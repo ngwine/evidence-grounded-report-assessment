@@ -25,16 +25,16 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
 
 Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 
-| Hạng mục | Trạng thái |
-|---|---|
-| Phạm vi đề tài | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
-| SRS/Use Case tuần 1 | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi |
-| Product Backlog/WBS | Baseline v1 ngày 21/08/2026; chờ Q/Y review/ký |
-| Cơ sở dữ liệu | Đã chọn MongoDB |
-| MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02 |
-| Frontend, API, worker | Mới tạo cấu trúc |
-| Parser và model local | Chờ prototype/benchmark |
-| Search Provider bên ngoài | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt |
+| Hạng mục                                  | Trạng thái                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
+| SRS/Use Case tuần 1                        | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi                          |
+| Product Backlog/WBS                         | Baseline v1 ngày 21/08/2026; chờ Q/Y review/ký                                                                 |
+| Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
+| MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02                                                                                                   |
+| Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
+| Parser và model local                      | Chờ prototype/benchmark                                                                                          |
+| Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
 ## Kiến trúc dự kiến
 

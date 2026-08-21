@@ -19,6 +19,7 @@ venv/
 .ruff_cache/
 .coverage
 htmlcov/
+local_test_data/
 
 # Node / frontend
 node_modules/
