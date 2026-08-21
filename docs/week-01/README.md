@@ -12,9 +12,9 @@ Thư mục này chứa năm đầu ra của tuần 1. “Content-complete” ngh
 |---|---|---|
 | W1-01 | Khảo sát quy trình đánh giá | Có bộ câu hỏi, mẫu biên bản và mô hình AS-IS/TO-BE để xác nhận; chỉ chuyển sang “đã xác nhận” sau khi có phản hồi thực tế từ ít nhất một giảng viên |
 | W1-02 | Khảo sát kỹ thuật | Có so sánh bốn nhóm kỹ thuật, baseline, metrics, ưu/nhược điểm, nguồn sơ cấp và khuyến nghị cho đề tài |
-| W1-03 | Đặc tả yêu cầu v1 | Có phạm vi, yêu cầu chức năng/phi chức năng, tiêu chí nghiệm thu và ma trận truy vết; nội dung đủ review nhưng chưa thành baseline cho đến khi GVHD phê duyệt |
-| W1-04 | Bộ Use Case | Có sơ đồ tổng thể, 17 Use Case chi tiết, luồng lỗi/an toàn và acceptance scenarios; vẫn chờ xác nhận workflow thực tế |
-| W1-05 | Backlog/WBS | Có Epic → Story → Task, ưu tiên, ước lượng, phụ thuộc, roadmap 24 tuần, critical path, gate và DoD; phải rebaseline sau khi chốt nhân lực/phạm vi |
+| W1-03 | Đặc tả yêu cầu v1 trước rebaseline | Review-candidate lịch sử; có chi tiết yêu cầu nhưng còn RQ/provider/reference feature không thuộc phạm vi 2 hướng chính + 1 bổ sung đã chốt, phải đồng bộ trước khi baseline |
+| W1-04 | Bộ Use Case trước rebaseline | Review-candidate lịch sử; có 17 Use Case và acceptance scenarios nhưng phải loại/đổi truy vết phần không còn trong phạm vi mới |
+| W1-05 | Backlog/WBS tuần 1 | Snapshot review-candidate ban đầu; từ 21/08/2026 dùng Product Backlog và WBS/phân công riêng trong `docs/planning/` làm nguồn điều phối hiện hành |
 
 ## Danh mục tài liệu
 
@@ -22,9 +22,11 @@ Thư mục này chứa năm đầu ra của tuần 1. “Content-complete” ngh
 - [W1-01 – Bộ câu hỏi phỏng vấn](./W1-01-cau-hoi-phong-van.md)
 - [W1-01 – Quy trình AS-IS/TO-BE](./W1-01-as-is-to-be.md)
 - [W1-02 – Khảo sát kỹ thuật](./W1-02-khao-sat-ky-thuat.md)
-- [W1-03 – Đặc tả yêu cầu v1](./W1-03-dac-ta-yeu-cau-v1.md)
-- [W1-04 – Bộ Use Case](./W1-04-bo-use-case.md)
-- [W1-05 – Product Backlog và WBS](./W1-05-backlog-wbs.md)
+- [W1-03 – Đặc tả yêu cầu v1 trước rebaseline](./W1-03-dac-ta-yeu-cau-v1.md)
+- [W1-04 – Bộ Use Case trước rebaseline](./W1-04-bo-use-case.md)
+- [W1-05 – Snapshot Product Backlog/WBS tuần 1 (lịch sử)](./W1-05-backlog-wbs.md)
+- [Product Backlog hiện hành](../planning/PRODUCT_BACKLOG.md)
+- [WBS/phân công 24 tuần hiện hành](../planning/WBS_VA_PHAN_CONG.md)
 
 ## Căn cứ lập tài liệu
 

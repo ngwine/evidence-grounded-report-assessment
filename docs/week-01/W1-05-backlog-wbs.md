@@ -2,6 +2,13 @@
 
 ## Hệ thống hỗ trợ đánh giá báo cáo sinh viên bằng AI cục bộ
 
+> **Tài liệu lịch sử (review-candidate tuần 1).** Từ ngày 21/08/2026, hai nguồn
+> planning đang hiệu lực là [Product Backlog](../planning/PRODUCT_BACKLOG.md) và
+> [WBS/phân công theo 24 tuần](../planning/WBS_VA_PHAN_CONG.md). Tài liệu hiện
+> tại chỉ giữ lịch sử phân tích/ID ban đầu; roadmap W06–W15 và các RQ/feature
+> cũ ngoài phạm vi 2 hướng chính + 1 bổ sung không được dùng để điều phối thực
+> thi. Canonical ID vẫn được giữ để không mất traceability.
+
 ## 1. Thông tin tài liệu
 
 | Thuộc tính | Giá trị |

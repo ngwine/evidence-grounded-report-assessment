@@ -27,12 +27,14 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 
 | Hạng mục | Trạng thái |
 |---|---|
-| Yêu cầu, Use Case, backlog | `Review candidate` |
+| Phạm vi đề tài | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
+| SRS/Use Case tuần 1 | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi |
+| Product Backlog/WBS | Baseline v1 ngày 21/08/2026; chờ Q/Y review/ký |
 | Cơ sở dữ liệu | Đã chọn MongoDB |
 | MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02 |
 | Frontend, API, worker | Mới tạo cấu trúc |
 | Parser và model local | Chờ prototype/benchmark |
-| Search Provider bên ngoài | Mặc định tắt, chờ G-WEB |
+| Search Provider bên ngoài | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt |
 
 ## Kiến trúc dự kiến
 
@@ -51,7 +53,7 @@ flowchart LR
     WK --> GRAPH[Evidence Graph]
     WK --> DB
     WK --> AI[Local AI runtime]
-    WK -. chỉ khi được duyệt .-> SP[Search Provider]
+    WK -. chỉ sau change request .-> SP[Extension boundary – OUT OF SCOPE]
 ```
 
 - Frontend không kết nối trực tiếp MongoDB.
@@ -60,7 +62,8 @@ flowchart LR
 - **Pipeline 1** (Similarity): BM25 + Dense → RRF → Re-ranking → Classification → Similarity Report.
 - **Pipeline 2** (Assessment): Rubric Compile → Checklist Classify → Evidence Retrieval (Local/Graph) → Verification → Rationale → Scoring.
 - MongoDB là source of truth. Lexical/vector index là dữ liệu dẫn xuất có thể dựng lại.
-- Search Provider mặc định `disabled` cho đến khi vượt qua gate chính sách.
+- Search Provider không thuộc WBS 24 tuần và luôn `disabled`; boundary chỉ được
+  giữ làm extension placeholder, không phải feature đang chờ triển khai.
 
 ## Cấu trúc thư mục
 
@@ -85,7 +88,7 @@ flowchart LR
 │       │   ├── modules/          # Nghiệp vụ theo feature
 │       │   │   ├── auth/
 │       │   │   ├── reports/
-│       │   │   ├── references/
+│       │   │   ├── references/  # quote/citation span core; DOI checker ngoài scope
 │       │   │   ├── similarity/   # Pipeline 1 – tương đồng
 │       │   │   ├── rubrics/
 │       │   │   ├── assessment/   # Pipeline 2 – đánh giá bằng chứng
@@ -102,7 +105,7 @@ flowchart LR
 │       │   │   ├── graph/        # Evidence Graph (HippoRAG-style)
 │       │   │   ├── local_ai/
 │       │   │   ├── storage/
-│       │   │   └── search_provider/
+│       │   │   └── search_provider/ # extension placeholder – OUT OF SCOPE
 │       │   └── worker/           # Task handlers, checkpoint, retry
 │       └── tests/
 ├── research/                     # Nghiên cứu và thực nghiệm
@@ -162,10 +165,12 @@ Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã
 
 ## Tài liệu
 
+- [Product Backlog](docs/planning/PRODUCT_BACKLOG.md)
+- [WBS và phân công theo 24 tuần](docs/planning/WBS_VA_PHAN_CONG.md)
 - [Hồ sơ tuần 1](docs/week-01/README.md)
 - [Đặc tả yêu cầu](docs/week-01/W1-03-dac-ta-yeu-cau-v1.md)
 - [Bộ Use Case](docs/week-01/W1-04-bo-use-case.md)
-- [Backlog/WBS](docs/week-01/W1-05-backlog-wbs.md)
+- [Snapshot Backlog/WBS tuần 1 (lịch sử)](docs/week-01/W1-05-backlog-wbs.md)
 - [Pipeline 1 – Similarity](docs/pipelines/pipeline-1-similarity.md)
 - [Pipeline 2 – Assessment](docs/pipelines/pipeline-2-assessment.md)
 - [Kiến trúc phân lớp](docs/architecture/layers.md)
