@@ -7,15 +7,17 @@ tests/local_test_data/ (bị .gitignore, chỉ tồn tại trên máy người t
 
 Riêng test_docx_real_report_smoke() dùng file báo cáo THẬT -- tự động BỎ QUA
 (skip, không báo lỗi) nếu máy đang chạy không có sẵn file đó.
+
+python -m pytest tests/test_pdf_docx_parsing.py -v
 """
 import json
 from pathlib import Path
 
 import pytest
 
-from kltn_ai.integrations.parsers.pdf_parser import extract_pdf_elements
-from kltn_ai.integrations.parsers.docx_parser import extract_docx_elements
-from kltn_ai.integrations.indexing.chunking import chunk_elements
+from src.kltn_ai.integrations.parsers.pdf_parser import extract_pdf_elements
+from src.kltn_ai.integrations.parsers.docx_parser import extract_docx_elements
+from src.kltn_ai.integrations.indexing.chunking import chunk_elements
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 LOCAL_DATA_DIR = Path(__file__).parent / "local_test_data"
