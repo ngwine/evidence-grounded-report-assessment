@@ -20,6 +20,7 @@ venv/
 .coverage
 htmlcov/
 local_test_data/
+demo_output/
 
 # Node / frontend
 node_modules/

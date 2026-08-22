@@ -1,22 +1,24 @@
 """
 Test tự động cho pipeline Extract -> Chunking (PDF và DOCX).
 
-Dùng file mẫu AN TOÀN trong tests/fixtures/ (không phải báo cáo thật) cho các
-test chính -- để chạy được ở MỌI máy (đồng đội, CI), không phụ thuộc vào
-tests/local_test_data/ (bị .gitignore, chỉ tồn tại trên máy người test thủ công).
+Dùng file mẫu trong tests/fixtures/cho các test chính
+để chạy được ở mọi máy (đồng đội, CI),
+không phụ thuộc vào tests/local_test_data/ (bị .gitignore, chỉ tồn tại trên máy người test thủ công).
 
-Riêng test_docx_real_report_smoke() dùng file báo cáo THẬT -- tự động BỎ QUA
+Riêng test_docx_real_report_smoke() dùng file báo cáo thật - tự động bỏ qua
 (skip, không báo lỗi) nếu máy đang chạy không có sẵn file đó.
 
-python -m pytest tests/test_pdf_docx_parsing.py -v
+Lệnh chạy: từ thư mục evidence-grounded-report-assessment
+python -m pytest services/backend/tests/test_pdf_docx_parsing.py -v 
 """
 import json
 from pathlib import Path
-
 import pytest
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.kltn_ai.integrations.parsers.pdf_parser import extract_pdf_elements
-from src.kltn_ai.integrations.parsers.docx_parser import extract_docx_elements
+from src.kltn_ai.integrations.parsing.pdf_parser import extract_pdf_elements
+from src.kltn_ai.integrations.parsing.docx_parser import extract_docx_elements
 from src.kltn_ai.integrations.indexing.chunking import chunk_elements
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
@@ -74,6 +76,7 @@ def test_docx_extract_and_chunk_pipeline():
     not (LOCAL_DATA_DIR / "5_52200229_BaoCao.docx").exists(),
     reason="Cần file báo cáo thật trong tests/local_test_data/ (không commit, chỉ có ở máy local)",
 )
+
 def test_docx_real_report_smoke():
     """Test bổ sung trên file báo cáo THẬT -- kiểm tra pipeline vẫn chạy ổn
     trên dữ liệu thực tế phức tạp hơn nhiều so với file mẫu. Tự động bỏ qua
@@ -83,14 +86,12 @@ def test_docx_real_report_smoke():
     chunks = chunk_elements(elements, max_tokens=400, min_tokens=40)
     _assert_chunks_valid(chunks, max_tokens=400)
 
-
-@pytest.mark.skipif(
-    not (LOCAL_DATA_DIR / "Report.pdf").exists(),
-    reason="Cần file báo cáo thật trong tests/local_test_data/ (không commit, chỉ có ở máy local)",
-)
 def test_pdf_real_report_smoke():
-    """Tương tự test_docx_real_report_smoke(), nhưng cho file PDF thật."""
-    pdf_path = LOCAL_DATA_DIR / "Report.pdf"
+    """Test bổ sung trên file PDF lấy từ fixtures/, kiểm tra pipeline vẫn
+    chạy ổn trên dữ liệu phức tạp hơn nhiều so với file mẫu tự tạo. Không
+    cần skipif vì file luôn có sẵn (đã commit vào fixtures/, không phải
+    local_test_data/)."""
+    pdf_path = FIXTURES_DIR / "Report.pdf"
     elements = extract_pdf_elements(str(pdf_path))
     chunks = chunk_elements(elements, max_tokens=400, min_tokens=40)
     _assert_chunks_valid(chunks, max_tokens=400)

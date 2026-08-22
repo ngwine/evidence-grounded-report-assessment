@@ -361,14 +361,14 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
         cur_heading = [line] # cur_heading roup (list): tạm giữ các dòng heading nghi ngờ cùng 1 heading
         j = i + 1
         while j < len(clean_lines):
-            next_line = clean_lines[j]
+            nxt_line = clean_lines[j]
 
-            # so sánh trang của dòng đang xét (next_line) với trang của phần tử mới nhất vừa được gộp vào cur_heading
-            same_page = next_line["page"] == cur_heading[-1]["page"]
+            # so sánh trang của dòng đang xét (nxt_line) với trang của phần tử mới nhất vừa được gộp vào cur_heading
+            same_page = nxt_line["page"] == cur_heading[-1]["page"]
 
             # nếu same_page đúng, gap = khoảng cách y giữa 2 dòng; 
             # nếu sai, gap = None (không tính được, vì khác trang thì so y không có ý nghĩa gì)"
-            gap = next_line["y"] - cur_heading[-1]["y"] if same_page else None
+            gap = nxt_line["y"] - cur_heading[-1]["y"] if same_page else None
 
             # lấy cỡ chữ lớn hơn trong 2 dòng đang so sánh
             # mối quan hệ giữa "cỡ chữ" và "khoảng cách dòng hợp lý" là quan hệ tỉ lệ thuận (chữ to gấp đôi => khoảng cách hợp lý cũng gấp đôi theo)
@@ -380,14 +380,14 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                 # n là cách giãn dòng:
                     # giãn dòng đơn (hệ số dòng đơn * 1), giãn 1.5 (hệ số dòng đơn * 1.5), giãn dòng đôi (hệ số dòng đơn * 2.0)
             # ngưỡng cao nhất có thể là 1.3 * 2 = 2.6 => lấy hệ số "heading_merge_gap_factor" = 3.0
-            max_gap = max(cur_heading[-1]["size"], next_line["size"]) * heading_merge_gap_factor
+            max_gap = max(cur_heading[-1]["size"], nxt_line["size"]) * heading_merge_gap_factor
 
             # nếu cùng trang, khoảng cách không âm (dòng sau phải nằm dưới dòng trước, đúng thứ tự đọc) 
             # và không vượt quá ngưỡng cho phép
             gap_ok = same_page and gap is not None and 0 <= gap <= max_gap
 
-            if (next_line["type"] == "heading" and gap_ok and not _looks_like_heading_start(next_line["text"])):
-                cur_heading.append(next_line)
+            if (nxt_line["type"] == "heading" and gap_ok and not _looks_like_heading_start(nxt_line["text"])):
+                cur_heading.append(nxt_line)
                 j += 1
             else:
                 break
@@ -402,41 +402,72 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
     
     clean_lines = merged_lines
 
-    # Xây dựng elements cuối cùng: heading cập nhật section_path, paragraph gộp
-    # theo đoạn văn hoàn chỉnh, bỏ qua nội dung thuộc section điều hướng
+    # Xây dựng elements cuối cùng:
+        # heading cập nhật section_path, paragraph gộp theo đoạn văn hoàn chỉnh, 
+        # bỏ qua nội dung thuộc section điều hướng NAV_SECTION_HEADING_RE
     elements = []   # kết quả cuối cùng
     section_path = []   # đường dẫn phân cấp ngữ cảnh
-    skip_nav_section = False    # đang ở trong một section điều hướng (mục lục,...) cần bỏ qua hay không
-    skip_level = None   # nếu đang skip, section đó ở CẤP mấy (để biết khi nào thoát ra)
+    skip_nav_section = False    # dùng để lọc nội dung điều hướng bên trong mục lục, danh mục bảng biểu/hình vẽ
+                                # nếu True là đang trong nội dung của mục lục, danh mục bảng biểu/hình vẽ
+                                # => bỏ qua nội dung đó => không thêm nó vào elements
+    skip_level = None   # lưu level của heading hiện tại
+                        # => nếu gặp heading tiếp theo, so sánh
+                        # nếu level của heading đó <= skip_level
+                        # => skip_nav_section = False
     i = 0
     while i < len(clean_lines):
         line = clean_lines[i]
 
-        # Xét xem dòng đó có phải là heading hay không
+        # Với mỗi heading gặp được:
+            # 1. Cập nhật section_path để dùng cho các nội dung bên trong heading.
+            # 2. Ghi heading đó vào elements.
+            # 3. Quản lý trạng thái "có đang bỏ qua nav_section hay không".
+
+        # Kiểm tra có phải heading hay không
         if line["type"] == "heading":
-            level = _infer_level_from_text(line["text"], line["level"])
+            level = _infer_level_from_text(line["text"], line["level"]) # lấy level của heading
+
+            #  Kiểm tra có nên thoát khỏi chế độ skip không
             if skip_nav_section and level <= skip_level:
                 skip_nav_section = False
-    
+
+            # Xây section_path
+                # 1. giữ lại section_path có level < level hiện tại => heading cùng cấp/sâu hơn bị loại vì đã hết phạm vi
+                # 2. thêm heading cha vào section_path
             section_path = [s for s in section_path if s[0] < level]
             section_path.append((level, line["text"]))
+
+            # Thêm heading vào elements
             elements.append({
                 "type": "heading", "level": level, "text": line["text"],
                 "page": line["page"], "section_path": [s[1] for s in section_path[:-1]]
             })
 
+            # Xét heading để xem nó có phải nav_section hay không
+            # => xuống else sẽ bỏ qua nội dung nav_section
             if NAV_SECTION_HEADING_RE.match(line["text"]):
                 skip_nav_section = True
                 skip_level = level
             i += 1
+
+        # Nếu không phải là heading
         else:
+            # Bỏ qua nội dung của nav_section
             if skip_nav_section:
                 i += 1
                 continue
-            buf = [line]
-            j = i + 1
+            buf = [line]    # buffer (list): lưu trữ các dòng đang nghi ngờ thuộc cùng 1 đoạn văn
+                            # => dùng cho việc gộp đoạn văn
+
+            j = i + 1       # con trỏ chạy tiếp từ i+1 => dùng để xem có thể gộp đến dòng nào
             while j < len(clean_lines):
                 nxt = clean_lines[j]
+
+                # Xét xem có thể gộp đoạn văn không:
+                    # 1. dòng này và dòng trước đó có cùng 1 trang không
+                        # (hạn chế: đoạn văn ngắt qua trang sẽ KHÔNG được gộp, tách thành element riêng)
+                    # 2. khoảng cách giữa hai dòng có nằm trong ngưỡng cho phép không
+                    # 3. dòng này không bị thụt đầu dòng (thường đoạn mới sẽ thụt lùi đầu dòng)
                 same_page = nxt["page"] == buf[-1]["page"]
                 line_gap = nxt["y"] - buf[-1]["y"] if same_page else None
                 normal_gap = buf[-1]["size"] * line_gap_factor
@@ -446,6 +477,9 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                     j += 1
                 else:
                     break
+
+            # Nối các dòng đã gộp thành 1 đoạn văn hoàn chỉnh
+            # Thêm các dòng đã gộp vào elements, rồi nhảy i tới vị trí j (bỏ qua các dòng vừa gộp)
             merged_text = _join_paragraph_lines([b["text"] for b in buf])
             elements.append({
                 "type": "paragraph", "text": merged_text, "page": buf[0]["page"],
