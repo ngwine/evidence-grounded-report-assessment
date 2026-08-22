@@ -67,6 +67,28 @@ cân bằng tải; không cộng với SP của Product Backlog.
 `Ready` là cột workflow, không phải giá trị trạng thái WBS. Work package ở cột
 `Ready` vẫn mang `TODO` cho đến khi owner bắt đầu và có evidence đầu tiên.
 
+### 2.4. Hardware baseline
+
+| Thành viên/mục đích | Thiết bị | CPU/SoC | Bộ nhớ | GPU | Hệ điều hành | Trạng thái |
+|---|---|---|---:|---|---|---|
+| Q — phát triển/tích hợp | MacBook Pro 14-inch (11/2024) | Apple M4 | 16 GB unified memory | Apple integrated GPU; không có card rời | macOS Sequoia 15.6.1 | Đã xác nhận 21/08/2026 |
+| Y — phát triển và benchmark local sơ bộ | Không yêu cầu ở W01 | Không yêu cầu ở W01 | 16 GB | Không có card rời | Không yêu cầu ở W01 | Đã xác nhận cấu hình tối thiểu 21/08/2026; benchmark thực tế tại W05 |
+| Máy demo/benchmark chính thức | Chưa chốt | — | — | — | — | Khóa tại `G-03` sau benchmark thực tế |
+
+Không lưu serial number hoặc định danh thiết bị trong repository. Với máy M4
+16 GB, lựa chọn model/quantization/context chỉ được chốt sau benchmark W05;
+không suy ra khả năng chạy model từ tên chip.
+
+### 2.5. GitHub workflow baseline
+
+| Artifact | Evidence | Trạng thái 21/08 |
+|---|---|---|
+| Quy ước branch/commit/PR/review | [`CONTRIBUTING.md`](../../CONTRIBUTING.md) và [PR template](../../.github/pull_request_template.md) | Đã tạo; chờ approval chéo trên PR |
+| Issue board | [KLTN Evidence-Grounded Delivery](https://github.com/users/ngwine/projects/2) | Đã liên kết repository; có 6 trạng thái và field truy vết |
+| Labels | [Danh sách labels](https://github.com/ngwine/evidence-grounded-report-assessment/labels) | Đã tạo type/component/priority/risk |
+| Milestones | [W01–W24](https://github.com/ngwine/evidence-grounded-report-assessment/milestones) | Đã tạo theo ngày kết thúc từng tuần trong WBS |
+| Review/closure `W1.5` | [Issue #1](https://github.com/ngwine/evidence-grounded-report-assessment/issues/1) | Q/Y xác nhận bằng review trên PR; chưa được tự đánh dấu thay reviewer |
+
 ## 3. Definition of Done chung
 
 Một work package chỉ được `DONE` khi:
@@ -130,6 +152,9 @@ buộc có evidence, approver và ngày quyết định ISO `YYYY-MM-DD`.
 - W01/W02 không được ghi `100%` trong Excel cho đến khi đạt DoD tương ứng.
 - Trong recovery, Q ưu tiên quyết định/schema/API chặn code; Y ưu tiên
   wireframe/rubric/dataset protocol để hai luồng có thể phát triển song song.
+- Hardware Q và cấu hình tối thiểu của Y đã được kiểm kê; dung lượng lưu trữ
+  khả dụng và máy demo chính thức được chốt bằng benchmark thực tế trước
+  `G-03`.
 - Carry-over không tạo thêm capacity. Trước khi commit W03, owner ghi
   `remaining SP`; với mỗi người, `remaining carry-over + committed W03 ≤ 13 SP`.
   Nếu vượt, defer theo P2 → P1 → P0 không chặn vertical slice; không cắt
@@ -151,7 +176,7 @@ buộc có evidence, approver và ngày quyết định ISO `YYYY-MM-DD`.
 | `W1.2` | `EP-01-S05` | Khảo sát AS-IS/TO-BE và chuẩn bị xác nhận giảng viên | Y | Q | 3 | `W1.1` | Bộ câu hỏi, biên bản và bảng giả định có trạng thái/người/ngày | IN PROGRESS |
 | `W1.3` | `EP-01-S01` | Khảo sát kỹ thuật plagiarism/IR/rubric/evidence/graph | Y | Q | 3 | `W1.1` | Có [khảo sát kỹ thuật](../week-01/W1-02-khao-sat-ky-thuat.md) so sánh baseline, metric, ưu/nhược điểm và nguồn nghiên cứu | DONE |
 | `W1.4` | `EP-12-S01` | Lập Product Backlog, WBS và traceability ban đầu | Q | Y | 2 | `W1.1` | Hai file planning riêng; mọi tuần/outcome có owner; RQ1/RQ2/RQ3 trỏ tới epic, experiment và artifact tương ứng | IN PROGRESS |
-| `W1.5` | `EP-01-S04`, `EP-02-S01` | Khởi tạo repo, cấu trúc thư mục, quy ước Git và issue board | Q | Y | 3 | `W1.4` | Capacity/máy/deadline được ghi; repo/scaffold/README/labels/milestones có bằng chứng | IN PROGRESS |
+| `W1.5` | `EP-01-S04`, `EP-02-S01` | Khởi tạo repo, cấu trúc thư mục, quy ước Git và issue board | Q | Y | 3 | `W1.4` | Capacity/máy/deadline được ghi; repo/scaffold/README, [workflow](../../CONTRIBUTING.md), [board](https://github.com/users/ngwine/projects/2), [labels](https://github.com/ngwine/evidence-grounded-report-assessment/labels), [milestones](https://github.com/ngwine/evidence-grounded-report-assessment/milestones) và [issue review](https://github.com/ngwine/evidence-grounded-report-assessment/issues/1) có bằng chứng | IN PROGRESS |
 | `W1.6` | `EP-12-S01` | Viết bản nháp Chương 1 | Y | Q | 2 | `W1.1` | Bối cảnh, vấn đề, mục tiêu, phạm vi, đóng góp và bố cục | TODO |
 
 **Tải kế hoạch:** Q = 8 SP, Y = 8 SP.
