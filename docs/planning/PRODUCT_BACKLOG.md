@@ -269,7 +269,14 @@ Tải được tính theo owner của outcome, không tính effort review. Bản
 | Ngoài phạm vi đã chốt (`OUT OF SCOPE`) | 18 | 15 | Giữ canonical ID cho provider/reference checker; chỉ mở lại bằng change request |
 | Icebox (`P1` + `P2`) | 0 | 39 | Writing/logic, OCR, cross-language, style và cohort dashboard; không tính vào cam kết 24 tuần |
 
-## 17. Cấu hình issue board đề xuất
+## 17. Cấu hình issue board
+
+Đã tạo [GitHub Project](https://github.com/users/ngwine/projects/2), liên kết
+repository và cấu hình theo mục này ngày 21/08/2026. Bộ
+[labels](https://github.com/ngwine/evidence-grounded-report-assessment/labels)
+và [milestones W01–W24](https://github.com/ngwine/evidence-grounded-report-assessment/milestones)
+là evidence vận hành; [issue #1](https://github.com/ngwine/evidence-grounded-report-assessment/issues/1)
+theo dõi việc review/đóng `W1.5`.
 
 ### Cột
 

@@ -161,10 +161,13 @@ Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã
 - Chỉ giảng viên có quyền mới được duyệt hoặc công bố kết quả.
 - Logic thực nghiệm chính đặt trong script/config có version; notebook chỉ dùng khám phá.
 - Thay đổi DB, provider, rubric, RQ hoặc phạm vi phải có ADR/change record.
-- Nhánh đề xuất: `feat/...`, `fix/...`, `docs/...`, `experiment/...`.
+- Branch, commit, pull request và review tuân theo
+  [`CONTRIBUTING.md`](CONTRIBUTING.md); thay đổi vào `main` qua PR và cần thành
+  viên còn lại approve.
 
 ## Tài liệu
 
+- [Quy ước Git và review](CONTRIBUTING.md)
 - [Product Backlog](docs/planning/PRODUCT_BACKLOG.md)
 - [WBS và phân công theo 24 tuần](docs/planning/WBS_VA_PHAN_CONG.md)
 - [Hồ sơ tuần 1](docs/week-01/README.md)
