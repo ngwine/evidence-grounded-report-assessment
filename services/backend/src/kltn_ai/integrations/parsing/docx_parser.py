@@ -19,8 +19,6 @@ from docx.table import Table    # dùng để kiểm tra có phải bảng khôn
 from docx.text.paragraph import Paragraph   # dùng để kiểm tra đây có phải đoạn văn không (phân biệt với bảng)
 from docx.oxml.ns import qn # dùng cho Content Control (SDT)
 import re
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
 
 # Style Word gán khi chọn "Heading 1/2/3..." trên giao diện
 # đọc thẳng để biết đây là heading, không cần đoán qua size/bold như PDF
@@ -64,7 +62,7 @@ def iter_block_items(doc):
                 # 1. tên thẻ kết thúc bằng "}p" -> đây là <w:p> (đoạn văn)
                 # 2. tên thẻ kết thúc bằng "}tbl" -> đây là <w:tbl> (bảng)
                 # 3. tên thẻ kết thúc bằng "}sdt" -> đây là Content Control
-            tag = child.tag 
+            tag = child.tag
             if tag.endswith('}p'):
                 yield Paragraph(child, doc)
             elif tag.endswith('}tbl'):
@@ -181,7 +179,7 @@ def extract_docx_elements(file_path):
                 "type": "table", "rows": rows_data,
                 "para_index": idx, "section_path": [s[1] for s in section_path]
             })
-            
+
             idx += 1   # chỉ tăng 1 lần cho CẢ bảng, vì cả bảng là 1 element duy nhất
                        # (khác Paragraph — mỗi đoạn văn là 1 element riêng)
     return elements

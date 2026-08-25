@@ -9,9 +9,8 @@ Riêng test_docx_real_report_smoke() dùng file báo cáo thật - tự động 
 (skip, không báo lỗi) nếu máy đang chạy không có sẵn file đó.
 
 Lệnh chạy: từ thư mục evidence-grounded-report-assessment
-python -m pytest services/backend/tests/test_pdf_docx_parsing.py -v 
+python -m pytest services/backend/tests/test_pdf_docx_parsing.py -v
 """
-import json
 from pathlib import Path
 import pytest
 import sys
@@ -83,15 +82,5 @@ def test_docx_real_report_smoke():
     (không báo lỗi) trên máy/CI không có sẵn file này."""
     docx_path = LOCAL_DATA_DIR / "5_52200229_BaoCao.docx"
     elements = extract_docx_elements(str(docx_path))
-    chunks = chunk_elements(elements, max_tokens=400, min_tokens=40)
-    _assert_chunks_valid(chunks, max_tokens=400)
-
-def test_pdf_real_report_smoke():
-    """Test bổ sung trên file PDF lấy từ fixtures/, kiểm tra pipeline vẫn
-    chạy ổn trên dữ liệu phức tạp hơn nhiều so với file mẫu tự tạo. Không
-    cần skipif vì file luôn có sẵn (đã commit vào fixtures/, không phải
-    local_test_data/)."""
-    pdf_path = FIXTURES_DIR / "Report.pdf"
-    elements = extract_pdf_elements(str(pdf_path))
     chunks = chunk_elements(elements, max_tokens=400, min_tokens=40)
     _assert_chunks_valid(chunks, max_tokens=400)
