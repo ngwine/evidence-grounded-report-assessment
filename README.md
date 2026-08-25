@@ -25,16 +25,17 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
 
 Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 
-| Hạng mục | Trạng thái |
-|---|---|
-| Phạm vi đề tài | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
-| SRS/Use Case tuần 1 | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi |
-| Product Backlog/WBS | Baseline v1 ngày 21/08/2026; chờ Q/Y review/ký |
-| Cơ sở dữ liệu | Đã chọn MongoDB |
-| MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02 |
-| Frontend, API, worker | Mới tạo cấu trúc |
-| Parser và model local | Chờ prototype/benchmark |
-| Search Provider bên ngoài | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt |
+| Hạng mục                                  | Trạng thái                                                                                                      |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
+| SRS/Use Case tuần 1                        | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi                          |
+| Product Backlog/WBS                         | Baseline v1 ngày 21/08/2026; chờ Q/Y review/ký                                                                 |
+| Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
+| MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02                                                                                                   |
+| Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
+| Parser và chunking | Đã có prototype PDF/DOCX trên branch tích hợp; chờ review và benchmark chất lượng |
+| Model local | Chờ benchmark tại `G-03` |
+| Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
 ## Kiến trúc dự kiến
 
@@ -99,7 +100,7 @@ flowchart LR
 │       │   │   └── analysis/     # Shared analysis logic
 │       │   ├── integrations/     # Adapter parser, indexing, retrieval,
 │       │   │   │                 # graph, local AI, storage, provider
-│       │   │   ├── parsers/
+│       │   │   ├── parsing/
 │       │   │   ├── indexing/     # BM25 + Dense Vector indexing
 │       │   │   ├── retrieval/    # Hybrid Retrieval, RRF, re-ranking
 │       │   │   ├── graph/        # Evidence Graph (HippoRAG-style)
@@ -139,11 +140,15 @@ flowchart LR
 
 ## Thiết lập
 
-Hiện chưa có dependency manifest hoặc `compose.yaml`, nên README chưa đưa lệnh
-chạy giả. Bước cấu hình đầu tiên:
+Hiện chưa có manifest cho toàn bộ ứng dụng hoặc `compose.yaml`. Riêng prototype
+Parsing/Chunking có dependency phát triển tại
+`services/backend/requirements-dev.txt`. Bước cấu hình đầu tiên:
 
 ```bash
 cp .env.example .env
+python3 -m venv .venv
+./.venv/bin/pip install -r services/backend/requirements-dev.txt
+./.venv/bin/python -m pytest services/backend/tests/test_pdf_docx_parsing.py -v
 ```
 
 Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã kiểm thử để:

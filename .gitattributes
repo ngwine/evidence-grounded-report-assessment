@@ -1,0 +1,10 @@
+# Đánh dấu rõ các định dạng nhị phân -- Git sẽ KHÔNG áp dụng chuyển đổi
+# LF/CRLF lên các file này nữa (tránh nguy cơ làm hỏng nội dung file).
+*.pdf   binary
+*.docx  binary
+*.doc   binary
+*.xlsx  binary
+*.pptx  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
