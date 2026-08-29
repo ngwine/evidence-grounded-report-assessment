@@ -15,9 +15,6 @@ import re   # nhận diện Mục lục (dot leader), số trang La Mã, số th
 import unicodedata  # chuẩn hoá NFKC: sửa lỗi ligature (vd: "oﬃcial" -> "official")
                     # do PDF gộp cụm chữ thành 1 ký tự
 from collections import Counter
-import json
-import sys
-sys.stdout.reconfigure(encoding='utf-8')
 
 # Dòng kết thúc bằng chữ cái + dấu "-" -> khả năng cao là từ bị ngắt dòng giữa chừng
 # do PDF word-wrap (vd: "rep-" ở cuối dòng, "resent" ở dòng sau)
@@ -31,7 +28,7 @@ NAV_SECTION_HEADING_RE = re.compile(
     re.IGNORECASE
 )
 
-# Dòng có dạng "tiêu đề....số trang" => dòng mục lục 
+# Dòng có dạng "tiêu đề....số trang" => dòng mục lục
 TOC_LINE_RE = re.compile(r"(?:\.\s?){3,}\s*\d+\s*$")
 
 # Dòng bắt đầu bằng số thứ tự nhiều cấp (bắt buộc ≥1 dấu chấm)
@@ -75,10 +72,10 @@ def _roman_to_int(s):
 def _join_paragraph_lines(lines_text):
     """
     Nối hiều dòng thành 1 đoạn văn hoàn chỉnh.
-    
+
     Nếu 1 dòng kết thúc bằng '-' do bị ngắt dòng giữa chừng thì nối liền không chèn dấu cách
     và bỏ '-'.
-    
+
     Các trường hợp còn lại nối có dấu cách.
     """
     result = lines_text[0]
@@ -104,7 +101,7 @@ def _normalize(text):
 def _looks_like_heading_start(text):
     """
     True nếu dòng bắt đầu bằng Stt hoặc nhãn (Chương|Chapter|Phần|Part).
-    
+
     Dùng để phân biệt 1 dòng heading có phải điểm bắt đầu của 1 heading mới hay không,
     tránh gộp nhầm 2 heading khác nhau làm 1 khi chúng ở gần nhau.
     """
@@ -140,14 +137,14 @@ def _strip_page_number(text):
 # ---------------------------------------------------------------------------
 
 # file_path : đường dẫn của file pdf
-# line_gap_factor : 
-# indent_threshold_factor : 1 dòng có bị thụt đầu dòng hay không 
+# line_gap_factor :
+# indent_threshold_factor : 1 dòng có bị thụt đầu dòng hay không
 # => lề trái phải lệch ít nhất 1.5 lần cỡ chữ so với lề chuẩn mới coi là thụt đầu dòng
 # heading_merge_gap_factor : quyết định 2 dòng heading liên tiếp có nên gộp thành 1 heading không
 
 def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor=1.5,
                          heading_merge_gap_factor=3.0, y_tolerance=2.0):
-    
+
     """
     Tham số:
         - line_gap_factor: khoảng cách dòng tối đa (= cỡ chữ * hệ số này)
@@ -194,13 +191,13 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                         "y": s["bbox"][1]
                     })
 
-        
+
         # B1: Gom span theo hàng (dựa vào tọa độ y)
         raw_spans.sort(key=lambda s: s["y"])
-        raw_line_groups = []   # raw_line_group (list): lưu trữ các hàng đã thêm span vào xong 
+        raw_line_groups = []   # raw_line_group (list): lưu trữ các hàng đã thêm span vào xong
         raw_cur_line = []   # raw_cur_cluster (list): lưu trữ 1 hàng thêm span dang dở
                         # => tạm giữ các span đang nghi ngờ là cùng 1 hàng
-        raw_cur_y = None    # raw_cur_y: tọa độ neo 
+        raw_cur_y = None    # raw_cur_y: tọa độ neo
                         # => dùng làm mốc so sánh cho span tiếp theo: "span mới này có gần với hàng đang xây không?"
 
         for s in raw_spans:
@@ -271,8 +268,6 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
         norm = _strip_page_number(text)
         return bool(norm) and norm in repeated_normalized
 
-    print(repeated_texts)
-
     """
     True nếu cả dòng CHỈ LÀ số trang đứng riêng lẻ — dùng để lọc bỏ, không
     coi là nội dung thật. Chấp nhận 2 dạng: số Ả Rập (có thể kèm dấu gạch
@@ -290,7 +285,7 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
     size_counter = Counter()    # tìm cỡ chữ xuất hiện nhiều nhất
                                 # => thường Paragraph chiếm nhiều nhất trong file
                                 # => body_size => để phát hiện các heading
-    x_counter = Counter()   # tìm tạo độ x xuất hiện nhiều nhất => tọa độ x đó là lề trái 
+    x_counter = Counter()   # tìm tạo độ x xuất hiện nhiều nhất => tọa độ x đó là lề trái
                             # => body_left_x => để phát hiện indent
     for lines in pages_lines:
         for line in lines:
@@ -326,7 +321,7 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
         for line in lines:
             text = line["text"]
 
-            # Nếu text này có trong set repeated_texts hoặc text là số trang thì bỏ qua, không phân loại heading 
+            # Nếu text này có trong set repeated_texts hoặc text là số trang thì bỏ qua, không phân loại heading
             if not text or is_repeated_header_footer(text) or is_page_number_line(text):
                 continue
 
@@ -366,7 +361,7 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             # so sánh trang của dòng đang xét (nxt_line) với trang của phần tử mới nhất vừa được gộp vào cur_heading
             same_page = nxt_line["page"] == cur_heading[-1]["page"]
 
-            # nếu same_page đúng, gap = khoảng cách y giữa 2 dòng; 
+            # nếu same_page đúng, gap = khoảng cách y giữa 2 dòng;
             # nếu sai, gap = None (không tính được, vì khác trang thì so y không có ý nghĩa gì)"
             gap = nxt_line["y"] - cur_heading[-1]["y"] if same_page else None
 
@@ -382,7 +377,7 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             # ngưỡng cao nhất có thể là 1.3 * 2 = 2.6 => lấy hệ số "heading_merge_gap_factor" = 3.0
             max_gap = max(cur_heading[-1]["size"], nxt_line["size"]) * heading_merge_gap_factor
 
-            # nếu cùng trang, khoảng cách không âm (dòng sau phải nằm dưới dòng trước, đúng thứ tự đọc) 
+            # nếu cùng trang, khoảng cách không âm (dòng sau phải nằm dưới dòng trước, đúng thứ tự đọc)
             # và không vượt quá ngưỡng cho phép
             gap_ok = same_page and gap is not None and 0 <= gap <= max_gap
 
@@ -399,11 +394,11 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             "type": "heading", "level": min(g["level"] for g in cur_heading),
         })
         i = j
-    
+
     clean_lines = merged_lines
 
     # Xây dựng elements cuối cùng:
-        # heading cập nhật section_path, paragraph gộp theo đoạn văn hoàn chỉnh, 
+        # heading cập nhật section_path, paragraph gộp theo đoạn văn hoàn chỉnh,
         # bỏ qua nội dung thuộc section điều hướng NAV_SECTION_HEADING_RE
     elements = []   # kết quả cuối cùng
     section_path = []   # đường dẫn phân cấp ngữ cảnh
@@ -487,15 +482,3 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             })
             i = j
     return elements
-
-# Đoạn dưới đây chỉ chạy khi gọi trực tiếp file này (python pdf_parser.py),
-# Không chạy khi file khác `import pdf_parser` -- nếu không có "if" này, bất kỳ
-# ai import module này (kể cả code test, hay sau này api/routes) đều vô tình
-# bị chạy luôn đoạn code bên dưới, cố mở file cứng không tồn tại và bị lỗi.
-if __name__ == "__main__":
-    # 1. Gọi hàm để lấy kết quả bóc tách
-    extracted_data = extract_pdf_elements("data/GeoBase_NHNC1_Data_Model_UML_EN.pdf")
-
-    # 2. Ghi ra file JSON với định dạng chuẩn, dễ đọc
-    with open("output_parsing_pdf.json", "w", encoding="utf-8") as f:
-        json.dump(extracted_data, f, ensure_ascii=False, indent=4)

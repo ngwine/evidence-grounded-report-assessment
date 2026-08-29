@@ -33,7 +33,8 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02                                                                                                   |
 | Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
-| Parser và model local                      | Chờ prototype/benchmark                                                                                          |
+| Parser và chunking | Đã có prototype PDF/DOCX trên branch tích hợp; chờ review và benchmark chất lượng |
+| Model local | Chờ benchmark tại `G-03` |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
 ## Kiến trúc dự kiến
@@ -99,7 +100,7 @@ flowchart LR
 │       │   │   └── analysis/     # Shared analysis logic
 │       │   ├── integrations/     # Adapter parser, indexing, retrieval,
 │       │   │   │                 # graph, local AI, storage, provider
-│       │   │   ├── parsers/
+│       │   │   ├── parsing/
 │       │   │   ├── indexing/     # BM25 + Dense Vector indexing
 │       │   │   ├── retrieval/    # Hybrid Retrieval, RRF, re-ranking
 │       │   │   ├── graph/        # Evidence Graph (HippoRAG-style)
@@ -139,11 +140,15 @@ flowchart LR
 
 ## Thiết lập
 
-Hiện chưa có dependency manifest hoặc `compose.yaml`, nên README chưa đưa lệnh
-chạy giả. Bước cấu hình đầu tiên:
+Hiện chưa có manifest cho toàn bộ ứng dụng hoặc `compose.yaml`. Riêng prototype
+Parsing/Chunking có dependency phát triển tại
+`services/backend/requirements-dev.txt`. Bước cấu hình đầu tiên:
 
 ```bash
 cp .env.example .env
+python3 -m venv .venv
+./.venv/bin/pip install -r services/backend/requirements-dev.txt
+./.venv/bin/python -m pytest services/backend/tests/test_pdf_docx_parsing.py -v
 ```
 
 Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã kiểm thử để:
@@ -161,10 +166,13 @@ Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã
 - Chỉ giảng viên có quyền mới được duyệt hoặc công bố kết quả.
 - Logic thực nghiệm chính đặt trong script/config có version; notebook chỉ dùng khám phá.
 - Thay đổi DB, provider, rubric, RQ hoặc phạm vi phải có ADR/change record.
-- Nhánh đề xuất: `feat/...`, `fix/...`, `docs/...`, `experiment/...`.
+- Branch, commit, pull request và review tuân theo
+  [`CONTRIBUTING.md`](CONTRIBUTING.md); thay đổi vào `main` qua PR và cần thành
+  viên còn lại approve.
 
 ## Tài liệu
 
+- [Quy ước Git và review](CONTRIBUTING.md)
 - [Product Backlog](docs/planning/PRODUCT_BACKLOG.md)
 - [WBS và phân công theo 24 tuần](docs/planning/WBS_VA_PHAN_CONG.md)
 - [Hồ sơ tuần 1](docs/week-01/README.md)

@@ -66,7 +66,6 @@ def _run_demo(label, extract_fn, file_path, output_name):
     print(f"\n  Đã lưu đầy đủ vào: {OUTPUT_DIR}/{output_name}_elements.json")
     print(f"  Đã lưu đầy đủ vào: {OUTPUT_DIR}/{output_name}_chunks.json")
 
-# Có thể chỉ chạy 2 file sample đầu tiên nếu muốn xem kết quả ngắn, chạy 2 file dưới thì kết quả sẽ nhiều hơn
 if __name__ == "__main__":
     _run_demo(
         "PDF - file mẫu (fixtures)",
@@ -79,16 +78,4 @@ if __name__ == "__main__":
         extract_docx_elements,
         FIXTURES_DIR / "sample_thesis.docx",
         "docx_fixture",
-    )
-    _run_demo(
-        "PDF - GeoBase (fixtures, tài liệu UML tiếng Anh)",
-        extract_pdf_elements,
-        FIXTURES_DIR / "GeoBase_NHNC1_Data_Model_UML_EN.pdf",
-        "pdf_geobase",
-    )
-    _run_demo(
-        "PDF - Report (fixtures, tài liệu web về phương pháp parsing)",
-        extract_pdf_elements,
-        FIXTURES_DIR / "Report.pdf",
-        "pdf_report",
     )

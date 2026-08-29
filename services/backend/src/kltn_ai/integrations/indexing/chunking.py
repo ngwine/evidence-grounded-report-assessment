@@ -13,8 +13,6 @@ thành 1 chunk có kích thước hợp lý (giới hạn bởi max_tokens/min_t
 khi chunk được truy xuất riêng lẻ.
 """
 
-import re
-
 def approx_token_count(text):
     """
     Ước lượng số lượng token của 1 đoạn text
@@ -39,7 +37,7 @@ def _format_table_text(rows):
         if len(row) == 2:
             lines.append(f"{row[0]}: {row[1]}")
         else:
-            lines.append(" - ".join(row))        
+            lines.append(" - ".join(row))
     return "\n".join(lines) # Chuỗi string, nội dung giữa các hàng được ngăn cách bởi \n
 
 
@@ -62,11 +60,11 @@ def chunk_elements(elements, max_tokens=400, min_tokens=40):
 
     2. Bảng luôn tách thành 1 chunk riêng, không gộp chung với đoạn văn,
     chuyển từ dạng danh sách lồng từ elements sang text thuần thông qua _format_table_text
-    
+
     3. Sau khi có chunks thô, chunk nào quá nhỏ (< min_tokens)
     sẽ được gộp chung vào chunk liền trước, nếu cùng thuộc 1 chương lớn (section_path cấp cao nhất giống nhau)
     và tổng kích thước sau khi gộp vẫn không vượt max_tokens.
-    
+
     4. Mỗi chunk lưu section_path (section sâu nhất, dùng làm breadcrumb hiển thị)
     lẫn section_paths (danh sách đầy đủ mọi section đã góp
     phần vào chunk đó, kể cả sau khi gộp) - để không mất thông tin
@@ -143,7 +141,7 @@ def chunk_elements(elements, max_tokens=400, min_tokens=40):
         return el.get("para_index", el.get("page"))
 
     for el in elements:
-        # Bỏ qua Heading 
+        # Bỏ qua Heading
         # heading chỉ có tác dụng cung cấp ngữ cảnh cho các đoạn văn phía sau nó
         if el["type"] == "heading":
             continue
@@ -192,7 +190,7 @@ def chunk_elements(elements, max_tokens=400, min_tokens=40):
         # => Thỏa điều kiện thì thử nối text và tính token trước
 
         if (
-                merged                                # 1. đã có chunk trước đó được gộp vào rồi        
+                merged                                # 1. đã có chunk trước đó được gộp vào rồi
                 and ch["type"] == "text"              # 2. chunk hiện tại phải là text
                 and merged[-1]["type"] == "text"      # 3. chunk trước đó cũng phải là text
                 and ch["token_count"] < min_tokens    # 4. chunk hiện tại quá nhỏ
