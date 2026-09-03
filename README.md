@@ -29,11 +29,11 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
 | SRS/Use Case tuần 1                        | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi                          |
-| Product Backlog/WBS                         | Baseline v1 ngày 21/08/2026; chờ Q/Y review/ký                                                                 |
+| Product Backlog/WBS                         | Baseline v1.1 cập nhật actual/reforecast ngày 03/09/2026; chờ Q/Y review/ký                                      |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
-| MongoDB deployment và Search/Vector Search | Chờ OQ-04/G-02                                                                                                   |
+| MongoDB deployment và Search/Vector Search | Chờ `W2.2`/`G-02`                                                                                                 |
 | Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
-| Parser và chunking | Đã có prototype PDF/DOCX trên branch tích hợp; chờ review và benchmark chất lượng |
+| Parser và chunking | Prototype PDF/DOCX đã merge vào `main`; chờ worker integration, stable provenance, real/golden corpus và benchmark chất lượng |
 | Model local | Chờ benchmark tại `G-03` |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
