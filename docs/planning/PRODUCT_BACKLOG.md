@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.1 |
+| Phiên bản | 1.2 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật | 03/09/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
@@ -14,13 +14,13 @@
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | Phạm vi, pipeline và dataset-task mapping đã chốt; parser/chunker đang ở mức prototype; quyền dữ liệu, kiến trúc chi tiết và các gate vẫn mở; actual/reforecast theo WBS v1.1 |
+| Trạng thái baseline | Phạm vi, pipeline và dataset-task mapping đã chốt; parser/chunker đang ở mức prototype; `W2.1` có review candidate; quyền dữ liệu và các gate vẫn mở; actual/evidence theo WBS v1.2 |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.1; không đổi target backlog để che độ trễ.
+phiên bản 1.2; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
@@ -105,8 +105,8 @@ Một item chỉ được kéo lên `Ready` khi:
 | `EP-02-S01` | Repo, dependency manifest, Compose, CI và môi trường tái lập | P0 | 5 | Q | Y | W01–W03 | `EP-01-S04` | FE/BE/worker/DB chạy healthcheck; lint/type/test, SAST, secret và dependency scan chạy trong CI từ W03; High/Critical làm fail gate hoặc có waiver owner/expiry; README chạy trên môi trường sạch | IN PROGRESS |
 | `EP-02-S02` | Thiết kế MongoDB collection, index, invariant và data dictionary | P0 | 8 | Q | Y | W02–W03 | `EP-02-S05` | Schema/version/reference/index/migration/rebuild được mô tả; source of truth và derived index tách rõ | PLANNED |
 | `EP-02-S03` | Authentication, session, RBAC và user management tối thiểu | P0 | 8 | Q | Y | W03 | `EP-02-S02/06/07` | Student/Lecturer/Admin đúng ma trận; cross-user access bị chặn; authorization test đạt | PLANNED |
-| `EP-02-S04` | Threat model và adversarial test plan | P0 | 5 | Q | Y | W02, cập nhật W16/W21 | `EP-02-S05` | Có asset/trust boundary/risk→mitigation→test traceability cho upload/parser, queue, DB, tenant retrieval, prompt injection, output sanitization và log privacy | PLANNED |
-| `EP-02-S05` | Thiết kế C4 Context/Container/Deployment và trust boundary | P0 | 5 | Q | Y | W02 | `EP-01-S01` | Sơ đồ phản ánh React–FastAPI–worker–MongoDB–storage–local AI; ranh giới đồng bộ/bất đồng bộ rõ | IN PROGRESS |
+| `EP-02-S04` | Threat model và adversarial test plan | P0 | 5 | Q | Y | W02, cập nhật W16/W21 | `EP-02-S05` | [Threat model v1](../threat-model/threat-model-v1.md) có asset/trust boundary/risk→mitigation→test traceability cho upload/parser, queue, DB, tenant retrieval, prompt injection, output sanitization và log privacy | IN PROGRESS |
+| `EP-02-S05` | Thiết kế C4 Context/Container/Deployment và trust boundary | P0 | 5 | Q | Y | W02 | `EP-01-S01` | [C4](../architecture/c4.md) phản ánh React–FastAPI–worker–MongoDB–storage–local AI; [data flow](../architecture/data-flow.md) làm rõ ranh giới đồng bộ/bất đồng bộ | IN PROGRESS |
 | `EP-02-S06` | Viết API contract v1 và error format chung | P0 | 8 | Q | Y | W02–W03 | `EP-02-S02/05` | Contract bao phủ auth, report/source, upload, job/run, chunks, rubric, result/review; có lỗi và pagination | PLANNED |
 | `EP-02-S07` | Thiết kế wireframe/navigation cho các luồng P0 | P0 | 5 | Y | Q | W02 | `EP-01-S01` | Bao phủ upload, progress, similarity evidence, rubric assessment và Accept/Edit/Reject; có loading/empty/error | PLANNED |
 | `EP-02-S08` | Audit log và data lifecycle nền tảng | P0 | 5 | Q | Y | W03, W15 | `EP-02-S02/03`, `EP-01-S02` | Sự kiện quyền/upload/run/review/publish có actor/time/before-after; retention/delete có authorization | PLANNED |
@@ -322,6 +322,7 @@ Tên issue:
 |---|---|---|
 | 1.0 | 21/08/2026 | Tách Product Backlog khỏi WBS; phân công Q/Y; lấy roadmap Excel và phạm vi 2 hướng chính + 1 bổ sung làm chuẩn; giữ canonical ID cũ nhưng đánh dấu provider/reference checker `OUT OF SCOPE`; chuyển extension khỏi critical path |
 | 1.1 | 03/09/2026 | Sửa MSSV Y thành `52200229`; ghi nhận scope/pipeline và dataset-task mapping đã chốt; cập nhật parser/chunker theo prototype đã merge; dùng parser adapter theo benchmark thay vì khóa Docling; đưa Targeted Questions về `P1/CONDITIONAL`; đồng bộ actual/reforecast với WBS v1.1 |
+| 1.2 | 03/09/2026 | Liên kết C4/data flow/threat model `W2.1`; chuyển `EP-02-S04` sang `IN PROGRESS`; chưa đóng `EP-02-S04/05` cho đến khi reviewer xác nhận |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|

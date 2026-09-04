@@ -29,7 +29,8 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
 | SRS/Use Case tuần 1                        | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi                          |
-| Product Backlog/WBS                         | Baseline v1.1 cập nhật actual/reforecast ngày 03/09/2026; chờ Q/Y review/ký                                      |
+| Product Backlog/WBS                         | Baseline v1.2 cập nhật actual/evidence ngày 03/09/2026; chờ Q/Y review/ký                                      |
+| C4/trust boundary/threat model (`W2.1`) | Đã có review candidate; chờ đồng bộ scope `W1.1` và Y review xác nhận trước khi `DONE` |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB deployment và Search/Vector Search | Chờ `W2.2`/`G-02`                                                                                                 |
 | Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
@@ -182,3 +183,6 @@ Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã
 - [Pipeline 1 – Similarity](docs/pipelines/pipeline-1-similarity.md)
 - [Pipeline 2 – Assessment](docs/pipelines/pipeline-2-assessment.md)
 - [Kiến trúc phân lớp](docs/architecture/layers.md)
+- [C4 Context, Container và Deployment](docs/architecture/c4.md)
+- [Data Flow và Trust Boundary](docs/architecture/data-flow.md)
+- [Threat Model và Adversarial Test Plan v1](docs/threat-model/threat-model-v1.md)
