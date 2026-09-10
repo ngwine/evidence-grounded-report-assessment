@@ -48,10 +48,39 @@ Các dạng quan hệ cần kiểm tra:
 - Claim ↔ Evidence từ tài liệu đối chứng
 
 ### Evidence Verification
-Mỗi checklist có một trong ba trạng thái:
-- **MET**: có đủ bằng chứng cho thấy yêu cầu được đáp ứng
-- **UNMET**: bằng chứng cho thấy yêu cầu chưa được đáp ứng
-- **CANNOT_ASSESS**: không đủ bằng chứng để đưa ra đánh giá đáng tin cậy
+
+Verification tách hai tầng để không đánh đồng “không tìm thấy bằng chứng” với
+“có bằng chứng chứng minh claim sai”:
+
+1. Quan hệ giữa từng claim và evidence:
+   - **SUPPORTED**: evidence trực tiếp hỗ trợ claim;
+   - **CONTRADICTED**: evidence trực tiếp mâu thuẫn với claim;
+   - **INSUFFICIENT**: evidence thiếu, mơ hồ, khác ngữ cảnh hoặc chưa đủ thẩm
+     quyền để xác định hỗ trợ hay mâu thuẫn.
+2. Kết quả checklist:
+   - **MET**: có đủ evidence `SUPPORTED` theo yêu cầu rubric;
+   - **UNMET**: evidence đáng tin cậy cho thấy yêu cầu không đạt, bao gồm trường
+     hợp claim bị `CONTRADICTED`;
+   - **CANNOT_ASSESS**: chỉ có evidence `INSUFFICIENT` hoặc xung đột chưa thể
+     phân xử đáng tin cậy.
+
+Mapping mặc định:
+
+| Claim–evidence | Checklist |
+|---|---|
+| `SUPPORTED` | `MET` |
+| `CONTRADICTED` | `UNMET` |
+| `INSUFFICIENT` | `CANNOT_ASSESS` |
+
+Trường hợp “báo cáo nói A, tài liệu đối chứng nói B” chỉ được đánh dấu
+`CONTRADICTED → UNMET` khi tài liệu đối chứng đã được duyệt cho đúng purpose,
+đủ thẩm quyền và A/B nói về cùng đối tượng, thời điểm, đơn vị, dataset và điều
+kiện. Nếu chưa xác định được nguồn nào đúng hoặc khác ngữ cảnh thì phải dùng
+`INSUFFICIENT → CANNOT_ASSESS`, không tự chọn một phía.
+
+Verifier phải lưu cả evidence span chứa A và B, source/version/locator và lý do
+mapping. Claim gồm nhiều ý nên được compiler tách thành checklist nguyên tử;
+không dùng trạng thái `PARTIALLY_SUPPORTED` để che một mâu thuẫn trực tiếp.
 
 ### Deterministic Decision Rules
 Điểm đề xuất được suy ra bằng decision rules định nghĩa trong rubric, **không**

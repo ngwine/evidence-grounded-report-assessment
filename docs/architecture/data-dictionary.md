@@ -527,8 +527,9 @@ Index: unique `{workspace_id: 1, idempotency_key: 1}`;
 | `quote_text` | string | Có | Exact bounded evidence |
 | `quote_sha256` | string | Có | Detect tampering |
 | `retrieval_scores` | object | Có | BM25/dense/RRF/rerank + rank |
-| `verification_state` | string | Có | `SUPPORTED`, `PARTIALLY_SUPPORTED`, `NOT_SUPPORTED` |
+| `verification_state` | string | Có | Quan hệ claim–evidence: `SUPPORTED`, `CONTRADICTED`, `INSUFFICIENT` |
 | `verification_spec` | object | Có | Model/rule/config hash |
+| `verification_reason_code` | string | Có | Ví dụ `DIRECT_SUPPORT`, `DIRECT_CONTRADICTION`, `CONTEXT_MISMATCH`, `SOURCE_AUTHORITY_UNKNOWN` |
 | `data_class` | string | Có | Kế thừa source |
 
 Index: unique `{analysis_run_id: 1, evidence_key: 1}`;
@@ -542,6 +543,12 @@ Fields: `workspace_id`, `analysis_run_id`, `report_version_id`,
 `criterion_scores`, `total_score`, `scoring_rule_sha256`, `rationale`,
 `evidence_ids`, `status` (`DRAFT`, `READY_FOR_REVIEW`, `ACCEPTED`, `REJECTED`,
 `SUPERSEDED`), common immutable timestamps.
+
+Mỗi `checklist_results[]` bắt buộc có `checklist_key`, `status`
+(`MET`, `UNMET`, `CANNOT_ASSESS`), `evidence_ids`, `reason_code` và
+`decision_rule_version`. Mapping mặc định là `SUPPORTED → MET`,
+`CONTRADICTED → UNMET`, `INSUFFICIENT → CANNOT_ASSESS`; mọi override phải do
+rubric rule có version quyết định và được ghi trong rationale.
 
 AI/rule engine chỉ tạo proposal. Unique `{analysis_run_id: 1}` và
 `{workspace_id: 1, report_version_id: 1, created_at: -1}`.
