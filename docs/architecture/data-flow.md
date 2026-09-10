@@ -244,7 +244,8 @@ biến data-flow thành ADR ngầm.
 | Asset/threat/control/test | [`threat-model-v1.md`](../threat-model/threat-model-v1.md) |
 | Pipeline 1 | [`pipeline-1-similarity.md`](../pipelines/pipeline-1-similarity.md) |
 | Pipeline 2 | [`pipeline-2-assessment.md`](../pipelines/pipeline-2-assessment.md) |
-| MongoDB/API đầu ra kế tiếp | `W2.2`, rồi `W2.3` |
+| MongoDB | [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](./data-dictionary.md) (`W2.2`, review candidate) |
+| API đầu ra kế tiếp | `W2.3` |
 
 - [x] Có data class và quy tắc mixed data.
 - [x] Có boundary cho browser, parser, AI, Internet, tenant retrieval,

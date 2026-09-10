@@ -11,3 +11,8 @@
 Quyết định cần ADR sớm: MongoDB deployment/search, queue, file storage,
 parser, embedding/reranker/LLM và Search Provider.
 
+## Danh mục
+
+| ADR | Quyết định | Trạng thái |
+|---|---|---|
+| [ADR-001](./ADR-001-mongodb-provenance-storage.md) | MongoDB deployment, provenance, file storage, queue và derived index | Review candidate — chờ Yến review |
