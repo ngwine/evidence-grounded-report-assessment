@@ -34,6 +34,7 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
+| API contract (`W2.3`) | Có [API Contract v1](docs/api/API_CONTRACT_V1.md) và [OpenAPI draft](docs/api/openapi-v1.yaml); YAML/$ref đã kiểm tra, chờ Yến review |
 | Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
 | Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
 | Parser và chunking | Prototype PDF/DOCX đã merge vào `main`; chờ worker integration, stable provenance, real/golden corpus và benchmark chất lượng |

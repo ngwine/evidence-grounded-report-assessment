@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.3 |
+| Phiên bản | 1.4 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật tiến độ/reforecast | 10/09/2026 |
 | Thời gian dự án | 08/08/2026–22/01/2027 (24 tuần) |
@@ -20,8 +20,9 @@ Các roadmap cũ lệch Excel ở W06–W15 không còn là nguồn lịch chu�
 qua được giữ nguyên để thể hiện độ trễ; không sửa ngày nhằm làm đẹp tiến độ.
 Phiên bản 1.1 ghi nhận actual đến hết ngày 03/09/2026 và bổ sung reforecast;
 phiên bản 1.2 bổ sung evidence kiến trúc `W2.1` ở trạng thái chờ review; phiên
-bản 1.3 ghi nhận PR `W2.1` và design artifact `W2.2`. Baseline ngày 21/08/2026
-vẫn được giữ để đối chiếu schedule variance.
+bản 1.3 ghi nhận PR `W2.1` và design artifact `W2.2`; phiên bản 1.4 bổ sung
+API/OpenAPI review candidate `W2.3`. Baseline ngày 21/08/2026 vẫn được giữ để
+đối chiếu schedule variance.
 
 ---
 
@@ -137,7 +138,7 @@ buộc có evidence, approver và ngày quyết định ISO `YYYY-MM-DD`.
 | Gate | Tuần baseline | Forecast v1.1 | Điều kiện Pass | Nếu Fail | Status cập nhật | Evidence hiện tại | Approver | Decision date |
 |---|---:|---:|---|---|---|---|---|---|
 | `G-01 Scope/Data` | W01–W02 | 11/09 | Scope/RQ/actor/capacity và quyền dùng sample có quyết định | Không đưa dữ liệu chưa rõ quyền vào hệ thống; mở blocker có owner | OPEN | Scope và pipeline đã chốt; data-rights/consent/retention và xác nhận GVHD chưa đóng | Q + Y + GVHD | — |
-| `G-02 Architecture` | W02 | 11/09 | C4, MongoDB/index decision, schema, API, wireframe, rubric/protocol v1 được review | Chỉ dựng skeleton độc lập với decision; carry-over trừ vào capacity tuần recovery | OPEN | `W2.1` có PR #5 chờ Y review; `W2.2` có [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](../architecture/data-dictionary.md) review candidate; `W2.3–W2.6` chưa đạt DoD | Q + Y | — |
+| `G-02 Architecture` | W02 | 11/09 | C4, MongoDB/index decision, schema, API, wireframe, rubric/protocol v1 được review | Chỉ dựng skeleton độc lập với decision; carry-over trừ vào capacity tuần recovery | OPEN | `W2.1` PR #5 đã được Y approve/merge; `W2.2` có PR #6 chờ review; `W2.3` có [API contract](../api/API_CONTRACT_V1.md)/[OpenAPI](../api/openapi-v1.yaml) review candidate; `W2.4–W2.6` chưa đạt DoD | Q + Y | — |
 | `G-03 Model/Parse Feasibility` | W05 | 25/09 | Parser/chunk provenance đạt fixture; model/index chạy trên máy demo; JSON schema khóa | Dùng fallback model/index; cắt OCR/extension | OPEN | Parser/chunker prototype đã merge; test `2 passed, 1 skipped`; thiếu golden benchmark, worker, stable provenance và model/index benchmark | Q + Y | — |
 | `G-04 Similarity v1` | W08 | 16/10 | BM25/Dense/RRF/reranker/classifier/report chạy và có metric sơ bộ | Giữ baseline tốt nhất; không mở extension | OPEN | Chưa bắt đầu implementation | Q + Y | — |
 | `G-05 LOCAL Assessment` | W10 | 30/10 | Rubric→LOCAL evidence→three-state verification chạy, có ground truth pilot | Sửa protocol/retrieval trước khi dựng graph sâu | OPEN | Kiến trúc và dataset mapping đã chốt; chưa có implementation/pilot | Q + Y | — |
@@ -182,9 +183,10 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W1.4` | CARRY-OVER | 75% | Hai file planning và RQ traceability đã có | Q/Y review và xác nhận baseline hiện hành |
 | `W1.5` | CARRY-OVER | 75% | Repo/board/labels/milestones/workflow và PR #2 đã merge | Approval/comment xác nhận của reviewer Y |
 | `W1.6` | CARRY-OVER | 25% | Báo cáo tiến độ có nội dung nền | Chương 1 riêng và review chéo |
-| `W2.1` | CARRY-OVER | 50% | Có [C4](../architecture/c4.md), [data flow/trust boundary](../architecture/data-flow.md) và [threat model/adversarial plan v1](../threat-model/threat-model-v1.md) ở trạng thái review candidate | Đồng bộ scope `W1.1`; Y review/ghi xác nhận và xác nhận owner/mốc cho adversarial tests |
+| `W2.1` | CARRY-OVER | 75% | [PR #5](https://github.com/ngwine/evidence-grounded-report-assessment/pull/5) đã được Yến approve và merge; có C4, data flow/trust boundary và threat model v1 | Đồng bộ scope `W1.1` trong SRS/Use Case cũ trước khi `DONE` |
 | `W2.2` | CARRY-OVER | 75% | Có [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](../architecture/data-dictionary.md): deployment, collection/index, provenance, lifecycle và deny-by-default | Y review/xác nhận; `W2.6.3` chốt retention/authority/SLA. Implementation/acceptance test thuộc `W3.1` |
-| `W2.3–W2.4` | CARRY-OVER | 0% | Chưa có artifact đạt DoD | API contract; wireframe/navigation/permission matrix |
+| `W2.3` | CARRY-OVER | 75% | Có [API Contract v1](../api/API_CONTRACT_V1.md) và [OpenAPI draft](../api/openapi-v1.yaml); YAML parse và `$ref` check đạt | Y review; đồng bộ thay đổi từ review `W2.2`; runtime contract test thuộc `W3.x` |
+| `W2.4` | CARRY-OVER | 0% | Chưa có artifact đạt DoD | Wireframe/navigation/permission matrix |
 | `W2.5` | CARRY-OVER | 25% | Đã chốt LOCAL/GRAPH, three-state và trường rubric | Rubric mẫu, annotation/adjudication guideline có ví dụ |
 | `W2.6` | CARRY-OVER | 50% | Dataset/benchmark mapping và in-domain schema đã chốt | Rights/access/license/checksum/split/retention/approval |
 | `W3.1` | CARRY-OVER | 25% | Repo scaffold tồn tại | FastAPI/Mongo/Compose/CI healthcheck và security gates |
@@ -235,7 +237,7 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 |---|---|---|---|---|---:|---|---|---|
 | `W2.1` | `EP-02-S05`, `EP-02-S04` | Thiết kế C4 Context/Container/Deployment, data flow, trust boundary và threat-model/adversarial plan v1 | Q | Y | 4 | `W1.1` | [C4](../architecture/c4.md) phản ánh Web–API–worker–DB/storage/index/local AI; [data flow/trust boundary](../architecture/data-flow.md) và [threat model](../threat-model/threat-model-v1.md) có asset/risk→mitigation→test mapping cho upload/parser, queue, DB, tenant retrieval, prompt injection, output sanitization và log privacy | CARRY-OVER |
 | `W2.2` | `EP-02-S02`, `EP-09-S06` | Chốt MongoDB deployment/index ADR, collection, data dictionary và lifecycle fields | Q | Y | 5 | `W2.1` | [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](../architecture/data-dictionary.md) mô tả schema/reference/index/invariant/migration/rebuild, purpose/rights/retention/tombstone và derived-data cascade | CARRY-OVER |
-| `W2.3` | `EP-02-S06` | Viết API contract v1 và error format | Q | Y | 4 | `W2.2` | Auth/report/source/upload/job/chunk/rubric/result/review contract | CARRY-OVER |
+| `W2.3` | `EP-02-S06` | Viết API contract v1 và error format | Q | Y | 4 | `W2.2` | [API Contract v1](../api/API_CONTRACT_V1.md) và [OpenAPI draft](../api/openapi-v1.yaml) bao phủ auth/report/source/upload/job/chunk/rubric/result/review, error/pagination/idempotency/revision | CARRY-OVER |
 | `W2.4` | `EP-02-S07`, `EP-02-S03` | Wireframe, navigation map và ma trận quyền các luồng P0 | Y | Q | 4 | `W1.1` | Upload/progress/evidence/review có loading/empty/error/permission | CARRY-OVER |
 | `W2.5` | `EP-01-S06`, `EP-05-S01` | Rubric template v1, checklist LOCAL/GRAPH và annotation/adjudication guideline | Y | Q | 5 | `W1.2` | Criterion/evidence/weight/level/rule có example; người gán nhãn, vòng review và cách giải quyết bất đồng rõ | CARRY-OVER |
 | `W2.6` | `EP-01-S02`, `EP-04-S01`, `EP-09-S06`, `EP-10-S01` | Lập data/rubric/model inventory, hồ sơ rights–purpose–retention và dataset/benchmark/sample-corpus plan v1 | Y | Q | 4 | `W1.2`, `W2.5`, nguồn dữ liệu/GVHD | Mỗi nguồn có owner/license-or-consent/allowed purpose/classification/anonymization/retention/approver/date; deny-by-default nếu chưa duyệt; đơn vị mẫu/nhãn/split/metric/provenance và sample không nhạy cảm rõ | CARRY-OVER |
@@ -749,6 +751,7 @@ làm đẹp tiến độ.
 | 1.1 | 03/09/2026 | Sửa MSSV thành viên Y thành `52200229`; ghi nhận scope/pipeline và dataset-task mapping đã chốt; cập nhật actual W01–W04; parser/chunker baseline ở commit `3c1c133` đạt `2 passed, 1 skipped` nhưng chưa đạt production DoD; chuyển parser plan sang benchmark-driven adapter; tách prototype khỏi worker/provenance/golden benchmark; reforecast `G-02→11/09`, `G-03→25/09`, `G-04→16/10`, `G-05→30/10`, `G-06→20/11`; giữ `G-07` trở đi và hạn nộp; đưa mọi tuần về tối đa 13 SP/người, tổng 307 SP/người; Targeted Questions/PDF/full Docling–GROBID là conditional |
 | 1.2 | 03/09/2026 | Bổ sung evidence `W2.1`: C4 Context/Container/Deployment, data flow với 10 trust boundary và threat-model/adversarial plan v1; giữ actual 50%/`CARRY-OVER` theo quy tắc WBS cho đến khi đồng bộ `W1.1` và Y review xác nhận |
 | 1.3 | 10/09/2026 | Mở PR #5 cho `W2.1`; bổ sung ADR-001 và data dictionary `W2.2` gồm MongoDB deployment, collection/index, provenance, migration/rebuild, retention/tombstone/cascade và deny-by-default; cập nhật actual `W2.2` lên 75% nhưng giữ `CARRY-OVER` đến khi Y review |
+| 1.4 | 10/09/2026 | Ghi nhận PR #5 đã được Y approve/merge; bổ sung API Contract v1 và OpenAPI draft `W2.3`, kiểm tra YAML/$ref; cập nhật actual `W2.1` và `W2.3` lên 75% nhưng giữ `CARRY-OVER` cho đến khi đạt đủ DoD/review |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|
