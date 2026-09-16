@@ -314,7 +314,9 @@ Các điểm trên không cho phép bỏ auth/scope/governance/evidence guard kh
 - [x] Có evidence/checklist enum và contradiction mapping nhất quán `W2.2`.
 - [x] Có OpenAPI draft parse được.
 - [ ] Yến review endpoint theo wireframe/permission/rubric flow.
-- [ ] Đồng bộ thay đổi được yêu cầu từ review PR `W2.2`.
+- [x] Đồng bộ review PR `W2.2`: quan hệ
+  `document_elements → chunks` qua `chunks.element_ids`; ADR/Data Dictionary
+  đã được phê duyệt và merge trong PR #6.
 - [ ] Contract tests chạy khi API được hiện thực ở `W3.x`.
 
 `W2.3` chỉ chuyển `DONE` sau review; implementation/test runtime không được ghi
