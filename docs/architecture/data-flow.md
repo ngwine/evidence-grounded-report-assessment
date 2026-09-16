@@ -120,7 +120,7 @@ Một version mới không âm thầm ghi đè version cũ. Run luôn khóa vào
 |---:|---|---|---|
 | 1 | Published rubric version → criterion/checklist plan | nội bộ | Rubric đã dùng là immutable; weight/rule validate; run khóa version |
 | 2 | Checklist + report/corpus → LOCAL hoặc GRAPH evidence | `TB-05`, `TB-10` | Chọn mode theo criterion; mọi node/span truy được về source/version/locator |
-| 3 | Evidence package → three-state verification | `TB-03` | Chỉ `SUPPORTED`, `PARTIALLY_SUPPORTED`, `NOT_SUPPORTED`; evidence không đủ phải abstain/fail closed |
+| 3 | Evidence package → claim verification → checklist outcome | `TB-03` | Quan hệ claim–evidence chỉ là `SUPPORTED`, `CONTRADICTED`, `INSUFFICIENT`; kết quả checklist chỉ là `MET`, `UNMET`, `CANNOT_ASSESS`. Mâu thuẫn chỉ thành `UNMET` khi nguồn và ngữ cảnh đủ tin cậy; còn lại phải abstain/fail closed |
 | 4 | Verified checklist → rationale + deterministic score proposal | `TB-03` | Model không tự tính/ghi đè rule điểm; rationale trích đúng evidence ID |
 | 5 | Proposal → Accept/Edit/Reject → publish | `TB-06`, `TB-09` | Lecturer quyết định cuối; edit cần reason; student chỉ thấy bản đã publish |
 
@@ -244,7 +244,8 @@ biến data-flow thành ADR ngầm.
 | Asset/threat/control/test | [`threat-model-v1.md`](../threat-model/threat-model-v1.md) |
 | Pipeline 1 | [`pipeline-1-similarity.md`](../pipelines/pipeline-1-similarity.md) |
 | Pipeline 2 | [`pipeline-2-assessment.md`](../pipelines/pipeline-2-assessment.md) |
-| MongoDB/API đầu ra kế tiếp | `W2.2`, rồi `W2.3` |
+| MongoDB | [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](./data-dictionary.md) (`W2.2`, review candidate) |
+| API đầu ra kế tiếp | `W2.3` |
 
 - [x] Có data class và quy tắc mixed data.
 - [x] Có boundary cho browser, parser, AI, Internet, tenant retrieval,

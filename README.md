@@ -32,7 +32,8 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 | Product Backlog/WBS                         | Baseline v1.2 cập nhật actual/evidence ngày 03/09/2026; chờ Q/Y review/ký                                      |
 | C4/trust boundary/threat model (`W2.1`) | Đã có review candidate; chờ đồng bộ scope `W1.1` và Y review xác nhận trước khi `DONE` |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
-| MongoDB deployment và Search/Vector Search | Chờ `W2.2`/`G-02`                                                                                                 |
+| MongoDB/provenance (`W2.2`) | Đã có [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](docs/architecture/data-dictionary.md) ở trạng thái review candidate; chờ Yến review |
+| Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
 | Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
 | Parser và chunking | Prototype PDF/DOCX đã merge vào `main`; chờ worker integration, stable provenance, real/golden corpus và benchmark chất lượng |
 | Model local | Chờ benchmark tại `G-03` |
