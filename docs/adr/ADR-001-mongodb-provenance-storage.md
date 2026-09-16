@@ -1,7 +1,8 @@
 # ADR-001 — MongoDB, provenance, file storage và derived index
 
-- **Trạng thái:** Review candidate
+- **Trạng thái:** Accepted — design baseline
 - **Ngày:** 10/09/2026
+- **Ngày phê duyệt:** 10/09/2026
 - **WBS:** `W2.2`
 - **Owner:** Nguyễn Trần Ngọc Quý (Q)
 - **Reviewer:** Võ Thị Kim Yến (Y)
@@ -406,11 +407,13 @@ Tạo ADR thay thế khi:
 - [x] Owner hoàn thành decision, alternatives, consequence và test contract.
 - [x] Có deployment, file storage, queue và index/rebuild decision.
 - [x] Có provenance, migration, retention/tombstone/cascade design.
-- [ ] Yến review collection/scope/data-rights và xác nhận trên PR.
+- [x] Yến review collection/scope/data-rights và phê duyệt trên PR #6 ngày
+  10/09/2026; nhận xét về quan hệ `document_elements → chunks` đã được xử lý
+  trong Data Dictionary v0.2.
 - [ ] `W2.6.3` xác nhận retention/authority/SLA với data owner/GVHD.
 - [ ] `W3.1` chạy clean Compose/init/index smoke test.
 
 | Vai trò | Họ tên | Quyết định | Ngày | Evidence |
 |---|---|---|---|---|
 | Owner | Nguyễn Trần Ngọc Quý | Đề xuất review | 10/09/2026 | Branch `docs/w2-2-mongodb-provenance-adr` |
-| Reviewer | Võ Thị Kim Yến | Chờ review |  |  |
+| Reviewer | Võ Thị Kim Yến | Phê duyệt design baseline | 10/09/2026 | [PR #6 — APPROVED](https://github.com/ngwine/evidence-grounded-report-assessment/pull/6) |

@@ -2,9 +2,9 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 0.1 |
+| Phiên bản | 0.2 |
 | Ngày | 10/09/2026 |
-| Trạng thái | REVIEW CANDIDATE |
+| Trạng thái | APPROVED DESIGN BASELINE |
 | WBS | `W2.2` |
 | Owner | Nguyễn Trần Ngọc Quý (Q) |
 | Reviewer | Võ Thị Kim Yến (Y) |
@@ -88,6 +88,7 @@ erDiagram
     FILE_OBJECTS ||--|| DOCUMENT_VERSIONS : supplies
     DOCUMENT_VERSIONS ||--o{ DOCUMENT_ELEMENTS : parsed_to
     DOCUMENT_VERSIONS ||--o{ CHUNKS : chunked_to
+    DOCUMENT_ELEMENTS }o--o{ CHUNKS : contributes_to
     GOVERNANCE_RECORDS ||--o{ DOCUMENTS : governs
     GOVERNANCE_RECORDS ||--o{ DATASET_MANIFESTS : governs
     DATASET_MANIFESTS ||--o{ DATASET_MEMBERSHIPS : contains
@@ -104,6 +105,13 @@ erDiagram
     REVIEWS ||--o| PUBLICATIONS : publishes
     DELETION_REQUESTS ||--o{ TOMBSTONES : creates
 ```
+
+Quan hệ `DOCUMENT_ELEMENTS → CHUNKS` được hiện thực bằng
+`chunks.element_ids`. Mỗi chunk phải tham chiếu ít nhất một element thuộc cùng
+`document_version_id` và generation; một element có thể không tạo chunk riêng
+(ví dụ heading chỉ cung cấp ngữ cảnh) hoặc góp vào nhiều chunk khi nội dung dài
+được tách. Repository kiểm tra non-empty reference, cùng version/generation và
+không cho dangling/cross-document reference trước khi commit chunk generation.
 
 ## 4. Collection catalog
 
@@ -787,7 +795,9 @@ quan hệ.
 - [x] Có provenance từ file đến evidence/publication.
 - [x] Có migration, validator, rebuild và reconciliation strategy.
 - [x] Có rights/purpose/retention gate, tombstone và cascade matrix.
-- [ ] Yến review/xác nhận collection, scope, rubric và data governance fields.
+- [x] Yến review/xác nhận collection, scope, rubric và data governance fields
+  trên PR #6 ngày 10/09/2026; nhận xét bổ sung quan hệ
+  `document_elements → chunks` đã được xử lý trong phiên bản 0.2.
 - [ ] `W2.6.3`/GVHD chốt duration, authority, hold và backup aging.
 - [ ] `W3.1` hiện thực validator/index/Compose và chạy acceptance tests.
 

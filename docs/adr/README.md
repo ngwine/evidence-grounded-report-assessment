@@ -15,4 +15,4 @@ parser, embedding/reranker/LLM và Search Provider.
 
 | ADR | Quyết định | Trạng thái |
 |---|---|---|
-| [ADR-001](./ADR-001-mongodb-provenance-storage.md) | MongoDB deployment, provenance, file storage, queue và derived index | Review candidate — chờ Yến review |
+| [ADR-001](./ADR-001-mongodb-provenance-storage.md) | MongoDB deployment, provenance, file storage, queue và derived index | Accepted — design baseline; PR #6 được Yến phê duyệt 10/09/2026 |
