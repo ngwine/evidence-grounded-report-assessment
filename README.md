@@ -15,8 +15,9 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
    Similarity Report.
 3. **Đánh giá báo cáo dựa trên bằng chứng** – Rubric → Checklist → Evidence
    Retrieval (Local + Graph) → Verification → Rationale → Deterministic Scoring.
-4. **Hỗ trợ giảng viên** – Sinh câu hỏi vấn đáp, Lecturer Review, Feedback Log
-   và báo cáo tổng hợp.
+4. **Hỗ trợ giảng viên** – Lecturer Review, Feedback Log và báo cáo tổng hợp;
+   Targeted Questions là hướng `CONDITIONAL`, chỉ mở sau khi hai pipeline chính
+   đạt gate chất lượng và tiến độ.
 
 > Kết quả AI chỉ là đề xuất hỗ trợ. Hệ thống không tự kết luận đạo văn và
 > không tự công bố điểm.
@@ -27,12 +28,12 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 
 | Hạng mục                                  | Trạng thái                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
-| SRS/Use Case tuần 1                        | `Review candidate`; cần đồng bộ bỏ các RQ/feature cũ không còn trong phạm vi                          |
+| Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
+| SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
 | Product Backlog/WBS                         | Baseline v1.2 cập nhật actual/evidence ngày 03/09/2026; chờ Q/Y review/ký                                      |
-| C4/trust boundary/threat model (`W2.1`) | Đã có review candidate; chờ đồng bộ scope `W1.1` và Y review xác nhận trước khi `DONE` |
+| C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
-| MongoDB/provenance (`W2.2`) | Đã có [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](docs/architecture/data-dictionary.md) ở trạng thái review candidate; chờ Yến review |
+| MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
 | Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
 | Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
 | Parser và chunking | Prototype PDF/DOCX đã merge vào `main`; chờ worker integration, stable provenance, real/golden corpus và benchmark chất lượng |
@@ -56,7 +57,6 @@ flowchart LR
     WK --> GRAPH[Evidence Graph]
     WK --> DB
     WK --> AI[Local AI runtime]
-    WK -. chỉ sau change request .-> SP[Extension boundary – OUT OF SCOPE]
 ```
 
 - Frontend không kết nối trực tiếp MongoDB.
@@ -65,8 +65,8 @@ flowchart LR
 - **Pipeline 1** (Similarity): BM25 + Dense → RRF → Re-ranking → Classification → Similarity Report.
 - **Pipeline 2** (Assessment): Rubric Compile → Checklist Classify → Evidence Retrieval (Local/Graph) → Verification → Rationale → Scoring.
 - MongoDB là source of truth. Lexical/vector index là dữ liệu dẫn xuất có thể dựng lại.
-- Search Provider không thuộc WBS 24 tuần và luôn `disabled`; boundary chỉ được
-  giữ làm extension placeholder, không phải feature đang chờ triển khai.
+- Search Provider không thuộc WBS 24 tuần; hệ thống chỉ truy xuất trên source
+  corpus đã được nạp và duyệt quyền sử dụng.
 
 ## Cấu trúc thư mục
 
@@ -96,30 +96,29 @@ flowchart LR
 │       │   │   ├── rubrics/
 │       │   │   ├── assessment/   # Pipeline 2 – đánh giá bằng chứng
 │       │   │   ├── reviews/
-│       │   │   ├── questions/
+│       │   │   ├── questions/   # CONDITIONAL; chỉ mở sau core gate
 │       │   │   ├── feedback/     # Feedback Log
 │       │   │   ├── datasets/     # Metadata dataset thực nghiệm
 │       │   │   └── analysis/     # Shared analysis logic
 │       │   ├── integrations/     # Adapter parser, indexing, retrieval,
-│       │   │   │                 # graph, local AI, storage, provider
+│       │   │   │                 # graph, local AI và storage
 │       │   │   ├── parsing/
 │       │   │   ├── indexing/     # BM25 + Dense Vector indexing
 │       │   │   ├── retrieval/    # Hybrid Retrieval, RRF, re-ranking
 │       │   │   ├── graph/        # Evidence Graph (HippoRAG-style)
 │       │   │   ├── local_ai/
 │       │   │   ├── storage/
-│       │   │   └── search_provider/ # extension placeholder – OUT OF SCOPE
 │       │   └── worker/           # Task handlers, checkpoint, retry
 │       └── tests/
 ├── research/                     # Nghiên cứu và thực nghiệm
 │   ├── protocols/
 │   │   ├── rq1-similarity/       # RQ1: Phát hiện tương đồng
 │   │   ├── rq2-assessment/       # RQ2: Đánh giá dựa bằng chứng
-│   │   └── rq3-questions/        # RQ3: Sinh câu hỏi
+│   │   └── rq3-questions/        # RQ3: Sinh câu hỏi — CONDITIONAL
 │   ├── datasets/
 │   │   ├── similarity/           # Cặp đoạn gán nhãn
 │   │   ├── assessment/           # Báo cáo + rubric + labels
-│   │   └── questions/            # Câu hỏi đánh giá
+│   │   └── questions/            # Dataset RQ3 — CONDITIONAL
 │   ├── configs/
 │   ├── scripts/
 │   ├── notebooks/
@@ -163,7 +162,7 @@ Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã
 ## Quy ước chính
 
 - Không commit `.env`, secret, báo cáo thật, PII, model weight, cache hoặc log.
-- File upload và nội dung web luôn được xem là dữ liệu không tin cậy.
+- File upload và mọi tài liệu nguồn luôn được xem là dữ liệu không tin cậy.
 - Mọi kết quả AI phải lưu model/prompt/config version và evidence ID.
 - Chỉ giảng viên có quyền mới được duyệt hoặc công bố kết quả.
 - Logic thực nghiệm chính đặt trong script/config có version; notebook chỉ dùng khám phá.
