@@ -12,9 +12,17 @@ khoảng cách dòng, số thứ tự trong text...
 import pymupdf as fitz # PyMuPDF — đọc toạ độ glyph trực tiếp, tránh lỗi chèn khoảng trắng sai (kerning)
             # khi extract text
 import re   # nhận diện Mục lục (dot leader), số trang La Mã, số thứ tự heading ("1.1", "1.1.1"...)
-import unicodedata  # chuẩn hoá NFKC: sửa lỗi ligature (vd: "oﬃcial" -> "official")
-                    # do PDF gộp cụm chữ thành 1 ký tự
 from collections import Counter
+
+from .text_normalization import (
+    build_generation_key,
+    build_parser_spec,
+    normalize_with_mapping,
+    resolve_document_version_id,
+    sha256_text,
+    stable_block_id,
+    stable_element_key,
+)
 
 # Dòng kết thúc bằng chữ cái + dấu "-" -> khả năng cao là từ bị ngắt dòng giữa chừng
 # do PDF word-wrap (vd: "rep-" ở cuối dòng, "resent" ở dòng sau)
@@ -93,10 +101,186 @@ def _normalize(text):
     xóa ký tự "vô hình" sót lại từ Word (zero-width space...), gộp khoảng trắng thừa,
     xóa khoảng trắng đầu/cuối.
     """
-    text = unicodedata.normalize("NFKC", text)
-    text = re.sub(r"[\u200b\u200c\u200d\u2060\ufeff]", "", text)
-    text = re.sub(r"[ \t]+", " ", text)
-    return text.strip()
+    return normalize_with_mapping(text).text
+
+
+def _sort_page_lines_reading_order(lines, page_width):
+    """Return deterministic single- or two-column reading order.
+
+    PyMuPDF commonly emits each column as a separate block, but sorting every
+    line only by ``y`` interleaves left and right columns.  We enable the
+    column-major path only when both sides contain at least two narrow lines;
+    full-width lines are kept as separators between column bands.
+    """
+
+    if len(lines) < 4 or page_width <= 0:
+        return sorted(lines, key=lambda line: (line["y"], line["x"]))
+
+    midpoint = page_width / 2
+    narrow = [
+        line
+        for line in lines
+        if (line["bbox"][2] - line["bbox"][0]) <= page_width * 0.62
+    ]
+    left = [line for line in narrow if line["bbox"][0] < midpoint * 0.8]
+    right = [line for line in narrow if line["bbox"][0] > midpoint * 0.9]
+    if len(left) < 2 or len(right) < 2:
+        return sorted(lines, key=lambda line: (line["y"], line["x"]))
+
+    spanning = [
+        line
+        for line in lines
+        if (line["bbox"][2] - line["bbox"][0]) > page_width * 0.62
+    ]
+    regular = [line for line in lines if line not in spanning]
+
+    def column_sort(items):
+        return sorted(
+            items,
+            key=lambda line: (
+                0 if line["bbox"][0] < midpoint else 1,
+                line["y"],
+                line["x"],
+            ),
+        )
+
+    ordered = []
+    lower_y = float("-inf")
+    for separator in sorted(spanning, key=lambda line: (line["y"], line["x"])):
+        band = [line for line in regular if lower_y <= line["y"] < separator["y"]]
+        ordered.extend(column_sort(band))
+        ordered.append(separator)
+        lower_y = separator["y"]
+    ordered.extend(column_sort([line for line in regular if line["y"] >= lower_y]))
+    return ordered
+
+
+def _is_header_footer_candidate(line):
+    """Limit repetition filtering to page margins, never repeated body text."""
+
+    page_height = line.get("page_height") or 0
+    if page_height <= 0:
+        return False
+    return line["bbox"][1] <= page_height * 0.15 or line["bbox"][3] >= page_height * 0.85
+
+
+def _combine_pdf_lines(lines, *, dehyphenate=False):
+    """Combine extracted PDF lines while preserving raw offsets and boxes."""
+
+    raw_text_parts = []
+    fragments = []
+    cursor = 0
+    for line in lines:
+        if raw_text_parts:
+            raw_text_parts.append("\n")
+            cursor += 1
+        raw_line = line["raw_text"]
+        start = cursor
+        raw_text_parts.append(raw_line)
+        cursor += len(raw_line)
+        fragments.append({
+            "raw_char_start": start,
+            "raw_char_end": cursor,
+            "page_index": line["page_index"],
+            "page_number": line["page"],
+            "page_label": line["page_label"],
+            "bbox": list(line["bbox"]),
+        })
+
+    raw_text = "".join(raw_text_parts)
+    normalized = normalize_with_mapping(
+        raw_text,
+        dehyphenate_line_breaks=dehyphenate,
+    )
+    boxes = [fragment["bbox"] for fragment in fragments]
+    bbox = [
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    ]
+    return raw_text, normalized, fragments, bbox
+
+
+def _build_pdf_element(
+    *,
+    element_type,
+    source_lines,
+    section_path,
+    order,
+    document_version_id,
+    parser_spec,
+    generation_key,
+    level=None,
+    dehyphenate=False,
+):
+    raw_text, normalized, fragments, bbox = _combine_pdf_lines(
+        source_lines,
+        dehyphenate=dehyphenate,
+    )
+    raw_digest = sha256_text(raw_text)
+    source_coordinate = {
+        "page_index": source_lines[0]["page_index"],
+        "page_label": source_lines[0]["page_label"],
+        "bbox": bbox,
+        "fragments": fragments,
+    }
+    block_id = stable_block_id(
+        document_version_id=document_version_id,
+        source_kind="pdf",
+        source_coordinate=source_coordinate,
+        raw_text_sha256=raw_digest,
+    )
+    locator = {
+        "locator_version": 1,
+        "source_kind": "pdf",
+        "coordinate_system": {
+            "text": "unicode_code_point",
+            "bbox": "pdf_points_top_left",
+        },
+        "offset_convention": "half_open",
+        "page_index": source_lines[0]["page_index"],
+        "page_number": source_lines[0]["page"],
+        "page_label": source_lines[0]["page_label"],
+        "bbox": bbox,
+        "section_path": list(section_path),
+        "block_id": block_id,
+        "raw_char_start": 0,
+        "raw_char_end": len(raw_text),
+        "fragments": fragments,
+    }
+    element_key = stable_element_key(
+        document_version_id=document_version_id,
+        element_type=element_type,
+        raw_text_sha256=raw_digest,
+        locator=locator,
+        level=level,
+    )
+    element = {
+        "schema_version": 2,
+        "document_version_id": document_version_id,
+        "element_key": element_key,
+        "element_id": element_key,
+        "order": order,
+        "type": element_type,
+        "element_type": element_type.upper(),
+        "raw_text": raw_text,
+        "normalized_text": normalized.text,
+        "text": normalized.text,
+        "raw_text_sha256": raw_digest,
+        "normalized_text_sha256": sha256_text(normalized.text),
+        "section_path": list(section_path),
+        "structure_path": list(section_path),
+        "locator": locator,
+        "normalization_map": normalized.normalization_map,
+        "parser_spec": dict(parser_spec),
+        "generation_key": generation_key,
+        # Legacy one-based page alias retained for current chunker/demo code.
+        "page": source_lines[0]["page"],
+    }
+    if level is not None:
+        element["level"] = level
+    return element
 
 def _looks_like_heading_start(text):
     """
@@ -143,7 +327,8 @@ def _strip_page_number(text):
 # heading_merge_gap_factor : quyết định 2 dòng heading liên tiếp có nên gộp thành 1 heading không
 
 def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor=1.5,
-                         heading_merge_gap_factor=3.0, y_tolerance=2.0):
+                         heading_merge_gap_factor=3.0, y_tolerance=2.0,
+                         document_version_id=None):
 
     """
     Tham số:
@@ -157,11 +342,38 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             coi 2 span là cùng 1 hàng ngang
     """
 
+    resolved_document_version_id = resolve_document_version_id(
+        file_path,
+        document_version_id,
+    )
+    parser_config = {
+        "schema_version": 2,
+        "line_gap_factor": line_gap_factor,
+        "indent_threshold_factor": indent_threshold_factor,
+        "heading_merge_gap_factor": heading_merge_gap_factor,
+        "y_tolerance": y_tolerance,
+        "normalization": "unicode-nfkc-zero-width-whitespace",
+        "paragraph_dehyphenation": True,
+    }
+    parser_spec = build_parser_spec(
+        name="pymupdf-layout-parser",
+        version="2.0.0",
+        config=parser_config,
+    )
+    generation_key = build_generation_key(
+        document_version_id=resolved_document_version_id,
+        parser_spec=parser_spec,
+    )
+
     doc = fitz.open(file_path)
     n_pages = len(doc)
     pages_lines = []
 
-    for page in doc:
+    for page_index, page in enumerate(doc):
+        try:
+            page_label = page.get_label() or str(page_index + 1)
+        except (AttributeError, RuntimeError, ValueError):
+            page_label = str(page_index + 1)
         # Lấy toàn bộ nội dung của 1 trang dưới dạng cấu trúc "dict"
         # d (dict):
             # "width", "height" => kích thước trang
@@ -171,7 +383,7 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                         # mỗi span có "text", "size", "flags" (đậm/nghiêng), "bbox" (tọa độ)
         d = page.get_text("dict")
         raw_spans = []
-        for block in d["blocks"]:
+        for block_index, block in enumerate(d["blocks"]):
             for line in block.get("lines", []):
                 for s in line.get("spans", []):
                     t = s.get("text", "")
@@ -188,26 +400,34 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                         "size": s["size"],
                         "bold": bool(s["flags"] & 2**4),
                         "x0": s["bbox"][0],
-                        "y": s["bbox"][1]
+                        "y": s["bbox"][1],
+                        "bbox": tuple(s["bbox"]),
+                        "block_index": block_index,
                     })
 
 
         # B1: Gom span theo hàng (dựa vào tọa độ y)
-        raw_spans.sort(key=lambda s: s["y"])
+        raw_spans.sort(key=lambda s: (s["y"], s["x0"]))
         raw_line_groups = []   # raw_line_group (list): lưu trữ các hàng đã thêm span vào xong
         raw_cur_line = []   # raw_cur_cluster (list): lưu trữ 1 hàng thêm span dang dở
                         # => tạm giữ các span đang nghi ngờ là cùng 1 hàng
         raw_cur_y = None    # raw_cur_y: tọa độ neo
+        raw_cur_block = None
                         # => dùng làm mốc so sánh cho span tiếp theo: "span mới này có gần với hàng đang xây không?"
 
         for s in raw_spans:
-            if raw_cur_line and abs(s["y"] - raw_cur_y) <= y_tolerance:
+            if (
+                raw_cur_line
+                and s["block_index"] == raw_cur_block
+                and abs(s["y"] - raw_cur_y) <= y_tolerance
+            ):
                 raw_cur_line.append(s)
             else:
                 if raw_cur_line:
                     raw_line_groups.append(raw_cur_line)
                 raw_cur_line = [s]
                 raw_cur_y = s["y"]
+                raw_cur_block = s["block_index"]
         if raw_cur_line:
             raw_line_groups.append(raw_cur_line)
 
@@ -215,19 +435,36 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
         lines = [] # lines (list): lưu các hàng đã hoàn thành
         for line in raw_line_groups:
             line.sort(key=lambda s: s["x0"]) # sắp xếp các span lúc nãy theo x0
-            text = ""
+            raw_text = ""
             size = 0.0
             bold = False
             for s in line:
-                sep = "" if (text == "" or text.endswith((" ", "-"))) else " "
-                text = text + sep + s["text"]
+                sep = "" if (raw_text == "" or raw_text.endswith((" ", "-"))) else " "
+                raw_text = raw_text + sep + s["text"]
                 size = max(size, s["size"])
                 bold = bold or s["bold"]
-            text = _normalize(text)
+            text = _normalize(raw_text)
             if text:
-                lines.append({"text": text, "size": size, "bold": bold,
-                              "x": line[0]["x0"], "y": line[0]["y"]})
-        lines.sort(key=lambda l: l["y"])    # sắp xếp các hàng theo y để chắc chắn
+                bbox = (
+                    min(span["bbox"][0] for span in line),
+                    min(span["bbox"][1] for span in line),
+                    max(span["bbox"][2] for span in line),
+                    max(span["bbox"][3] for span in line),
+                )
+                lines.append({
+                    "raw_text": raw_text,
+                    "text": text,
+                    "size": size,
+                    "bold": bold,
+                    "x": line[0]["x0"],
+                    "y": line[0]["y"],
+                    "bbox": bbox,
+                    "page_index": page_index,
+                    "page": page_index + 1,
+                    "page_label": page_label,
+                    "page_height": d["height"],
+                })
+        lines = _sort_page_lines_reading_order(lines, d["width"])
         pages_lines.append(lines)
 
     # Phát hiện Header/Footer
@@ -245,6 +482,8 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
     # lines: các dòng trong trang đó
     for page_index, lines in enumerate(pages_lines):
         for line in lines:
+            if not _is_header_footer_candidate(line):
+                continue
             # text_positions = {'National Hydro Network, Data Model � Edition 1.0 2004-06': {2}}
             # text_positions = {'National Hydro Network, Data Model � Edition 1.0 2004-06': {2, 3, ...}}
             text_positions.setdefault(line["text"], set()).add(page_index)
@@ -262,7 +501,10 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
         if n_pages > 1 and len(pages_seen) >= threshold
     }
 
-    def is_repeated_header_footer(text):
+    def is_repeated_header_footer(line):
+        if not _is_header_footer_candidate(line):
+            return False
+        text = line["text"]
         if text in repeated_texts:
             return True
         norm = _strip_page_number(text)
@@ -289,11 +531,16 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                             # => body_left_x => để phát hiện indent
     for lines in pages_lines:
         for line in lines:
-            if not is_repeated_header_footer(line["text"]) and not is_page_number_line(line["text"]):
+            if not is_repeated_header_footer(line) and not is_page_number_line(line["text"]):
                 size_counter[line["size"]] += 1
                 x_counter[round(line["x"])] += 1
     body_size = size_counter.most_common(1)[0][0] if size_counter else 13.0
     body_left_x = x_counter.most_common(1)[0][0] if x_counter else 0
+    body_left_candidates = [
+        x
+        for x, count in x_counter.most_common(4)
+        if count >= 2
+    ] or [body_left_x]
 
     def classify(size, bold):
         """
@@ -313,16 +560,17 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
         """
         Xét xem một dòng có đang thụt lùi đầu dòng hay không
         """
-        return (x - body_left_x) >= body_size * indent_threshold_factor
+        nearest_margin = min(body_left_candidates, key=lambda margin: abs(x - margin))
+        return abs(x - nearest_margin) >= body_size * indent_threshold_factor
 
     # Lọc rác (header/footer, số trang, nội dung trong mục lục) + phân loại heading/paragraph
     clean_lines = []
-    for page_index, lines in enumerate(pages_lines, start=1):
+    for lines in pages_lines:
         for line in lines:
             text = line["text"]
 
             # Nếu text này có trong set repeated_texts hoặc text là số trang thì bỏ qua, không phân loại heading
-            if not text or is_repeated_header_footer(text) or is_page_number_line(text):
+            if not text or is_repeated_header_footer(line) or is_page_number_line(text):
                 continue
 
             # Nếu text là nội dung trong mục lục thì bỏ qua, không phân loại heading
@@ -337,8 +585,20 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             else:
                 etype, level = classify(line["size"], line["bold"])
                 # print(f"not_looks_like_heading_start: {text, etype, level}")
-            clean_lines.append({"page": page_index, "y": line["y"], "x": line["x"], "size": line["size"],
-                                "text": text, "type": etype, "level": level})
+            clean_lines.append({
+                "page_index": line["page_index"],
+                "page": line["page"],
+                "page_label": line["page_label"],
+                "y": line["y"],
+                "x": line["x"],
+                "size": line["size"],
+                "bbox": line["bbox"],
+                "raw_text": line["raw_text"],
+                "text": text,
+                "type": etype,
+                "level": level,
+                "source_lines": [line],
+            })
 
     # Gộp các dòng heading liên tiếp (không có paragraph xen giữa) thành 1
     # heading hoàn chỉnh, dừng lại khi gặp dòng tự bắt đầu 1 heading mới
@@ -387,11 +647,24 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             else:
                 break
 
-        merged_text = " ".join(g["text"] for g in cur_heading)
+        source_lines = [
+            source_line
+            for heading_line in cur_heading
+            for source_line in heading_line["source_lines"]
+        ]
+        _, merged_normalized, _, merged_bbox = _combine_pdf_lines(source_lines)
         merged_lines.append({
-            "page": cur_heading[0]["page"], "y": cur_heading[0]["y"], "x": cur_heading[0]["x"],
-            "size": max(g["size"] for g in cur_heading), "text": merged_text,
+            "page_index": cur_heading[0]["page_index"],
+            "page": cur_heading[0]["page"],
+            "page_label": cur_heading[0]["page_label"],
+            "y": cur_heading[0]["y"],
+            "x": cur_heading[0]["x"],
+            "size": max(g["size"] for g in cur_heading),
+            "bbox": tuple(merged_bbox),
+            "raw_text": "\n".join(line["raw_text"] for line in source_lines),
+            "text": merged_normalized.text,
             "type": "heading", "level": min(g["level"] for g in cur_heading),
+            "source_lines": source_lines,
         })
         i = j
 
@@ -432,11 +705,19 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             section_path = [s for s in section_path if s[0] < level]
             section_path.append((level, line["text"]))
 
-            # Thêm heading vào elements
-            elements.append({
-                "type": "heading", "level": level, "text": line["text"],
-                "page": line["page"], "section_path": [s[1] for s in section_path[:-1]]
-            })
+            # Thêm heading vào elements. ``section_path`` của heading chỉ chứa
+            # các heading cha để giữ tương thích với schema cũ.
+            heading_path = [s[1] for s in section_path[:-1]]
+            elements.append(_build_pdf_element(
+                element_type="heading",
+                source_lines=line["source_lines"],
+                section_path=heading_path,
+                order=len(elements),
+                document_version_id=resolved_document_version_id,
+                parser_spec=parser_spec,
+                generation_key=generation_key,
+                level=level,
+            ))
 
             # Xét heading để xem nó có phải nav_section hay không
             # => xuống else sẽ bỏ qua nội dung nav_section
@@ -473,12 +754,23 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
                 else:
                     break
 
-            # Nối các dòng đã gộp thành 1 đoạn văn hoàn chỉnh
-            # Thêm các dòng đã gộp vào elements, rồi nhảy i tới vị trí j (bỏ qua các dòng vừa gộp)
-            merged_text = _join_paragraph_lines([b["text"] for b in buf])
-            elements.append({
-                "type": "paragraph", "text": merged_text, "page": buf[0]["page"],
-                "section_path": [s[1] for s in section_path]
-            })
+            # Lưu nguyên văn từng dòng với dấu xuống dòng; normalized_text mới
+            # thực hiện nối dòng/dehyphenation và giữ mapping về raw_text.
+            source_lines = [
+                source_line
+                for paragraph_line in buf
+                for source_line in paragraph_line["source_lines"]
+            ]
+            elements.append(_build_pdf_element(
+                element_type="paragraph",
+                source_lines=source_lines,
+                section_path=[s[1] for s in section_path],
+                order=len(elements),
+                document_version_id=resolved_document_version_id,
+                parser_spec=parser_spec,
+                generation_key=generation_key,
+                dehyphenate=True,
+            ))
             i = j
+    doc.close()
     return elements

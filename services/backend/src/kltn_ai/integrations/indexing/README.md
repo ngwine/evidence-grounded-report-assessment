@@ -8,6 +8,9 @@ Adapter lập chỉ mục nội dung phục vụ Hybrid Retrieval trong cả hai
 - Lập chỉ mục Dense Vector (embedding) cho tìm kiếm ngữ nghĩa.
 - Hỗ trợ cập nhật chỉ mục khi có tài liệu mới hoặc xoá.
 - Chỉ mục là dữ liệu dẫn xuất, có thể dựng lại từ MongoDB source of truth.
+- Chunker v2 tạo stable key và `source_spans` để mọi passage trong index có thể
+  resolve về raw element; contract nằm tại
+  [`docs/architecture/parser-chunker-provenance-v2.md`](../../../../../../docs/architecture/parser-chunker-provenance-v2.md).
 
 ## Ranh giới
 
