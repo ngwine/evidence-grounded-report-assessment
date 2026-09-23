@@ -1,0 +1,4 @@
+# Use a separate Python 3.12 environment for the real Dense run on macOS.
+# Final paper runs must additionally freeze the resolved environment/version set.
+sentence-transformers>=3,<6
+torch>=2.2,<3

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "dataset_id": "retrieval-synthetic-pilot",
+  "dataset_version": "1.0.0",
+  "description": "Synthetic Vietnamese retrieval fixture; no student report or PII.",
+  "result_classification": "TEST_ONLY",
+  "governance": {
+    "status": "APPROVED",
+    "rights_basis": "PROJECT_GENERATED_SYNTHETIC",
+    "allowed_purposes": ["RETRIEVAL_EXPERIMENT", "AUTOMATED_TEST"],
+    "classification": "SYNTHETIC_PUBLIC",
+    "contains_pii": false,
+    "retention": "Keep with repository test history",
+    "approver": "Project fixture policy",
+    "approved_at": "2026-09-23"
+  },
+  "split": {
+    "name": "synthetic-test",
+    "unit": "document",
+    "document_ids": ["doc-supervised", "doc-unsupervised", "doc-tree"]
+  },
+  "files": {
+    "documents": {
+      "path": "documents.jsonl",
+      "sha256": "329b7db4801f1530ff1c452e19cc88bff217dd0948c63eefb0362fd9f049639b"
+    },
+    "chunks": {
+      "path": "chunks.jsonl",
+      "sha256": "c46af69a086418d52af4efe5489ca6f57df2707fd071fb15ed4c889361bf026a"
+    },
+    "queries": {
+      "path": "queries.jsonl",
+      "sha256": "2883748cabdefba66dbfde577962899e248dc82598e08af4fbf1cd07b9889b44"
+    },
+    "qrels": {
+      "path": "qrels.jsonl",
+      "sha256": "d64395c91b85d640099fe5688ab75c537334848936ff12dba0499c5b26bbcdfd"
+    }
+  }
+}
