@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "dataset_id": "pan13-span-retrieval-oracle-pilot",
+  "dataset_version": "zenodo-3715980+converter-v1+pilot-v1",
+  "description": "Oracle suspicious-span to source-span component diagnostic; not official PAN13 text alignment.",
+  "result_classification": "COMPONENT_DIAGNOSTIC",
+  "source": {
+    "provider": "PAN/Webis via Zenodo",
+    "landing_page": "https://zenodo.org/records/3715980",
+    "archive_name": "pan13-text-alignment-test-and-training.zip",
+    "provider_md5": "fec7fca7a82193a97fbb97cde7781b63",
+    "reference_sha256": "82b48527058ee2610e77360ff0d38d28fa54abfa7fa50e34d84673065524d223",
+    "reference_sha256_note": "Project verification after matching provider MD5; verify again locally.",
+    "local_sha256": null
+  },
+  "transformation": {
+    "converter": "research.pan_pilot",
+    "converter_version": "1.0.0",
+    "query_unit": "annotated_suspicious_span",
+    "target_scope": "span",
+    "chunker": "paragraph-aware-v1",
+    "offset_convention": "zero-based-half-open-unicode-code-point"
+  },
+  "governance": {
+    "status": "PENDING",
+    "rights_basis": "RIGHTS_REVIEW_REQUIRED",
+    "allowed_purposes": ["RETRIEVAL_EXPERIMENT"],
+    "classification": "RESEARCH_DATA",
+    "contains_pii": "UNKNOWN",
+    "retention": null,
+    "approver": null,
+    "approved_at": null
+  },
+  "split": {
+    "name": "official-partition-derived-pilot",
+    "unit": "source_document",
+    "official_partition": null,
+    "document_ids": [],
+    "query_ids": [],
+    "seed": 20260923
+  },
+  "files": {
+    "documents": {"path": "documents.jsonl", "sha256": null},
+    "chunks": {"path": "chunks.jsonl", "sha256": null},
+    "queries": {"path": "queries.jsonl", "sha256": null},
+    "qrels": {"path": "qrels.jsonl", "sha256": null}
+  }
+}

@@ -15,6 +15,8 @@ Thư mục nghiên cứu và thực nghiệm cho 3 hướng nghiên cứu.
 - `configs/` – Baseline, model, prompt, index config có version.
 - `offline_retrieval/` – Fixed-window, BM25, Dense, RRF, metric và run manifest
   chạy độc lập với MongoDB/API.
+- `pan_pilot/` – Converter deterministic từ PAN XML/TXT sang bốn JSONL có
+  provenance và manifest fail-closed.
 - `scripts/` – Experiment runner, metrics và tạo bảng/biểu.
 - `notebooks/` – Khám phá; không chứa logic duy nhất để tạo kết quả luận văn.
 - `results/` – Output được sinh lại từ artifact, mặc định không commit.

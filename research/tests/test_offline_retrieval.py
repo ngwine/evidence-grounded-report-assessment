@@ -8,8 +8,9 @@ import shutil
 
 import pytest
 
+from research.offline_retrieval.aggregation import collapse_to_documents
 from research.offline_retrieval.bm25 import rank_bm25
-from research.offline_retrieval.common import read_json, read_jsonl
+from research.offline_retrieval.common import read_json, read_jsonl, sha256_file
 from research.offline_retrieval.dense import local_model_revision
 from research.offline_retrieval.fixed_window import build_fixed_windows
 from research.offline_retrieval.metrics import evaluate_rankings
@@ -125,6 +126,77 @@ def test_span_grounded_metrics_use_gold_span_not_chunk_id():
     assert metrics["macro"]["1"] == {"recall": 1.0, "mrr": 1.0, "ndcg": 1.0}
 
 
+def test_document_aggregation_keeps_one_best_chunk_per_source():
+    collapsed = collapse_to_documents(
+        {
+            "q": [
+                {
+                    "chunk_id": "d1-c1",
+                    "document_id": "d1",
+                    "rank": 1,
+                    "score": 4.0,
+                    "source_spans": [],
+                },
+                {
+                    "chunk_id": "d1-c2",
+                    "document_id": "d1",
+                    "rank": 2,
+                    "score": 3.0,
+                    "source_spans": [],
+                },
+                {
+                    "chunk_id": "d2-c1",
+                    "document_id": "d2",
+                    "rank": 3,
+                    "score": 2.0,
+                    "source_spans": [],
+                },
+            ]
+        },
+        top_k=2,
+    )
+
+    assert [item["document_id"] for item in collapsed["q"]] == ["d1", "d2"]
+    assert [item["supporting_chunk_id"] for item in collapsed["q"]] == [
+        "d1-c1",
+        "d2-c1",
+    ]
+    assert [item["rank"] for item in collapsed["q"]] == [1, 2]
+
+
+def test_bm25_groups_documents_before_top_k_truncation():
+    corpus = [
+        {
+            "chunk_id": "d1-c1",
+            "document_id": "d1",
+            "text": "target target target",
+            "source_spans": [],
+        },
+        {
+            "chunk_id": "d1-c2",
+            "document_id": "d1",
+            "text": "target target",
+            "source_spans": [],
+        },
+        {
+            "chunk_id": "d2-c1",
+            "document_id": "d2",
+            "text": "target",
+            "source_spans": [],
+        },
+    ]
+
+    ranking = rank_bm25(
+        corpus,
+        [{"query_id": "q", "text": "target"}],
+        top_k=2,
+        group_by_document=True,
+    )["q"]
+
+    assert {candidate["document_id"] for candidate in ranking} == {"d1", "d2"}
+    assert all("supporting_chunk_id" in candidate for candidate in ranking)
+
+
 def test_dataset_gate_rejects_unapproved_manifest(tmp_path):
     copied = tmp_path / "fixture"
     shutil.copytree(FIXTURE_DIR, copied)
@@ -158,6 +230,52 @@ def test_runner_cannot_misclassify_an_injected_encoder_as_scientific(tmp_path):
             tmp_path / "run",
             encoder=KeywordFixtureEncoder(),
         )
+
+
+def test_document_scope_runner_collapses_before_metrics_and_rrf(tmp_path):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    qrels_path = copied / "qrels.jsonl"
+    qrels = read_jsonl(qrels_path)
+    for qrel in qrels:
+        qrel["target_scope"] = "document"
+    qrels_path.write_text(
+        "".join(
+            json.dumps(qrel, ensure_ascii=False, sort_keys=True) + "\n"
+            for qrel in qrels
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = copied / "dataset-manifest.json"
+    manifest = read_json(manifest_path)
+    manifest["files"]["qrels"]["sha256"] = sha256_file(qrels_path)
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+    )
+    config_path = copied / "config.json"
+    config = read_json(config_path)
+    config["metrics"]["target_scope"] = "document"
+    config["candidate_retrieval_depth"] = 20
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+
+    result = run_experiment(
+        manifest_path,
+        config_path,
+        tmp_path / "run",
+        encoder=KeywordFixtureEncoder(),
+        allow_test_encoder=True,
+    )
+
+    predictions = read_jsonl(result["predictions_path"])
+    for record in predictions:
+        document_ids = [
+            candidate["document_id"] for candidate in record["candidates"]
+        ]
+        assert len(document_ids) == len(set(document_ids))
+        assert all("supporting_chunk_id" in candidate for candidate in record["candidates"])
+    metrics = read_json(result["metrics_path"])
+    assert metrics["structure_hybrid_rrf"]["target_scope"] == "document"
+    assert metrics["structure_hybrid_rrf"]["macro"]["3"]["recall"] == 1.0
 
 
 def test_full_runner_writes_reproducibility_manifest_and_stable_artifacts(tmp_path):

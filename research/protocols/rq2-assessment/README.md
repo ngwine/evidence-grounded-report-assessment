@@ -36,5 +36,13 @@ lựa chọn chiến lược truy xuất evidence phù hợp với từng loại
 
 ## Dataset
 
-Dataset gồm báo cáo + rubric, checklist gán nhãn MET/UNMET/CANNOT_ASSESS kèm
-evidence. Xem `research/datasets/assessment/`.
+Ground truth end-to-end bắt buộc là dữ liệu trong miền: report version + rubric
+version + checklist nguyên tử, nhãn MET/UNMET/CANNOT_ASSESS, quan hệ
+SUPPORTED/CONTRADICTED/INSUFFICIENT và exact evidence span. Mọi report thật chỉ
+được xử lý sau consent/authority, anonymization, retention và approver gate.
+
+MMDocIR, HoVer và HARMOGEN-R chỉ kiểm thử thành phần tương ứng long-document
+retrieval, multi-hop verification và rubric-grading/agreement; không dataset nào
+trong ba nguồn này được dùng thay kết quả end-to-end report–rubric trong miền.
+
+Xem `research/datasets/assessment/`.

@@ -1,0 +1,59 @@
+"""Command-line interface for the PAN pilot converter."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Sequence
+
+from .converter import DATASET_PROFILES, convert_pan_pilot
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Convert extracted PAN XML/TXT into a gated retrieval pilot pack."
+    )
+    parser.add_argument("--dataset", required=True, choices=sorted(DATASET_PROFILES))
+    parser.add_argument("--input-root", required=True, type=Path)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--dataset-version", required=True)
+    parser.add_argument("--split-name", default="extracted-pilot")
+    parser.add_argument("--max-chunk-chars", type=int, default=1200)
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace only the five known generated files if they already exist.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        result = convert_pan_pilot(
+            dataset=args.dataset,
+            input_root=args.input_root,
+            output_dir=args.output_dir,
+            dataset_version=args.dataset_version,
+            split_name=args.split_name,
+            max_chunk_chars=args.max_chunk_chars,
+            overwrite=args.overwrite,
+        )
+    except (FileExistsError, OSError, ValueError) as exc:
+        raise SystemExit(f"PAN conversion failed: {exc}") from exc
+
+    print(
+        json.dumps(
+            {
+                "manifest": str(result.manifest_path),
+                "documents": result.document_count,
+                "chunks": result.chunk_count,
+                "queries": result.query_count,
+                "qrels": result.qrel_count,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
+    return 0

@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 import math
 from typing import Any, Iterable
 
+from .aggregation import render_ranked_candidates
 from .common import tokenize
 
 
@@ -16,6 +17,7 @@ def rank_bm25(
     top_k: int,
     k1: float = 1.2,
     b: float = 0.75,
+    group_by_document: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -85,15 +87,9 @@ def rank_bm25(
                 )
             scored.append((score, item["chunk_id"], item))
 
-        scored.sort(key=lambda row: (-row[0], row[1]))
-        results[query_id] = [
-            {
-                "chunk_id": chunk_id,
-                "document_id": item["document_id"],
-                "score": score,
-                "rank": rank,
-                "source_spans": item.get("source_spans", []),
-            }
-            for rank, (score, chunk_id, item) in enumerate(scored[:top_k], 1)
-        ]
+        results[query_id] = render_ranked_candidates(
+            scored,
+            top_k=top_k,
+            group_by_document=group_by_document,
+        )
     return results
