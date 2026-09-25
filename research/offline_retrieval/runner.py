@@ -26,7 +26,7 @@ from .common import (
 )
 from .dense import Encoder, SentenceTransformerEncoder, rank_dense
 from .fixed_window import build_fixed_windows
-from .metrics import evaluate_rankings
+from .metrics import evaluate_document_rankings, evaluate_rankings
 from .rrf import fuse_rrf
 
 
@@ -75,6 +75,12 @@ def _resolve_dataset_files(manifest_path: Path, manifest: dict[str, Any]) -> dic
             entry.get("sha256"), f"files.{name}.sha256"
         )
         path = (manifest_path.parent / relative_path).resolve()
+        try:
+            path.relative_to(manifest_path.parent.resolve())
+        except ValueError as exc:
+            raise ValueError(
+                f"Dataset file path escapes the pack directory: {relative_path}"
+            ) from exc
         if not path.is_file():
             raise ValueError(f"Dataset file does not exist: {path}")
         actual_checksum = sha256_file(path)
@@ -123,12 +129,16 @@ def validate_inputs(
     _validate_unique(documents, "document_id", "documents")
     _validate_unique(chunks, "chunk_id", "chunks")
     _validate_unique(queries, "query_id", "queries")
+    _validate_unique(qrels, "qrel_id", "qrels")
 
     document_map = {document["document_id"]: document for document in documents}
     query_ids = {query["query_id"] for query in queries}
     for document in documents:
         if not isinstance(document.get("text"), str):
             raise ValueError(f"Document {document['document_id']} requires string text")
+    for query in queries:
+        if not isinstance(query.get("text"), str) or not query["text"].strip():
+            raise ValueError(f"Query {query['query_id']} requires non-empty text")
     for chunk in chunks:
         if not isinstance(chunk.get("text"), str) or not chunk["text"].strip():
             raise ValueError(f"Chunk {chunk['chunk_id']} requires non-empty text")
@@ -163,7 +173,22 @@ def validate_inputs(
         start, end = qrel.get("raw_start"), qrel.get("raw_end")
         if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= len(document_map[document_id]["text"]):
             raise ValueError(f"qrels[{qrel_index}] has invalid raw span")
-        qrel.setdefault("qrel_id", f"{query_id}:{qrel_index}")
+        relevance = qrel.get("relevance")
+        if (
+            isinstance(relevance, bool)
+            or not isinstance(relevance, (int, float))
+            or relevance <= 0
+        ):
+            raise ValueError(f"qrels[{qrel_index}] relevance must be positive")
+
+    qrel_query_ids = {qrel["query_id"] for qrel in qrels}
+    if qrel_query_ids != query_ids:
+        missing = sorted(query_ids - qrel_query_ids)
+        extra = sorted(qrel_query_ids - query_ids)
+        raise ValueError(
+            "Every pilot query must have positive qrels; "
+            f"missing={missing}, extra={extra}"
+        )
 
     split = manifest.get("split")
     if not isinstance(split, dict) or not isinstance(split.get("document_ids"), list):
@@ -174,6 +199,16 @@ def validate_inputs(
     split_document_ids = set(split_ids)
     if split_document_ids != set(document_map):
         raise ValueError("Pilot manifest must list every document exactly once in split.document_ids")
+    split_query_ids = split.get("query_ids")
+    if split_query_ids is not None:
+        if not isinstance(split_query_ids, list):
+            raise ValueError("Dataset split.query_ids must be a list")
+        if len(split_query_ids) != len(set(split_query_ids)):
+            raise ValueError("Dataset split.query_ids must not contain duplicates")
+        if set(split_query_ids) != query_ids:
+            raise ValueError(
+                "Pilot manifest must list every query exactly once in split.query_ids"
+            )
 
     _require_non_empty_string(config.get("experiment_id"), "config.experiment_id")
     methods = config.get("methods")
@@ -190,6 +225,15 @@ def validate_inputs(
         raise ValueError("config.metric_cutoffs must be positive integers")
     if max(cutoffs) > retrieval_depth:
         raise ValueError("retrieval_depth must be >= every metric cutoff")
+    candidate_depth = config.get("candidate_retrieval_depth", retrieval_depth)
+    if (
+        isinstance(candidate_depth, bool)
+        or not isinstance(candidate_depth, int)
+        or candidate_depth < retrieval_depth
+    ):
+        raise ValueError(
+            "candidate_retrieval_depth must be an integer >= retrieval_depth"
+        )
 
     fixed_window = config.get("fixed_window")
     bm25 = config.get("bm25")
@@ -229,6 +273,16 @@ def validate_inputs(
         or not 0 < overlap_threshold <= 1
     ):
         raise ValueError("metrics.gold_overlap_threshold must be in (0, 1]")
+    target_scope = metrics.get("target_scope", "span")
+    if target_scope not in {"span", "document"}:
+        raise ValueError("metrics.target_scope must be span or document")
+    for index, qrel in enumerate(qrels):
+        qrel_scope = qrel.get("target_scope", "span")
+        if qrel_scope != target_scope:
+            raise ValueError(
+                f"qrels[{index}].target_scope={qrel_scope} does not match "
+                f"metrics.target_scope={target_scope}"
+            )
     if dense.get("backend") == "injected_test":
         if not allow_test_encoder:
             raise ValueError("injected_test dense backend is test-only")
@@ -398,13 +452,16 @@ def run_experiment(
     stage_timings["fixed_window_build"] = time.perf_counter() - stage_start
 
     depth = int(config["retrieval_depth"])
+    candidate_depth = int(config.get("candidate_retrieval_depth", depth))
+    target_scope = config["metrics"].get("target_scope", "span")
     stage_start = time.perf_counter()
     fixed_bm25 = rank_bm25(
         fixed_windows,
         loaded["queries"],
-        top_k=depth,
+        top_k=candidate_depth,
         k1=float(config["bm25"]["k1"]),
         b=float(config["bm25"]["b"]),
+        group_by_document=target_scope == "document",
     )
     stage_timings["fixed_window_bm25"] = time.perf_counter() - stage_start
 
@@ -412,9 +469,10 @@ def run_experiment(
     structure_bm25 = rank_bm25(
         loaded["chunks"],
         loaded["queries"],
-        top_k=depth,
+        top_k=candidate_depth,
         k1=float(config["bm25"]["k1"]),
         b=float(config["bm25"]["b"]),
+        group_by_document=target_scope == "document",
     )
     stage_timings["structure_bm25"] = time.perf_counter() - stage_start
 
@@ -425,16 +483,47 @@ def run_experiment(
         loaded["chunks"],
         loaded["queries"],
         encoder=encoder,
-        top_k=depth,
+        top_k=candidate_depth,
+        group_by_document=target_scope == "document",
     )
     stage_timings["structure_dense"] = time.perf_counter() - stage_start
 
     stage_start = time.perf_counter()
+    if target_scope == "document":
+        rrf_key = "document_id"
+    else:
+        fixed_bm25 = {
+            query_id: candidates[:depth]
+            for query_id, candidates in fixed_bm25.items()
+        }
+        structure_bm25 = {
+            query_id: candidates[:depth]
+            for query_id, candidates in structure_bm25.items()
+        }
+        structure_dense = {
+            query_id: candidates[:depth]
+            for query_id, candidates in structure_dense.items()
+        }
+        rrf_key = "chunk_id"
     hybrid = fuse_rrf(
         {"bm25": structure_bm25, "dense": structure_dense},
         rrf_k=int(config["rrf"]["k"]),
         top_k=depth,
+        key_field=rrf_key,
     )
+    if target_scope == "document":
+        fixed_bm25 = {
+            query_id: candidates[:depth]
+            for query_id, candidates in fixed_bm25.items()
+        }
+        structure_bm25 = {
+            query_id: candidates[:depth]
+            for query_id, candidates in structure_bm25.items()
+        }
+        structure_dense = {
+            query_id: candidates[:depth]
+            for query_id, candidates in structure_dense.items()
+        }
     stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
 
     rankings = {
@@ -444,15 +533,27 @@ def run_experiment(
         "structure_hybrid_rrf": hybrid,
     }
     stage_start = time.perf_counter()
-    metric_results = {
-        method: evaluate_rankings(
-            result,
-            loaded["qrels"],
-            cutoffs=sorted(set(config["metric_cutoffs"])),
-            overlap_threshold=float(config["metrics"]["gold_overlap_threshold"]),
-        )
-        for method, result in rankings.items()
-    }
+    if target_scope == "document":
+        metric_results = {
+            method: evaluate_document_rankings(
+                result,
+                loaded["qrels"],
+                cutoffs=sorted(set(config["metric_cutoffs"])),
+            )
+            for method, result in rankings.items()
+        }
+    else:
+        metric_results = {
+            method: evaluate_rankings(
+                result,
+                loaded["qrels"],
+                cutoffs=sorted(set(config["metric_cutoffs"])),
+                overlap_threshold=float(
+                    config["metrics"]["gold_overlap_threshold"]
+                ),
+            )
+            for method, result in rankings.items()
+        }
     stage_timings["evaluation"] = time.perf_counter() - stage_start
 
     prediction_records = [
