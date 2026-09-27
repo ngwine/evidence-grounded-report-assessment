@@ -28,6 +28,10 @@ from .dense import Encoder, SentenceTransformerEncoder, rank_dense
 from .fixed_window import build_fixed_windows
 from .metrics import evaluate_document_rankings, evaluate_rankings
 from .rrf import fuse_rrf
+from .validation import (
+    validate_approved_governance,
+    validate_pan_semantic_provenance,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -116,6 +120,7 @@ def validate_inputs(
     _require_non_empty_string(governance.get("approver"), "governance.approver")
     _require_non_empty_string(governance.get("approved_at"), "governance.approved_at")
     _require_non_empty_string(governance.get("rights_basis"), "governance.rights_basis")
+    validate_approved_governance(manifest)
     _require_non_empty_string(manifest.get("dataset_id"), "dataset_id")
     _require_non_empty_string(manifest.get("dataset_version"), "dataset_version")
 
@@ -283,6 +288,14 @@ def validate_inputs(
                 f"qrels[{index}].target_scope={qrel_scope} does not match "
                 f"metrics.target_scope={target_scope}"
             )
+    transformation = manifest.get("transformation")
+    if isinstance(transformation, dict):
+        manifest_target_scope = transformation.get("target_scope")
+        if manifest_target_scope is not None and manifest_target_scope != target_scope:
+            raise ValueError(
+                "Dataset transformation.target_scope does not match "
+                "config.metrics.target_scope"
+            )
     if dense.get("backend") == "injected_test":
         if not allow_test_encoder:
             raise ValueError("injected_test dense backend is test-only")
@@ -302,6 +315,14 @@ def validate_inputs(
                 raise ValueError("A local Dense model requires revision=sha256:<64 hex>")
         elif not re.fullmatch(r"[0-9a-fA-F]{40,64}", revision):
             raise ValueError("A cached model id requires an immutable 40–64 hex revision")
+
+    validate_pan_semantic_provenance(
+        manifest,
+        documents,
+        chunks,
+        queries,
+        qrels,
+    )
 
     return {
         "dataset_manifest_path": dataset_manifest_path,
@@ -489,41 +510,28 @@ def run_experiment(
     stage_timings["structure_dense"] = time.perf_counter() - stage_start
 
     stage_start = time.perf_counter()
-    if target_scope == "document":
-        rrf_key = "document_id"
-    else:
-        fixed_bm25 = {
-            query_id: candidates[:depth]
-            for query_id, candidates in fixed_bm25.items()
-        }
-        structure_bm25 = {
-            query_id: candidates[:depth]
-            for query_id, candidates in structure_bm25.items()
-        }
-        structure_dense = {
-            query_id: candidates[:depth]
-            for query_id, candidates in structure_dense.items()
-        }
-        rrf_key = "chunk_id"
+    rrf_key = "document_id" if target_scope == "document" else "chunk_id"
+    # RRF must see the configured candidate pool. Truncating each component to
+    # the final output depth first hides consensus candidates that rank just
+    # below that cutoff in the individual methods.
     hybrid = fuse_rrf(
         {"bm25": structure_bm25, "dense": structure_dense},
         rrf_k=int(config["rrf"]["k"]),
         top_k=depth,
         key_field=rrf_key,
     )
-    if target_scope == "document":
-        fixed_bm25 = {
-            query_id: candidates[:depth]
-            for query_id, candidates in fixed_bm25.items()
-        }
-        structure_bm25 = {
-            query_id: candidates[:depth]
-            for query_id, candidates in structure_bm25.items()
-        }
-        structure_dense = {
-            query_id: candidates[:depth]
-            for query_id, candidates in structure_dense.items()
-        }
+    fixed_bm25 = {
+        query_id: candidates[:depth]
+        for query_id, candidates in fixed_bm25.items()
+    }
+    structure_bm25 = {
+        query_id: candidates[:depth]
+        for query_id, candidates in structure_bm25.items()
+    }
+    structure_dense = {
+        query_id: candidates[:depth]
+        for query_id, candidates in structure_dense.items()
+    }
     stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
 
     rankings = {

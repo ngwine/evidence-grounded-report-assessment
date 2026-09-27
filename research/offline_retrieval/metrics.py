@@ -6,14 +6,41 @@ import math
 from typing import Any, Iterable, Mapping
 
 
-def _overlap_fraction(candidate: Mapping[str, Any], gold: Mapping[str, Any]) -> float:
-    if candidate.get("document_id") != gold.get("document_id"):
+def _union_coverage_fraction(
+    candidates: Iterable[Mapping[str, Any]], gold: Mapping[str, Any]
+) -> float:
+    """Return coverage of one gold span by the union of retrieved spans.
+
+    Coverage is clipped to the gold boundary before intervals are merged. This
+    prevents overlapping chunks from counting the same characters twice while
+    allowing several smaller chunks to jointly cover one long evidence span.
+    """
+
+    gold_document_id = gold.get("document_id")
+    gold_start = int(gold["raw_start"])
+    gold_end = int(gold["raw_end"])
+    intervals: list[tuple[int, int]] = []
+    for candidate in candidates:
+        if candidate.get("document_id") != gold_document_id:
+            continue
+        start = max(int(candidate["raw_start"]), gold_start)
+        end = min(int(candidate["raw_end"]), gold_end)
+        if start < end:
+            intervals.append((start, end))
+    if not intervals:
         return 0.0
-    start = max(int(candidate["raw_start"]), int(gold["raw_start"]))
-    end = min(int(candidate["raw_end"]), int(gold["raw_end"]))
-    overlap = max(0, end - start)
-    gold_length = max(1, int(gold["raw_end"]) - int(gold["raw_start"]))
-    return overlap / gold_length
+
+    intervals.sort()
+    covered = 0
+    merged_start, merged_end = intervals[0]
+    for start, end in intervals[1:]:
+        if start <= merged_end:
+            merged_end = max(merged_end, end)
+        else:
+            covered += merged_end - merged_start
+            merged_start, merged_end = start, end
+    covered += merged_end - merged_start
+    return covered / max(1, gold_end - gold_start)
 
 
 def evaluate_rankings(
@@ -50,21 +77,28 @@ def evaluate_rankings(
         for cutoff in aggregates:
             selected = candidates[:cutoff]
             matched_gold: set[str] = set()
+            covered_spans: dict[str, list[Mapping[str, Any]]] = {
+                str(qrel["qrel_id"]): [] for qrel in gold
+            }
             relevance: list[int] = []
             first_relevant_rank = 0
             for rank, candidate in enumerate(selected, 1):
-                candidate_matches: list[str] = []
+                candidate_spans = candidate.get("source_spans", [])
                 for qrel in gold:
                     qrel_id = str(qrel["qrel_id"])
-                    if any(
-                        _overlap_fraction(span, qrel) >= overlap_threshold
-                        for span in candidate.get("source_spans", [])
-                    ):
-                        candidate_matches.append(qrel_id)
-                new_matches = set(candidate_matches) - matched_gold
+                    covered_spans[qrel_id].extend(candidate_spans)
+                new_matches = {
+                    str(qrel["qrel_id"])
+                    for qrel in gold
+                    if str(qrel["qrel_id"]) not in matched_gold
+                    and _union_coverage_fraction(
+                        covered_spans[str(qrel["qrel_id"])], qrel
+                    )
+                    >= overlap_threshold
+                }
                 matched_gold.update(new_matches)
-                # Duplicate chunks covering the same gold span do not earn
-                # relevance twice; otherwise nDCG could exceed 1.0.
+                # A qrel earns relevance once, at the rank where cumulative
+                # union coverage first crosses the configured threshold.
                 is_relevant = int(bool(new_matches))
                 relevance.append(is_relevant)
                 if is_relevant and not first_relevant_rank:
@@ -94,6 +128,8 @@ def evaluate_rankings(
         for cutoff, values in aggregates.items()
     }
     return {
+        "target_scope": "span",
+        "coverage_mode": "cumulative_union",
         "query_count": len(query_ids),
         "qrel_count": sum(len(values) for values in gold_by_query.values()),
         "overlap_threshold": overlap_threshold,

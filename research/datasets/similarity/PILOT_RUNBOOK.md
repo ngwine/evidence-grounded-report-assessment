@@ -6,10 +6,14 @@ model weights and experiment outputs stay under ignored `var/` or
 
 ## 1. Verify the source archive
 
-PAN-PC-11 uses two RAR archives. Compare their MD5 values with
-`pan-pc-11-source-retrieval-pilot-v1/dataset-manifest.template.json`, then
-record local SHA-256. Point the converter only at the external-detection
-corpus; intrinsic-detection data is outside this pilot.
+PAN-PC-11 uses a **single multipart RAR archive** split into `.part1.rar` and
+`.part2.rar`; these are volumes, not two corpus splits. Put both files in the
+same directory, compare both MD5 values with the manifest template, record
+local SHA-256, then extract starting from `.part1.rar`. Point the converter at
+the complete `external-detection-corpus`; intrinsic-detection data is outside
+this pilot. Never convert a numbered archive volume or a single corpus
+`partN` as though it were an independent candidate corpus: PAN references can
+cross those directories.
 
 PAN13 Text Alignment uses
 `pan13-text-alignment-test-and-training.zip`. Verify provider MD5
@@ -30,11 +34,22 @@ PAN-PC-11:
 ```bash
 ./.venv/bin/python -m research.pan_pilot \
   --dataset pan-pc-11 \
-  --input-root var/datasets/raw/pan-pc-11/v1/external-part1 \
-  --output-dir var/datasets/derived/similarity/pan-pc-11-part1-pilot-v1 \
-  --dataset-version zenodo-3250095-v1-external-part1 \
-  --split-name derived-external-part1
+  --input-root var/datasets/raw/pan-pc-11/v1/extracted-unar/pan-plagiarism-corpus-2011/external-detection-corpus \
+  --output-dir var/datasets/derived/similarity/pan-pc-11-pilot-v1 \
+  --dataset-version zenodo-3250095-v1-external-derived-pilot \
+  --split-name hash-grouped-derived-pilot \
+  --max-annotations 30 \
+  --max-candidate-documents 200 \
+  --seed 20260923 \
+  --source-archive var/datasets/raw/pan-pc-11/v1/pan-plagiarism-corpus-2011.part1.rar \
+  --source-archive var/datasets/raw/pan-pc-11/v1/pan-plagiarism-corpus-2011.part2.rar
 ```
+
+This is a resource-bounded feasibility pilot for the 16 GB development
+machine, not a full-corpus PAN-PC-11 score. The converter records the sampler,
+seed, selected IDs/candidate pool and archive lineage. Full-corpus evaluation
+requires a streaming/inverted BM25 index and batched vector index rather than
+the in-memory reference runner.
 
 PAN13 Text Alignment component diagnostic:
 
@@ -44,7 +59,8 @@ PAN13 Text Alignment component diagnostic:
   --input-root var/datasets/raw/pan13-text-alignment/v1/training \
   --output-dir var/datasets/derived/similarity/pan13-training-component-v1 \
   --dataset-version zenodo-3715980-training-2013-01-21 \
-  --split-name official-training-derived
+  --split-name official-training-derived \
+  --source-archive var/datasets/raw/pan13-text-alignment/v1/pan13-text-alignment-test-and-training.zip
 ```
 
 The command writes `documents.jsonl`, `chunks.jsonl`, `queries.jsonl`,
@@ -84,11 +100,11 @@ PAN-PC-11:
 
 ```bash
 ./.venv-research/bin/python -m research.offline_retrieval validate \
-  --dataset-manifest var/datasets/derived/similarity/pan-pc-11-part1-pilot-v1/dataset-manifest.json \
+  --dataset-manifest var/datasets/derived/similarity/pan-pc-11-pilot-v1/dataset-manifest.json \
   --config research/configs/retrieval/pan-pc-11-pilot-v1.json
 
 ./.venv-research/bin/python -m research.offline_retrieval run \
-  --dataset-manifest var/datasets/derived/similarity/pan-pc-11-part1-pilot-v1/dataset-manifest.json \
+  --dataset-manifest var/datasets/derived/similarity/pan-pc-11-pilot-v1/dataset-manifest.json \
   --config research/configs/retrieval/pan-pc-11-pilot-v1.json \
   --output-dir research/results/rq1-pan-pc-11/run-001
 ```
@@ -105,5 +121,7 @@ PlagDet.
 - four methods run on the identical corpus/query/qrel split;
 - prediction and metric artifact checksums are stored;
 - PAN-PC-11 rankings contain unique source documents;
+- manifest identifies the deterministic query/candidate sampling policy; no
+  resource-bounded pilot number is called a full-corpus result;
 - two repeated runs produce byte-identical predictions/metrics;
 - errors and limitations are written before selecting the final framework.
