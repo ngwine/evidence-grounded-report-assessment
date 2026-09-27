@@ -8,6 +8,7 @@ import shutil
 
 import pytest
 
+import research.offline_retrieval.runner as runner_module
 from research.offline_retrieval.aggregation import collapse_to_documents
 from research.offline_retrieval.bm25 import rank_bm25
 from research.offline_retrieval.common import read_json, read_jsonl, sha256_file
@@ -106,6 +107,66 @@ def test_bm25_and_rrf_use_deterministic_chunk_id_tie_breaking():
     assert [candidate["chunk_id"] for candidate in fused["q"]] == ["a", "b"]
 
 
+def test_rrf_keeps_method_specific_support_provenance():
+    bm25_span = {"document_id": "d", "raw_start": 0, "raw_end": 10}
+    dense_span = {"document_id": "d", "raw_start": 20, "raw_end": 30}
+
+    [candidate] = fuse_rrf(
+        {
+            "bm25": {
+                "q": [
+                    {
+                        "document_id": "d",
+                        "supporting_chunk_id": "bm25-chunk",
+                        "rank": 1,
+                        "score": 4.5,
+                        "source_spans": [bm25_span],
+                    }
+                ]
+            },
+            "dense": {
+                "q": [
+                    {
+                        "document_id": "d",
+                        "supporting_chunk_id": "dense-chunk",
+                        "rank": 2,
+                        "score": 0.75,
+                        "source_spans": [dense_span],
+                    }
+                ]
+            },
+        },
+        rrf_k=60,
+        top_k=1,
+        key_field="document_id",
+    )["q"]
+
+    assert candidate["rrf_ranks"] == {"bm25": 1, "dense": 2}
+    assert candidate["rrf_supporting_ids"] == {
+        "bm25": "bm25-chunk",
+        "dense": "dense-chunk",
+    }
+    assert candidate["supports_by_method"] == {
+        "bm25": {
+            "support_id": "bm25-chunk",
+            "supporting_chunk_id": "bm25-chunk",
+            "rank": 1,
+            "score": 4.5,
+            "source_spans": [bm25_span],
+        },
+        "dense": {
+            "support_id": "dense-chunk",
+            "supporting_chunk_id": "dense-chunk",
+            "rank": 2,
+            "score": 0.75,
+            "source_spans": [dense_span],
+        },
+    }
+    assert candidate["representative_support_method"] == "bm25"
+    assert candidate["supporting_chunk_id"] == "bm25-chunk"
+    assert candidate["source_spans"] == [bm25_span, dense_span]
+
+
 def test_span_grounded_metrics_use_gold_span_not_chunk_id():
     rankings = {
         "q": [
@@ -123,7 +184,51 @@ def test_span_grounded_metrics_use_gold_span_not_chunk_id():
     ]
     metrics = evaluate_rankings(rankings, qrels, cutoffs=[1], overlap_threshold=0.5)
 
+    assert metrics["coverage_mode"] == "cumulative_union"
     assert metrics["macro"]["1"] == {"recall": 1.0, "mrr": 1.0, "ndcg": 1.0}
+
+
+def test_span_metrics_accumulate_union_coverage_without_double_counting():
+    rankings = {
+        "q": [
+            {
+                "chunk_id": "c1",
+                "document_id": "d",
+                "rank": 1,
+                "score": 2.0,
+                "source_spans": [
+                    {"document_id": "d", "raw_start": 0, "raw_end": 40}
+                ],
+            },
+            {
+                "chunk_id": "c2",
+                "document_id": "d",
+                "rank": 2,
+                "score": 1.0,
+                "source_spans": [
+                    {"document_id": "d", "raw_start": 20, "raw_end": 60}
+                ],
+            },
+        ]
+    }
+    qrels = [
+        {
+            "qrel_id": "g",
+            "query_id": "q",
+            "document_id": "d",
+            "raw_start": 0,
+            "raw_end": 100,
+        }
+    ]
+
+    metrics = evaluate_rankings(
+        rankings, qrels, cutoffs=[1, 2], overlap_threshold=0.6
+    )
+
+    assert metrics["coverage_mode"] == "cumulative_union"
+    assert metrics["macro"]["1"]["recall"] == 0.0
+    assert metrics["macro"]["2"]["recall"] == 1.0
+    assert metrics["macro"]["2"]["mrr"] == 0.5
 
 
 def test_document_aggregation_keeps_one_best_chunk_per_source():
@@ -276,6 +381,82 @@ def test_document_scope_runner_collapses_before_metrics_and_rrf(tmp_path):
     metrics = read_json(result["metrics_path"])
     assert metrics["structure_hybrid_rrf"]["target_scope"] == "document"
     assert metrics["structure_hybrid_rrf"]["macro"]["3"]["recall"] == 1.0
+
+
+def test_span_runner_fuses_candidate_depth_before_final_truncation(
+    tmp_path, monkeypatch
+):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+
+    def candidate(item, rank, score):
+        return {
+            "chunk_id": item["chunk_id"],
+            "document_id": item["document_id"],
+            "rank": rank,
+            "score": score,
+            "source_spans": item["source_spans"],
+        }
+
+    def fake_bm25(corpus, queries, *, top_k, **_kwargs):
+        items = list(corpus)
+        by_id = {item["chunk_id"]: item for item in items}
+        if "doc-supervised-c1" in by_id:
+            ordered = [
+                candidate(by_id["doc-supervised-c1"], 1, 2.0),
+                candidate(by_id["doc-tree-c1"], 2, 1.0),
+            ]
+        else:
+            ordered = [
+                candidate(item, rank, 3.0 - rank)
+                for rank, item in enumerate(items[:2], 1)
+            ]
+        return {
+            str(query["query_id"]): [dict(value) for value in ordered[:top_k]]
+            for query in queries
+        }
+
+    def fake_dense(corpus, queries, *, top_k, **_kwargs):
+        by_id = {item["chunk_id"]: item for item in corpus}
+        ordered = [
+            candidate(by_id["doc-unsupervised-c1"], 1, 0.9),
+            candidate(by_id["doc-tree-c1"], 2, 0.8),
+        ]
+        return {
+            str(query["query_id"]): [dict(value) for value in ordered[:top_k]]
+            for query in queries
+        }
+
+    monkeypatch.setattr(runner_module, "rank_bm25", fake_bm25)
+    monkeypatch.setattr(runner_module, "rank_dense", fake_dense)
+
+    def run_with_candidate_depth(value):
+        config_path = copied / f"config-{value}.json"
+        config = read_json(copied / "config.json")
+        config["retrieval_depth"] = 1
+        config["candidate_retrieval_depth"] = value
+        config["metric_cutoffs"] = [1]
+        config_path.write_text(
+            json.dumps(config, ensure_ascii=False), encoding="utf-8"
+        )
+        result = run_experiment(
+            copied / "dataset-manifest.json",
+            config_path,
+            tmp_path / f"run-{value}",
+            encoder=KeywordFixtureEncoder(),
+            allow_test_encoder=True,
+        )
+        predictions = read_jsonl(result["predictions_path"])
+        return next(
+            record["candidates"][0]["chunk_id"]
+            for record in predictions
+            if record["method"] == "structure_hybrid_rrf"
+            and record["query_id"] == "q-supervised"
+        )
+
+    assert run_with_candidate_depth(1) == "doc-supervised-c1"
+    # The shared rank-2 candidate wins only if both two-deep lists reach RRF.
+    assert run_with_candidate_depth(2) == "doc-tree-c1"
 
 
 def test_full_runner_writes_reproducibility_manifest_and_stable_artifacts(tmp_path):

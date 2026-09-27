@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+import research.pan_pilot.converter as pan_converter
 from research.offline_retrieval.common import sha256_file
 from research.offline_retrieval.runner import run_experiment
 from research.pan_pilot.cli import main
@@ -71,6 +72,54 @@ def _write_pan_fixture(
         encoding="utf-8",
     )
     return source_text, suspicious_text, source_start, source_span, this_text
+
+
+def _write_sampling_fixture(
+    root: Path,
+    *,
+    annotation_count: int = 6,
+    distractor_count: int = 6,
+    query_word_count: int = 8,
+) -> None:
+    source_dir = root / "src"
+    suspicious_dir = root / "susp"
+    source_dir.mkdir(parents=True)
+    suspicious_dir.mkdir(parents=True)
+    for index in range(annotation_count):
+        source_text = f"source evidence {index} with enough text"
+        query_text = " ".join(f"word{index}_{word}" for word in range(query_word_count))
+        source_name = f"source-document{index}.txt"
+        suspicious_name = f"suspicious-document{index}.txt"
+        (source_dir / source_name).write_text(source_text, encoding="utf-8")
+        (suspicious_dir / suspicious_name).write_text(query_text, encoding="utf-8")
+        label_dir = root / "labels" / ("manual" if index % 2 == 0 else "artificial")
+        label_dir.mkdir(parents=True, exist_ok=True)
+        (label_dir / f"annotation-{index}.xml").write_text(
+            (
+                f'<document reference="{suspicious_name}">'
+                f'<feature name="plagiarism" this_offset="0" '
+                f'this_length="{len(query_text)}" source_reference="{source_name}" '
+                f'source_offset="0" source_length="{len(source_text)}" />'
+                "</document>"
+            ),
+            encoding="utf-8",
+        )
+    for index in range(distractor_count):
+        (source_dir / f"source-document-distractor-{index}.txt").write_text(
+            f"negative distractor {index}", encoding="utf-8"
+        )
+
+    # Official PAN-PC distributions include metadata XML for both source and
+    # suspicious documents.  A source XML must never become a positive query.
+    (source_dir / "source-document0.xml").write_text(
+        (
+            '<document reference="source-document0.txt">'
+            '<feature name="plagiarism" this_offset="0" this_length="6" '
+            'source_reference="source-document1.txt" source_offset="0" '
+            'source_length="6" /></document>'
+        ),
+        encoding="utf-8",
+    )
 
 
 class _EvidenceFixtureEncoder:
@@ -185,6 +234,203 @@ def test_pan13_is_labeled_component_diagnostic_with_span_target(tmp_path):
     assert qrel["raw_end"] == source_start + len(source_span)
 
 
+def test_sampling_is_seeded_stratified_bounded_and_does_not_read_full_corpus(
+    tmp_path, monkeypatch
+):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(corpus)
+    reads: list[Path] = []
+    original_read = pan_converter._read_utf8_exact
+
+    def track_read(path: Path) -> str:
+        reads.append(path)
+        return original_read(path)
+
+    monkeypatch.setattr(pan_converter, "_read_utf8_exact", track_read)
+    first_dir = tmp_path / "first"
+    first = convert_pan_pilot(
+        dataset="pan-pc-11",
+        input_root=corpus,
+        output_dir=first_dir,
+        dataset_version="sample-v1",
+        max_positive_annotations=2,
+        max_candidate_documents=4,
+        seed=17,
+    )
+    manifest = _read_json(first.manifest_path)
+
+    assert first.document_count == 4
+    assert first.query_count == 2
+    assert manifest["source_extract"]["plagiarism_annotation_count_available"] == 6
+    assert manifest["source_extract"]["non_suspicious_xml_skipped"] == 1
+    assert manifest["sampling"]["positive_annotations_selected"] == 2
+    assert manifest["sampling"]["relevant_source_documents_selected"] == 2
+    assert manifest["sampling"]["distractor_documents_selected"] == 2
+    assert len(manifest["sampling"]["selected_annotation_ids"]) == 2
+    assert len(manifest["sampling"]["selected_annotation_ids_sha256"]) == 64
+    assert manifest["sampling"]["full_corpus_result"] is False
+
+    # Four selected candidate sources plus two selected suspicious documents;
+    # unselected source/suspicious text is never opened.
+    assert len(set(reads)) == 6
+    assert not any(path.name == "source-document0.xml" for path in reads)
+
+    reads.clear()
+    second_dir = tmp_path / "second"
+    convert_pan_pilot(
+        dataset="pan-pc-11",
+        input_root=corpus,
+        output_dir=second_dir,
+        dataset_version="sample-v1",
+        max_positive_annotations=2,
+        max_candidate_documents=4,
+        seed=17,
+    )
+    for filename in OUTPUT_NAMES.values():
+        assert (first_dir / filename).read_bytes() == (second_dir / filename).read_bytes()
+
+
+def test_converter_skips_and_reports_zero_length_annotations(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(
+        corpus,
+        annotation_count=1,
+        distractor_count=0,
+    )
+    zero_length_xml = corpus / "labels" / "manual" / "zero-length.xml"
+    zero_length_xml.write_text(
+        (
+            '<document reference="suspicious-document0.txt">'
+            '<feature name="plagiarism" this_offset="0" this_length="0" '
+            'source_reference="source-document0.txt" source_offset="0" '
+            'source_length="6" /></document>'
+        ),
+        encoding="utf-8",
+    )
+
+    output = tmp_path / "pack"
+    result = convert_pan_pilot(
+        dataset="pan-pc-11",
+        input_root=corpus,
+        output_dir=output,
+        dataset_version="zero-length-v1",
+        max_positive_annotations=10,
+        max_candidate_documents=1,
+    )
+
+    manifest = _read_json(result.manifest_path)
+    assert manifest["source_extract"]["zero_length_annotations_skipped"] == 1
+    assert manifest["source_extract"]["plagiarism_annotation_count_available"] == 1
+    assert result.query_count == 1
+
+
+def test_long_annotation_is_windowed_to_256_unicode_words_with_shared_qrel(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(
+        corpus,
+        annotation_count=1,
+        distractor_count=0,
+        query_word_count=600,
+    )
+    output = tmp_path / "pack"
+    convert_pan_pilot(
+        dataset="pan13",
+        input_root=corpus,
+        output_dir=output,
+        dataset_version="long-query-v1",
+        max_positive_annotations=1,
+        max_candidate_documents=1,
+        max_query_word_tokens=256,
+        query_stride_word_tokens=128,
+    )
+
+    queries = _read_jsonl(output / "queries.jsonl")
+    qrels = _read_jsonl(output / "qrels.jsonl")
+    assert len(queries) == len(qrels) == 4
+    assert {query["parent_annotation_id"] for query in queries} == {
+        qrel["parent_annotation_id"] for qrel in qrels
+    }
+    assert all(query["query_window"]["word_token_count"] <= 256 for query in queries)
+    assert sorted(query["query_window"]["token_start"] for query in queries) == [
+        0,
+        128,
+        256,
+        344,
+    ]
+    assert len({(qrel["document_id"], qrel["raw_start"], qrel["raw_end"]) for qrel in qrels}) == 1
+
+
+def test_source_archive_checksum_and_converter_provenance_are_recorded(
+    tmp_path, monkeypatch
+):
+    corpus = tmp_path / "corpus"
+    _write_pan_fixture(corpus)
+    archive = tmp_path / "pan13-text-alignment-test-and-training.zip"
+    archive.write_bytes(b"synthetic archive fixture")
+    monkeypatch.setattr(
+        pan_converter,
+        "_md5_file",
+        lambda path: pan_converter.EXPECTED_ARCHIVE_MD5["pan13"][path.name],
+    )
+    output = tmp_path / "pack"
+    convert_pan_pilot(
+        dataset="pan13",
+        input_root=corpus,
+        output_dir=output,
+        dataset_version="archive-v1",
+        source_archives=[archive],
+    )
+    manifest = _read_json(output / "dataset-manifest.json")
+    [record] = manifest["source"]["archives"]
+    assert record["name"] == archive.name
+    assert record["size_bytes"] == archive.stat().st_size
+    assert record["provider_checksum_verified"] is True
+    assert record["local_sha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
+    provenance = manifest["transformation"]["converter_provenance"]
+    assert len(provenance["code_sha256"]) == 64
+    assert len(provenance["git_commit"]) == 40
+    assert isinstance(provenance["git_dirty"], bool)
+
+
+def test_known_archive_with_wrong_provider_md5_is_rejected(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_pan_fixture(corpus)
+    archive = tmp_path / "pan13-text-alignment-test-and-training.zip"
+    archive.write_bytes(b"not the provider archive")
+    with pytest.raises(ValueError, match="Provider MD5 mismatch"):
+        convert_pan_pilot(
+            dataset="pan13",
+            input_root=corpus,
+            output_dir=tmp_path / "pack",
+            dataset_version="archive-v1",
+            source_archives=[archive],
+        )
+
+
+def test_pan_pc_requires_bounded_positive_sampling_and_keeps_all_relevant_sources(
+    tmp_path,
+):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(corpus, annotation_count=3, distractor_count=0)
+    with pytest.raises(ValueError, match="bounded max_positive_annotations"):
+        convert_pan_pilot(
+            dataset="pan-pc-11",
+            input_root=corpus,
+            output_dir=tmp_path / "unbounded",
+            dataset_version="v1",
+            max_positive_annotations=None,
+        )
+    with pytest.raises(ValueError, match="smaller than the number of relevant"):
+        convert_pan_pilot(
+            dataset="pan-pc-11",
+            input_root=corpus,
+            output_dir=tmp_path / "too-small",
+            dataset_version="v1",
+            max_positive_annotations=3,
+            max_candidate_documents=2,
+        )
+
+
 def test_converter_rejects_traversal_and_does_not_overwrite_by_default(tmp_path):
     corpus = tmp_path / "corpus"
     _write_pan_fixture(corpus, source_reference="../outside.txt")
@@ -220,6 +466,8 @@ def test_cli_emits_the_five_runner_files(tmp_path, capsys):
     corpus = tmp_path / "corpus"
     _write_pan_fixture(corpus)
     output = tmp_path / "cli-output"
+    archive = tmp_path / "locally-renamed-pan13.zip"
+    archive.write_bytes(b"local fixture")
 
     assert (
         main(
@@ -234,6 +482,14 @@ def test_cli_emits_the_five_runner_files(tmp_path, capsys):
                 "v1",
                 "--max-chunk-chars",
                 "64",
+                "--max-positive-annotations",
+                "1",
+                "--max-candidate-documents",
+                "1",
+                "--seed",
+                "19",
+                "--source-archive",
+                str(archive),
             ]
         )
         == 0
@@ -242,6 +498,9 @@ def test_cli_emits_the_five_runner_files(tmp_path, capsys):
     assert summary["documents"] == 1
     assert summary["queries"] == 1
     assert {path.name for path in output.iterdir()} == set(OUTPUT_NAMES.values())
+    manifest = _read_json(output / "dataset-manifest.json")
+    assert manifest["sampling"]["seed"] == 19
+    assert manifest["source"]["archives"][0]["provider_checksum_verified"] is False
 
 
 def test_pan_pc_pack_is_fail_closed_then_runs_all_baselines_after_test_approval(
@@ -301,6 +560,9 @@ def test_pan_pc_pack_is_fail_closed_then_runs_all_baselines_after_test_approval(
         {
             "status": "APPROVED",
             "rights_basis": "PROJECT_GENERATED_SYNTHETIC",
+            "classification": "SYNTHETIC_PUBLIC",
+            "contains_pii": False,
+            "retention": "Ephemeral generated test fixture",
             "approver": "test-policy",
             "approved_at": "2026-09-25",
         }

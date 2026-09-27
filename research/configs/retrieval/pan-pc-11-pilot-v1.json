@@ -3,8 +3,10 @@
   "experiment_id": "pan-pc-11-source-retrieval-pilot-v1",
   "protocol": {
     "dataset_role": "CORE_SOURCE_RETRIEVAL_DIAGNOSTIC",
-    "query_unit": "annotated_suspicious_span",
+    "query_unit": "annotated_suspicious_span_window",
     "target_scope": "source_document",
+    "corpus_scope": "DETERMINISTIC_RESOURCE_BOUNDED_PILOT",
+    "full_corpus_result": false,
     "official_pan_result": false
   },
   "seed": 20260923,

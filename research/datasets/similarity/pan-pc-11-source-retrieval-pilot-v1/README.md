@@ -7,6 +7,12 @@ source document from a candidate corpus. Chunk rankings are collapsed to unique
 source documents before RRF and Recall/MRR/nDCG. It is a controlled diagnostic
 for the thesis retrieval pipeline, not a reproduction of an official PAN task.
 
+On the 16 GB development machine, v1 is explicitly a deterministic bounded
+pilot: annotations and distractor source documents are hash-selected with a
+locked seed, while every relevant source for a selected query is retained. The
+manifest must record the sampler and candidate-pool composition. It must not be
+reported as a full PAN-PC-11 corpus score.
+
 The official corpus source is Webis/PAN-PC-11, archived as Zenodo record
 `3250095` under provider metadata `CC-BY-4.0`. The two provider MD5 values are
 locked in the manifest template; conversion must additionally record local

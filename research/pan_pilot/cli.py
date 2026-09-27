@@ -21,6 +21,33 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--split-name", default="extracted-pilot")
     parser.add_argument("--max-chunk-chars", type=int, default=1200)
     parser.add_argument(
+        "--max-positive-annotations",
+        "--max-annotations",
+        dest="max_positive_annotations",
+        type=int,
+        default=30,
+        help="Maximum sampled plagiarism annotations (default: 30).",
+    )
+    parser.add_argument(
+        "--max-candidate-documents",
+        type=int,
+        default=200,
+        help="Maximum relevant plus distractor source documents (default: 200).",
+    )
+    parser.add_argument("--seed", type=int, default=20260923)
+    parser.add_argument("--max-query-word-tokens", type=int, default=256)
+    parser.add_argument("--query-stride-word-tokens", type=int, default=128)
+    parser.add_argument(
+        "--source-archive",
+        action="append",
+        type=Path,
+        default=[],
+        help=(
+            "Original provider archive; repeat for multipart PAN-PC-11. "
+            "Known provider MD5 values are verified before conversion."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace only the five known generated files if they already exist.",
@@ -38,6 +65,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             dataset_version=args.dataset_version,
             split_name=args.split_name,
             max_chunk_chars=args.max_chunk_chars,
+            max_positive_annotations=args.max_positive_annotations,
+            max_candidate_documents=args.max_candidate_documents,
+            seed=args.seed,
+            max_query_word_tokens=args.max_query_word_tokens,
+            query_stride_word_tokens=args.query_stride_word_tokens,
+            source_archives=args.source_archive,
             overwrite=args.overwrite,
         )
     except (FileExistsError, OSError, ValueError) as exc:

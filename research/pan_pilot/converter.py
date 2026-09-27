@@ -12,6 +12,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 from typing import Any, Iterable
 import xml.etree.ElementTree as ET
 
@@ -58,8 +59,19 @@ DATASET_PROFILES = {
     },
 }
 
+EXPECTED_ARCHIVE_MD5 = {
+    "pan-pc-11": {
+        "pan-plagiarism-corpus-2011.part1.rar": "b2930f859497dd48ba5bb606d3f4a4f3",
+        "pan-plagiarism-corpus-2011.part2.rar": "b23d86c17a47d2bfbdc4c314ea5810df",
+    },
+    "pan13": {
+        "pan13-text-alignment-test-and-training.zip": "fec7fca7a82193a97fbb97cde7781b63",
+    },
+}
+
 _BLANK_LINE_RE = re.compile(r"(?:\r\n|\r|\n)[\t \f\v]*(?:\r\n|\r|\n)+")
 _WINDOWS_ABSOLUTE_RE = re.compile(r"^[A-Za-z]:[/\\]")
+_UNICODE_WORD_RE = re.compile(r"\w+", flags=re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -89,6 +101,16 @@ class _Annotation:
     source_end: int
 
 
+@dataclass(frozen=True)
+class _AnnotationScan:
+    annotations: tuple[_Annotation, ...]
+    xml_file_count: int
+    no_plagiarism_xml_count: int
+    non_suspicious_xml_count: int
+    zero_length_annotation_count: int
+    xml_inventory: tuple[dict[str, Any], ...]
+
+
 def _canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -103,6 +125,14 @@ def _sha256_text(value: str) -> str:
 
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _md5_file(path: Path) -> str:
+    digest = hashlib.md5(usedforsecurity=False)
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
@@ -234,17 +264,11 @@ def _checked_span(text: str, offset: int, length: int, *, label: str) -> tuple[i
     return offset, end
 
 
-def _parse_annotations(
-    index: _CorpusIndex,
-) -> tuple[list[_Annotation], dict[Path, str], int, int]:
+def _scan_annotations(index: _CorpusIndex) -> _AnnotationScan:
+    """Read XML metadata only; no corpus TXT content is opened here."""
+
     annotations: list[_Annotation] = []
-    text_cache: dict[Path, str] = {}
-
-    def text_for(path: Path) -> str:
-        if path not in text_cache:
-            text_cache[path] = _read_utf8_exact(path)
-        return text_cache[path]
-
+    xml_inventory: list[dict[str, Any]] = []
     xml_paths = sorted(
         (path for path in index.root.rglob("*") if path.suffix.casefold() == ".xml"),
         key=lambda path: path.as_posix(),
@@ -253,10 +277,20 @@ def _parse_annotations(
         raise ValueError("No PAN XML annotations found under input_root")
 
     no_plagiarism_xml_count = 0
+    non_suspicious_xml_count = 0
+    zero_length_annotation_count = 0
     for xml_path in xml_paths:
         resolved_xml = xml_path.resolve(strict=True)
         relative_xml = _relative_to_root(resolved_xml, index.root)
         xml_bytes = resolved_xml.read_bytes()
+        xml_sha256 = _sha256_bytes(xml_bytes)
+        xml_inventory.append(
+            {
+                "path": relative_xml,
+                "size_bytes": len(xml_bytes),
+                "sha256": xml_sha256,
+            }
+        )
         lowered = xml_bytes.lower()
         if b"<!doctype" in lowered or b"<!entity" in lowered:
             raise ValueError(f"DTD/entities are not allowed in PAN XML: {relative_xml}")
@@ -264,6 +298,25 @@ def _parse_annotations(
             root = ET.fromstring(xml_bytes)
         except ET.ParseError as exc:
             raise ValueError(f"Invalid PAN XML: {relative_xml}") from exc
+
+        suspicious_reference = root.attrib.get("reference", "").strip()
+        reference_path = PurePosixPath(suspicious_reference.replace("\\", "/"))
+        reference_name = reference_path.name.casefold()
+        reference_parts = {part.casefold() for part in reference_path.parts[:-1]}
+        relative_parts = {
+            part.casefold() for part in PurePosixPath(relative_xml).parts[:-1]
+        }
+        suspicious_directory_names = {
+            "susp",
+            "suspicious-document",
+            "suspicious-documents",
+        }
+        is_suspicious_xml = reference_name.startswith("suspicious-document") or bool(
+            suspicious_directory_names & (reference_parts | relative_parts)
+        )
+        if not is_suspicious_xml:
+            non_suspicious_xml_count += 1
+            continue
 
         plagiarism_features = [
             feature
@@ -275,13 +328,11 @@ def _parse_annotations(
             no_plagiarism_xml_count += 1
             continue
 
-        suspicious_reference = root.attrib.get("reference", "").strip()
         if not suspicious_reference:
             raise ValueError(f"PAN XML has no document reference: {relative_xml}")
         suspicious_path = index.resolve_reference(
             suspicious_reference, annotation_path=resolved_xml
         )
-        suspicious_text = text_for(suspicious_path)
 
         for feature_index, feature in enumerate(plagiarism_features):
             source_reference = feature.attrib.get("source_reference", "").strip()
@@ -292,42 +343,315 @@ def _parse_annotations(
             source_path = index.resolve_reference(
                 source_reference, annotation_path=resolved_xml
             )
-            source_text = text_for(source_path)
             this_offset = _required_non_negative_int(feature, "this_offset")
             this_length = _required_non_negative_int(feature, "this_length")
             source_offset = _required_non_negative_int(feature, "source_offset")
             source_length = _required_non_negative_int(feature, "source_length")
-            suspicious_start, suspicious_end = _checked_span(
-                suspicious_text,
-                this_offset,
-                this_length,
-                label=f"{relative_xml} suspicious",
-            )
-            source_start, source_end = _checked_span(
-                source_text,
-                source_offset,
-                source_length,
-                label=f"{relative_xml} source",
-            )
+            # PAN-PC-11 contains at least one provider annotation whose
+            # suspicious span has length zero. It cannot form a retrieval
+            # query, so exclude it explicitly and record the exclusion in the
+            # manifest instead of accepting an empty query or aborting the
+            # whole corpus conversion.
+            if this_length == 0 or source_length == 0:
+                zero_length_annotation_count += 1
+                continue
             annotations.append(
                 _Annotation(
                     annotation_path=relative_xml,
-                    annotation_sha256=_sha256_bytes(xml_bytes),
+                    annotation_sha256=xml_sha256,
                     feature_index=feature_index,
                     suspicious_path=suspicious_path,
                     suspicious_reference=suspicious_reference,
-                    suspicious_start=suspicious_start,
-                    suspicious_end=suspicious_end,
+                    suspicious_start=this_offset,
+                    suspicious_end=this_offset + this_length,
                     source_path=source_path,
                     source_reference=source_reference,
-                    source_start=source_start,
-                    source_end=source_end,
+                    source_start=source_offset,
+                    source_end=source_offset + source_length,
                 )
             )
 
     if not annotations:
         raise ValueError("No plagiarism features found in PAN XML annotations")
-    return annotations, text_cache, len(xml_paths), no_plagiarism_xml_count
+    return _AnnotationScan(
+        annotations=tuple(annotations),
+        xml_file_count=len(xml_paths),
+        no_plagiarism_xml_count=no_plagiarism_xml_count,
+        non_suspicious_xml_count=non_suspicious_xml_count,
+        zero_length_annotation_count=zero_length_annotation_count,
+        xml_inventory=tuple(xml_inventory),
+    )
+
+
+def _annotation_id(dataset_id: str, annotation: _Annotation) -> str:
+    """Stable positive ID derived only from XML metadata and paths."""
+
+    return _stable_id(
+        "annotation",
+        dataset_id,
+        annotation.annotation_path,
+        annotation.feature_index,
+        annotation.suspicious_reference,
+        annotation.suspicious_start,
+        annotation.suspicious_end,
+        annotation.source_reference,
+        annotation.source_start,
+        annotation.source_end,
+    )
+
+
+def _hash_order(seed: int, namespace: str, value: str) -> tuple[str, str]:
+    return (_sha256_text(f"{seed}\x1f{namespace}\x1f{value}"), value)
+
+
+def _select_annotations(
+    annotations: Iterable[_Annotation],
+    *,
+    dataset_id: str,
+    max_positive_annotations: int | None,
+    seed: int,
+) -> list[_Annotation]:
+    """Hash-order positives within XML-parent strata, then round-robin strata."""
+
+    all_annotations = list(annotations)
+    if max_positive_annotations is None or max_positive_annotations >= len(all_annotations):
+        return sorted(
+            all_annotations,
+            key=lambda item: _annotation_id(dataset_id, item),
+        )
+
+    strata: dict[str, list[_Annotation]] = {}
+    for annotation in all_annotations:
+        stratum = PurePosixPath(annotation.annotation_path).parent.as_posix() or "."
+        strata.setdefault(stratum, []).append(annotation)
+    for stratum, members in strata.items():
+        members.sort(
+            key=lambda item: _hash_order(
+                seed,
+                f"positive:{stratum}",
+                _annotation_id(dataset_id, item),
+            )
+        )
+
+    stratum_order = sorted(
+        strata,
+        key=lambda value: _hash_order(seed, "stratum", value),
+    )
+    cursors = {stratum: 0 for stratum in stratum_order}
+    selected: list[_Annotation] = []
+    while len(selected) < max_positive_annotations:
+        added = False
+        for stratum in stratum_order:
+            cursor = cursors[stratum]
+            members = strata[stratum]
+            if cursor >= len(members):
+                continue
+            selected.append(members[cursor])
+            cursors[stratum] += 1
+            added = True
+            if len(selected) == max_positive_annotations:
+                break
+        if not added:
+            break
+    return sorted(selected, key=lambda item: _annotation_id(dataset_id, item))
+
+
+def _select_source_paths(
+    index: _CorpusIndex,
+    all_annotations: Iterable[_Annotation],
+    selected_annotations: Iterable[_Annotation],
+    *,
+    max_candidate_documents: int,
+    seed: int,
+) -> tuple[list[Path], dict[str, int]]:
+    """Keep every selected positive source, then hash-sample negative sources."""
+
+    all_annotation_sources = {item.source_path for item in all_annotations}
+    full_candidates = index.source_candidates() | all_annotation_sources
+    relevant = {item.source_path for item in selected_annotations}
+    if len(relevant) > max_candidate_documents:
+        raise ValueError(
+            "max_candidate_documents is smaller than the number of relevant "
+            f"source documents ({max_candidate_documents} < {len(relevant)})"
+        )
+
+    distractors = sorted(
+        full_candidates - relevant,
+        key=lambda path: _hash_order(
+            seed,
+            "distractor-source",
+            _relative_to_root(path, index.root),
+        ),
+    )
+    selected_distractors = distractors[: max_candidate_documents - len(relevant)]
+    selected = sorted(
+        relevant | set(selected_distractors),
+        key=lambda path: _relative_to_root(path, index.root),
+    )
+    return selected, {
+        "source_documents_available": len(full_candidates),
+        "relevant_source_documents_available": len(all_annotation_sources),
+        "relevant_source_documents_selected": len(relevant),
+        "distractor_documents_available": len(full_candidates - relevant),
+        "distractor_documents_selected": len(selected_distractors),
+        "candidate_documents_selected": len(selected),
+    }
+
+
+def _query_windows(
+    text: str, *, max_word_tokens: int, stride_word_tokens: int
+) -> list[dict[str, int]]:
+    r"""Return deterministic character spans bounded by Unicode ``\w+`` tokens."""
+
+    tokens = list(_UNICODE_WORD_RE.finditer(text))
+    token_count = len(tokens)
+    if token_count <= max_word_tokens:
+        return [
+            {
+                "index": 0,
+                "token_start": 0,
+                "token_end": token_count,
+                "raw_start": 0,
+                "raw_end": len(text),
+                "word_token_count": token_count,
+            }
+        ]
+
+    starts = list(range(0, token_count - max_word_tokens + 1, stride_word_tokens))
+    final_start = token_count - max_word_tokens
+    if starts[-1] != final_start:
+        starts.append(final_start)
+    windows: list[dict[str, int]] = []
+    for index, token_start in enumerate(starts):
+        token_end = min(token_count, token_start + max_word_tokens)
+        windows.append(
+            {
+                "index": index,
+                "token_start": token_start,
+                "token_end": token_end,
+                "raw_start": tokens[token_start].start(),
+                "raw_end": tokens[token_end - 1].end(),
+                "word_token_count": token_end - token_start,
+            }
+        )
+    return windows
+
+
+def _archive_provenance(
+    dataset_key: str, source_archives: Iterable[str | Path]
+) -> list[dict[str, Any]]:
+    expected_by_name = EXPECTED_ARCHIVE_MD5[dataset_key]
+    records: list[dict[str, Any]] = []
+    seen_paths: set[Path] = set()
+    seen_names: set[str] = set()
+    for raw_path in source_archives:
+        path = Path(raw_path).expanduser().resolve(strict=True)
+        if not path.is_file():
+            raise ValueError(f"source_archive must be a file: {path.name}")
+        if path in seen_paths:
+            raise ValueError(f"Duplicate source_archive: {path.name}")
+        seen_paths.add(path)
+        normalized_name = path.name.casefold()
+        if normalized_name in seen_names:
+            raise ValueError(f"Duplicate source_archive name: {path.name}")
+        seen_names.add(normalized_name)
+        local_md5 = _md5_file(path)
+        expected_md5 = expected_by_name.get(normalized_name)
+        if expected_md5 is not None and local_md5 != expected_md5:
+            raise ValueError(
+                f"Provider MD5 mismatch for {path.name}: "
+                f"expected {expected_md5}, got {local_md5}"
+            )
+        records.append(
+            {
+                "name": path.name,
+                "size_bytes": path.stat().st_size,
+                "provider_md5": expected_md5,
+                "local_md5": local_md5,
+                "provider_checksum_verified": expected_md5 is not None,
+                "local_sha256": _sha256_file(path),
+            }
+        )
+    verified_names = {
+        record["name"].casefold()
+        for record in records
+        if record["provider_checksum_verified"]
+    }
+    if verified_names and verified_names != set(expected_by_name):
+        missing = sorted(set(expected_by_name) - verified_names)
+        raise ValueError(
+            "Incomplete official archive set; missing: " + ", ".join(missing)
+        )
+    return sorted(records, key=lambda item: item["name"].casefold())
+
+
+def _converter_provenance() -> dict[str, Any]:
+    converter_file = Path(__file__).resolve(strict=True)
+    provenance: dict[str, Any] = {
+        "file": "research/pan_pilot/converter.py",
+        "code_sha256": _sha256_file(converter_file),
+        "git_commit": None,
+        "git_dirty": None,
+    }
+    try:
+        root_result = subprocess.run(
+            ["git", "-C", str(converter_file.parent), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        repo_root = Path(root_result.stdout.strip())
+        commit_result = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        converter_relative = converter_file.relative_to(repo_root).as_posix()
+        status_result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "status",
+                "--porcelain",
+                "--untracked-files=no",
+                "--",
+                converter_relative,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        provenance["git_commit"] = commit_result.stdout.strip()
+        # Unrelated untracked notes must not make the exact converter source
+        # look dirty; its own content hash is already recorded above.
+        provenance["git_dirty"] = bool(status_result.stdout.strip())
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return provenance
+
+
+def _input_inventory_fingerprint(
+    index: _CorpusIndex, scan: _AnnotationScan
+) -> tuple[str, int]:
+    """Fingerprint metadata without opening every potentially huge source TXT."""
+
+    text_inventory = [
+        {
+            "path": relative,
+            "size_bytes": path.stat().st_size,
+        }
+        for relative, path in sorted(index.text_by_relative.items())
+    ]
+    payload = {
+        "method": "xml-content-sha256+text-path-size-v1",
+        "xml": list(scan.xml_inventory),
+        "text": text_inventory,
+    }
+    return _sha256_text(_canonical_json(payload)), len(scan.xml_inventory) + len(
+        text_inventory
+    )
 
 
 def _trim_whitespace(text: str, start: int, end: int) -> tuple[int, int] | None:
@@ -397,21 +721,6 @@ def _chunk_spans(text: str, *, max_chars: int) -> list[tuple[int, int]]:
     return chunks
 
 
-def _corpus_fingerprint(root: Path) -> tuple[str, int]:
-    records: list[dict[str, str]] = []
-    for candidate in sorted(root.rglob("*"), key=lambda path: path.as_posix()):
-        if not candidate.is_file() or candidate.suffix.casefold() not in {".txt", ".xml"}:
-            continue
-        resolved = candidate.resolve(strict=True)
-        records.append(
-            {
-                "path": _relative_to_root(resolved, root),
-                "sha256": _sha256_file(resolved),
-            }
-        )
-    return _sha256_text(_canonical_json(records)), len(records)
-
-
 def _write_outputs(
     output_dir: Path, rendered: dict[str, bytes], *, overwrite: bool
 ) -> None:
@@ -441,6 +750,12 @@ def convert_pan_pilot(
     dataset_version: str,
     split_name: str = "extracted-pilot",
     max_chunk_chars: int = 1200,
+    max_positive_annotations: int | None = 30,
+    max_candidate_documents: int = 200,
+    seed: int = 20260923,
+    max_query_word_tokens: int = 256,
+    query_stride_word_tokens: int = 128,
+    source_archives: Iterable[str | Path] = (),
     overwrite: bool = False,
 ) -> ConversionResult:
     """Convert PAN XML/TXT into deterministic runner inputs.
@@ -459,24 +774,59 @@ def convert_pan_pilot(
         raise ValueError("split_name must not be empty")
     if isinstance(max_chunk_chars, bool) or max_chunk_chars < 32:
         raise ValueError("max_chunk_chars must be an integer >= 32")
+    if (
+        max_positive_annotations is not None
+        and (
+            isinstance(max_positive_annotations, bool)
+            or max_positive_annotations < 1
+        )
+    ):
+        raise ValueError("max_positive_annotations must be null or an integer >= 1")
+    if dataset_key == "pan-pc-11" and max_positive_annotations is None:
+        raise ValueError("PAN-PC-11 requires a bounded max_positive_annotations")
+    if isinstance(max_candidate_documents, bool) or max_candidate_documents < 1:
+        raise ValueError("max_candidate_documents must be an integer >= 1")
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        raise ValueError("seed must be an integer")
+    if isinstance(max_query_word_tokens, bool) or max_query_word_tokens < 1:
+        raise ValueError("max_query_word_tokens must be an integer >= 1")
+    if (
+        isinstance(query_stride_word_tokens, bool)
+        or query_stride_word_tokens < 1
+        or query_stride_word_tokens > max_query_word_tokens
+    ):
+        raise ValueError(
+            "query_stride_word_tokens must be between 1 and max_query_word_tokens"
+        )
 
     profile = DATASET_PROFILES[dataset_key]
     index = _CorpusIndex(Path(input_root))
-    annotations, text_cache, xml_file_count, no_plagiarism_xml_count = _parse_annotations(
-        index
+    scan = _scan_annotations(index)
+    annotations = _select_annotations(
+        scan.annotations,
+        dataset_id=profile["dataset_id"],
+        max_positive_annotations=max_positive_annotations,
+        seed=seed,
     )
+    source_paths, source_sampling_counts = _select_source_paths(
+        index,
+        scan.annotations,
+        annotations,
+        max_candidate_documents=max_candidate_documents,
+        seed=seed,
+    )
+    archive_records = _archive_provenance(dataset_key, source_archives)
+    text_cache: dict[Path, str] = {}
 
-    source_paths = sorted(
-        {annotation.source_path for annotation in annotations}
-        | index.source_candidates(),
-        key=lambda path: _relative_to_root(path, index.root),
-    )
+    def text_for(path: Path) -> str:
+        if path not in text_cache:
+            text_cache[path] = _read_utf8_exact(path)
+        return text_cache[path]
+
     documents: list[dict[str, Any]] = []
     document_by_path: dict[Path, dict[str, Any]] = {}
     for source_path in source_paths:
-        if source_path not in text_cache:
-            text_cache[source_path] = _read_utf8_exact(source_path)
-        source_text = text_cache[source_path]
+        source_text = text_for(source_path)
         if not source_text.strip():
             raise ValueError(f"Source document is empty: {source_path.name}")
         relative = _relative_to_root(source_path, index.root)
@@ -532,76 +882,108 @@ def convert_pan_pilot(
     queries: list[dict[str, Any]] = []
     qrels: list[dict[str, Any]] = []
     for annotation in annotations:
-        suspicious_text = text_cache[annotation.suspicious_path]
-        source_text = text_cache[annotation.source_path]
-        query_text = suspicious_text[
-            annotation.suspicious_start : annotation.suspicious_end
-        ]
-        suspicious_relative = _relative_to_root(annotation.suspicious_path, index.root)
-        query_id = _stable_id(
-            "query",
-            profile["dataset_id"],
-            annotation.annotation_path,
-            annotation.feature_index,
-            suspicious_relative,
+        suspicious_text = text_for(annotation.suspicious_path)
+        source_text = text_for(annotation.source_path)
+        suspicious_start, suspicious_end = _checked_span(
+            suspicious_text,
             annotation.suspicious_start,
-            annotation.suspicious_end,
-            annotation.source_reference,
+            annotation.suspicious_end - annotation.suspicious_start,
+            label=f"{annotation.annotation_path} suspicious",
+        )
+        source_start, source_end = _checked_span(
+            source_text,
             annotation.source_start,
-            annotation.source_end,
+            annotation.source_end - annotation.source_start,
+            label=f"{annotation.annotation_path} source",
         )
-        queries.append(
-            {
-                "query_id": query_id,
-                "text": query_text,
-                "query_role": "SUSPICIOUS_SPAN",
-                "annotation_provenance": {
-                    "xml_path": annotation.annotation_path,
-                    "xml_sha256": annotation.annotation_sha256,
-                    "feature_index": annotation.feature_index,
-                    "suspicious_document": suspicious_relative,
-                    "declared_suspicious_reference": annotation.suspicious_reference,
-                    "suspicious_document_sha256": _sha256_text(suspicious_text),
-                    "raw_start": annotation.suspicious_start,
-                    "raw_end": annotation.suspicious_end,
-                    "text_sha256": _sha256_text(query_text),
-                },
-            }
-        )
-
+        annotation_text = suspicious_text[suspicious_start:suspicious_end]
+        suspicious_relative = _relative_to_root(annotation.suspicious_path, index.root)
+        parent_annotation_id = _annotation_id(profile["dataset_id"], annotation)
         document = document_by_path[annotation.source_path]
         # Keep the original PAN alignment span in both profiles.  The explicit
         # target_scope tells evaluation whether that span identifies a relevant
         # source document (PAN-PC-11) or is itself the diagnostic target (PAN13).
-        qrel_start, qrel_end = annotation.source_start, annotation.source_end
-        annotated_text = source_text[annotation.source_start : annotation.source_end]
-        qrels.append(
-            {
-                "qrel_id": _stable_id(
-                    "qrel",
-                    query_id,
-                    document["document_id"],
-                    qrel_start,
-                    qrel_end,
-                    profile["target_scope"],
-                ),
-                "query_id": query_id,
-                "document_id": document["document_id"],
-                "raw_start": qrel_start,
-                "raw_end": qrel_end,
-                "relevance": 1,
-                "target_scope": profile["target_scope"],
-                "source_reference": _relative_to_root(
-                    annotation.source_path, index.root
-                ),
-                "declared_source_reference": annotation.source_reference,
-                "annotated_source_span": {
-                    "raw_start": annotation.source_start,
-                    "raw_end": annotation.source_end,
-                    "text_sha256": _sha256_text(annotated_text),
-                },
-            }
+        annotated_text = source_text[source_start:source_end]
+        windows = _query_windows(
+            annotation_text,
+            max_word_tokens=max_query_word_tokens,
+            stride_word_tokens=query_stride_word_tokens,
         )
+        for window in windows:
+            window_text = annotation_text[window["raw_start"] : window["raw_end"]]
+            window_raw_start = suspicious_start + window["raw_start"]
+            window_raw_end = suspicious_start + window["raw_end"]
+            query_id = _stable_id(
+                "query",
+                parent_annotation_id,
+                window["index"],
+                window["token_start"],
+                window["token_end"],
+                window_raw_start,
+                window_raw_end,
+            )
+            queries.append(
+                {
+                    "query_id": query_id,
+                    "parent_annotation_id": parent_annotation_id,
+                    "text": window_text,
+                    "query_role": "SUSPICIOUS_SPAN_WINDOW",
+                    "query_window": {
+                        **window,
+                        "raw_start": window_raw_start,
+                        "raw_end": window_raw_end,
+                        "annotation_relative_raw_start": window["raw_start"],
+                        "annotation_relative_raw_end": window["raw_end"],
+                        "total_annotation_word_tokens": len(
+                            _UNICODE_WORD_RE.findall(annotation_text)
+                        ),
+                        "max_word_tokens": max_query_word_tokens,
+                        "stride_word_tokens": query_stride_word_tokens,
+                    },
+                    "annotation_provenance": {
+                        "xml_path": annotation.annotation_path,
+                        "xml_sha256": annotation.annotation_sha256,
+                        "feature_index": annotation.feature_index,
+                        "suspicious_document": suspicious_relative,
+                        "declared_suspicious_reference": annotation.suspicious_reference,
+                        "suspicious_document_sha256": _sha256_text(suspicious_text),
+                        "raw_start": suspicious_start,
+                        "raw_end": suspicious_end,
+                        "annotation_text_sha256": _sha256_text(annotation_text),
+                        "window_text_sha256": _sha256_text(window_text),
+                        "text_sha256": _sha256_text(window_text),
+                    },
+                }
+            )
+            qrels.append(
+                {
+                    "qrel_id": _stable_id(
+                        "qrel",
+                        query_id,
+                        document["document_id"],
+                        source_start,
+                        source_end,
+                        profile["target_scope"],
+                    ),
+                    "query_id": query_id,
+                    "parent_annotation_id": parent_annotation_id,
+                    "query_window_index": window["index"],
+                    "document_id": document["document_id"],
+                    "raw_start": source_start,
+                    "raw_end": source_end,
+                    "relevance": 1,
+                    "target_scope": profile["target_scope"],
+                    "source_reference": _relative_to_root(
+                        annotation.source_path, index.root
+                    ),
+                    "declared_source_reference": annotation.source_reference,
+                    "annotated_source_span": {
+                        "raw_start": source_start,
+                        "raw_end": source_end,
+                        "text_sha256": _sha256_text(annotated_text),
+                    },
+                }
+            )
     queries.sort(key=lambda record: record["query_id"])
     qrels.sort(key=lambda record: record["qrel_id"])
 
@@ -611,7 +993,18 @@ def convert_pan_pilot(
         "queries": _render_jsonl(queries),
         "qrels": _render_jsonl(qrels),
     }
-    fingerprint, input_file_count = _corpus_fingerprint(index.root)
+    fingerprint, input_file_count = _input_inventory_fingerprint(index, scan)
+    selected_annotation_ids = sorted(
+        _annotation_id(profile["dataset_id"], annotation) for annotation in annotations
+    )
+    selected_source_paths = sorted(
+        _relative_to_root(path, index.root) for path in source_paths
+    )
+    source_record = {**profile["source"], "archives": archive_records}
+    full_corpus_result = (
+        len(annotations) == len(scan.annotations)
+        and len(source_paths) == source_sampling_counts["source_documents_available"]
+    )
     manifest = {
         "schema_version": 1,
         "dataset_id": profile["dataset_id"],
@@ -619,7 +1012,7 @@ def convert_pan_pilot(
         "description": profile["description"],
         "evaluation_role": profile["evaluation_role"],
         "result_classification": profile["result_classification"],
-        "source": profile["source"],
+        "source": source_record,
         "governance": {
             "status": "PENDING",
             "rights_basis": profile["rights_basis"],
@@ -633,25 +1026,59 @@ def convert_pan_pilot(
         "source_extract": {
             "format": "PAN_XML_TXT",
             "input_fingerprint_sha256": fingerprint,
+            "input_fingerprint_method": "xml-content-sha256+text-path-size-v1",
             "input_file_count": input_file_count,
-            "xml_file_count": xml_file_count,
-            "no_plagiarism_xml_skipped": no_plagiarism_xml_count,
+            "xml_file_count": scan.xml_file_count,
+            "no_plagiarism_xml_skipped": scan.no_plagiarism_xml_count,
+            "non_suspicious_xml_skipped": scan.non_suspicious_xml_count,
+            "zero_length_annotations_skipped": scan.zero_length_annotation_count,
+            "plagiarism_annotation_count_available": len(scan.annotations),
+            "plagiarism_annotation_count_selected": len(annotations),
             "plagiarism_annotation_count": len(annotations),
+        },
+        "sampling": {
+            "strategy": "xml-parent-stratified-sha256-round-robin-v1",
+            "positive_unit": "plagiarism_feature",
+            "stratum": "annotation_xml_parent_directory",
+            "ordering": "sha256(seed, namespace, stable_id)",
+            "seed": seed,
+            "max_positive_annotations": max_positive_annotations,
+            "max_annotations": max_positive_annotations,
+            "max_candidate_documents": max_candidate_documents,
+            "positive_annotations_available": len(scan.annotations),
+            "positive_annotations_selected": len(annotations),
+            **source_sampling_counts,
+            "selected_annotation_ids": selected_annotation_ids,
+            "selected_annotation_ids_sha256": _sha256_text(
+                _canonical_json(selected_annotation_ids)
+            ),
+            "selected_candidate_source_paths_sha256": _sha256_text(
+                _canonical_json(selected_source_paths)
+            ),
+            "full_corpus_result": full_corpus_result,
         },
         "transformation": {
             "converter": "research.pan_pilot",
-            "converter_version": "1.0.0",
-            "query_unit": "annotated_suspicious_span",
+            "converter_version": "2.0.0",
+            "converter_provenance": _converter_provenance(),
+            "query_unit": "annotated_suspicious_span_window",
             "target_scope": profile["target_scope"],
             "chunker": "paragraph-aware-v1",
             "max_chunk_chars": max_chunk_chars,
+            "query_window": {
+                "tokenizer": "python-unicode-word-regex-v1",
+                "max_word_tokens": max_query_word_tokens,
+                "stride_word_tokens": query_stride_word_tokens,
+            },
             "offset_convention": "zero-based-half-open-unicode-code-point",
         },
         "split": {
             "name": split_name.strip(),
             "unit": "source_document",
+            "seed": seed,
             "document_ids": sorted(record["document_id"] for record in documents),
             "query_ids": sorted(record["query_id"] for record in queries),
+            "parent_annotation_ids": selected_annotation_ids,
         },
         "files": {
             name: {
