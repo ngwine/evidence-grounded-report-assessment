@@ -14,9 +14,11 @@ manifest must record the sampler and candidate-pool composition. It must not be
 reported as a full PAN-PC-11 corpus score.
 
 The official corpus source is Webis/PAN-PC-11, archived as Zenodo record
-`3250095` under provider metadata `CC-BY-4.0`. The two provider MD5 values are
-locked in the manifest template; conversion must additionally record local
-SHA-256. Do not commit the archive,
+`3250095`. The record states that the corpus may be used free of charge for
+research purposes, but it does not declare an SPDX/Creative Commons license.
+The pilot therefore records a research-use statement and does not assume
+redistribution rights. The two provider MD5 values are locked in the manifest
+template; conversion must additionally record local SHA-256. Do not commit the archive,
 extracted text or derived JSONL. Store them below:
 
 ```text

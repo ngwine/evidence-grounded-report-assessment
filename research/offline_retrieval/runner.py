@@ -35,7 +35,7 @@ from .validation import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REQUIRED_METHODS = {
+ALLOWED_METHODS = {
     "fixed_window_bm25",
     "structure_bm25",
     "structure_dense",
@@ -217,8 +217,16 @@ def validate_inputs(
 
     _require_non_empty_string(config.get("experiment_id"), "config.experiment_id")
     methods = config.get("methods")
-    if not isinstance(methods, list) or set(methods) != REQUIRED_METHODS:
-        raise ValueError(f"config.methods must contain exactly {sorted(REQUIRED_METHODS)}")
+    if (
+        not isinstance(methods, list)
+        or not methods
+        or len(methods) != len(set(methods))
+        or not set(methods) <= ALLOWED_METHODS
+    ):
+        raise ValueError(
+            "config.methods must contain unique supported methods from "
+            f"{sorted(ALLOWED_METHODS)}"
+        )
     seed = config.get("seed")
     if isinstance(seed, bool) or not isinstance(seed, int):
         raise ValueError("config.seed must be an integer")
@@ -464,82 +472,91 @@ def run_experiment(
     started_at = datetime.now(timezone.utc)
     stage_timings: dict[str, float] = {}
 
-    stage_start = time.perf_counter()
-    fixed_windows = build_fixed_windows(
-        loaded["documents"],
-        size_tokens=int(config["fixed_window"]["size_tokens"]),
-        stride_tokens=int(config["fixed_window"]["stride_tokens"]),
-    )
-    stage_timings["fixed_window_build"] = time.perf_counter() - stage_start
-
     depth = int(config["retrieval_depth"])
     candidate_depth = int(config.get("candidate_retrieval_depth", depth))
     target_scope = config["metrics"].get("target_scope", "span")
-    stage_start = time.perf_counter()
-    fixed_bm25 = rank_bm25(
-        fixed_windows,
-        loaded["queries"],
-        top_k=candidate_depth,
-        k1=float(config["bm25"]["k1"]),
-        b=float(config["bm25"]["b"]),
-        group_by_document=target_scope == "document",
-    )
-    stage_timings["fixed_window_bm25"] = time.perf_counter() - stage_start
+    selected_methods = set(config["methods"])
+    rankings: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
-    stage_start = time.perf_counter()
-    structure_bm25 = rank_bm25(
-        loaded["chunks"],
-        loaded["queries"],
-        top_k=candidate_depth,
-        k1=float(config["bm25"]["k1"]),
-        b=float(config["bm25"]["b"]),
-        group_by_document=target_scope == "document",
-    )
-    stage_timings["structure_bm25"] = time.perf_counter() - stage_start
+    if "fixed_window_bm25" in selected_methods:
+        stage_start = time.perf_counter()
+        fixed_windows = build_fixed_windows(
+            loaded["documents"],
+            size_tokens=int(config["fixed_window"]["size_tokens"]),
+            stride_tokens=int(config["fixed_window"]["stride_tokens"]),
+        )
+        stage_timings["fixed_window_build"] = time.perf_counter() - stage_start
+        stage_start = time.perf_counter()
+        fixed_bm25 = rank_bm25(
+            fixed_windows,
+            loaded["queries"],
+            top_k=candidate_depth,
+            k1=float(config["bm25"]["k1"]),
+            b=float(config["bm25"]["b"]),
+            group_by_document=target_scope == "document",
+        )
+        rankings["fixed_window_bm25"] = {
+            query_id: candidates[:depth]
+            for query_id, candidates in fixed_bm25.items()
+        }
+        stage_timings["fixed_window_bm25"] = time.perf_counter() - stage_start
 
-    if encoder is None:
-        encoder = _make_encoder(config, loaded["config_path"])
-    stage_start = time.perf_counter()
-    structure_dense = rank_dense(
-        loaded["chunks"],
-        loaded["queries"],
-        encoder=encoder,
-        top_k=candidate_depth,
-        group_by_document=target_scope == "document",
+    needs_structure_bm25 = bool(
+        {"structure_bm25", "structure_hybrid_rrf"} & selected_methods
     )
-    stage_timings["structure_dense"] = time.perf_counter() - stage_start
+    structure_bm25: dict[str, list[dict[str, Any]]] = {}
+    if needs_structure_bm25:
+        stage_start = time.perf_counter()
+        structure_bm25 = rank_bm25(
+            loaded["chunks"],
+            loaded["queries"],
+            top_k=candidate_depth,
+            k1=float(config["bm25"]["k1"]),
+            b=float(config["bm25"]["b"]),
+            group_by_document=target_scope == "document",
+        )
+        stage_timings["structure_bm25"] = time.perf_counter() - stage_start
+        if "structure_bm25" in selected_methods:
+            rankings["structure_bm25"] = {
+                query_id: candidates[:depth]
+                for query_id, candidates in structure_bm25.items()
+            }
 
-    stage_start = time.perf_counter()
-    rrf_key = "document_id" if target_scope == "document" else "chunk_id"
-    # RRF must see the configured candidate pool. Truncating each component to
-    # the final output depth first hides consensus candidates that rank just
-    # below that cutoff in the individual methods.
-    hybrid = fuse_rrf(
-        {"bm25": structure_bm25, "dense": structure_dense},
-        rrf_k=int(config["rrf"]["k"]),
-        top_k=depth,
-        key_field=rrf_key,
+    needs_dense = bool(
+        {"structure_dense", "structure_hybrid_rrf"} & selected_methods
     )
-    fixed_bm25 = {
-        query_id: candidates[:depth]
-        for query_id, candidates in fixed_bm25.items()
-    }
-    structure_bm25 = {
-        query_id: candidates[:depth]
-        for query_id, candidates in structure_bm25.items()
-    }
-    structure_dense = {
-        query_id: candidates[:depth]
-        for query_id, candidates in structure_dense.items()
-    }
-    stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
+    structure_dense: dict[str, list[dict[str, Any]]] = {}
+    if needs_dense:
+        if encoder is None:
+            encoder = _make_encoder(config, loaded["config_path"])
+        stage_start = time.perf_counter()
+        structure_dense = rank_dense(
+            loaded["chunks"],
+            loaded["queries"],
+            encoder=encoder,
+            top_k=candidate_depth,
+            group_by_document=target_scope == "document",
+        )
+        stage_timings["structure_dense"] = time.perf_counter() - stage_start
+        if "structure_dense" in selected_methods:
+            rankings["structure_dense"] = {
+                query_id: candidates[:depth]
+                for query_id, candidates in structure_dense.items()
+            }
 
-    rankings = {
-        "fixed_window_bm25": fixed_bm25,
-        "structure_bm25": structure_bm25,
-        "structure_dense": structure_dense,
-        "structure_hybrid_rrf": hybrid,
-    }
+    if "structure_hybrid_rrf" in selected_methods:
+        stage_start = time.perf_counter()
+        rrf_key = "document_id" if target_scope == "document" else "chunk_id"
+        # RRF must see the configured candidate pool. Truncating each component
+        # to the final output depth first hides consensus candidates just below
+        # that cutoff in the individual methods.
+        rankings["structure_hybrid_rrf"] = fuse_rrf(
+            {"bm25": structure_bm25, "dense": structure_dense},
+            rrf_k=int(config["rrf"]["k"]),
+            top_k=depth,
+            key_field=rrf_key,
+        )
+        stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
     stage_start = time.perf_counter()
     if target_scope == "document":
         metric_results = {

@@ -203,7 +203,8 @@ def test_pan_pc_11_conversion_is_deterministic_and_preserves_raw_offsets(tmp_pat
     assert manifest["evaluation_role"] == "CORE_SOURCE_RETRIEVAL_DIAGNOSTIC"
     assert manifest["result_classification"] == "COMPONENT_DIAGNOSTIC"
     assert manifest["source_extract"]["no_plagiarism_xml_skipped"] == 1
-    assert manifest["source"]["license"] == "CC-BY-4.0"
+    assert manifest["source"]["license"] is None
+    assert manifest["source"]["terms"] == "Free of charge for research purposes"
     assert manifest["split"]["document_ids"] == sorted(
         value["document_id"] for value in documents
     )
