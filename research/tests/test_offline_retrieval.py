@@ -459,6 +459,38 @@ def test_span_runner_fuses_candidate_depth_before_final_truncation(
     assert run_with_candidate_depth(2) == "doc-tree-c1"
 
 
+def test_bm25_only_run_does_not_load_or_execute_dense_model(tmp_path, monkeypatch):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    config_path = copied / "config.json"
+    config = read_json(config_path)
+    config["methods"] = ["fixed_window_bm25", "structure_bm25"]
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+
+    def unexpected_dense(*_args, **_kwargs):
+        raise AssertionError("Dense path must not run in a BM25-only experiment")
+
+    monkeypatch.setattr(runner_module, "_make_encoder", unexpected_dense)
+    monkeypatch.setattr(runner_module, "rank_dense", unexpected_dense)
+
+    result = run_experiment(
+        copied / "dataset-manifest.json",
+        config_path,
+        tmp_path / "run",
+        allow_test_encoder=True,
+    )
+
+    metrics = read_json(result["metrics_path"])
+    assert set(metrics) == {"fixed_window_bm25", "structure_bm25"}
+    timings = result["run_manifest"]["timing_seconds"]
+    assert set(timings) == {
+        "fixed_window_build",
+        "fixed_window_bm25",
+        "structure_bm25",
+        "evaluation",
+    }
+
+
 def test_full_runner_writes_reproducibility_manifest_and_stable_artifacts(tmp_path):
     encoder = KeywordFixtureEncoder()
     first_dir = tmp_path / "run-one"

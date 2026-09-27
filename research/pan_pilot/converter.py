@@ -32,12 +32,17 @@ DATASET_PROFILES = {
         "evaluation_role": "CORE_SOURCE_RETRIEVAL_DIAGNOSTIC",
         "result_classification": "COMPONENT_DIAGNOSTIC",
         "target_scope": "document",
-        "rights_basis": "CC-BY-4.0; project approver still required",
+        "rights_basis": (
+            "RESEARCH_USE_STATEMENT: Zenodo record 3250095 states that the "
+            "corpus may be used free of charge for research purposes; "
+            "redistribution is not approved"
+        ),
         "source": {
             "provider": "Webis/PAN",
             "landing_page": "https://webis.de/data/pan-pc-11.html",
             "doi": "10.5281/zenodo.3250095",
-            "license": "CC-BY-4.0",
+            "license": None,
+            "terms": "Free of charge for research purposes",
         },
     },
     "pan13": {

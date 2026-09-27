@@ -15,7 +15,8 @@
     "provider": "Webis/PAN",
     "landing_page": "https://webis.de/data/pan-pc-11.html",
     "doi": "10.5281/zenodo.3250095",
-    "license": "CC-BY-4.0",
+    "license": null,
+    "terms": "Free of charge for research purposes",
     "archives": [
       {
         "name": "pan-plagiarism-corpus-2011.part1.rar",
@@ -43,7 +44,7 @@
   },
   "governance": {
     "status": "PENDING",
-    "rights_basis": "CC-BY-4.0; project approver still required",
+    "rights_basis": "RESEARCH_USE_STATEMENT: Zenodo record 3250095 states that the corpus may be used free of charge for research purposes; redistribution is not approved",
     "allowed_purposes": ["RETRIEVAL_EXPERIMENT"],
     "classification": "RESEARCH_DATA",
     "contains_pii": "UNKNOWN",
