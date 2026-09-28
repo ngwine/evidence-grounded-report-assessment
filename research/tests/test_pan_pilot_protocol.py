@@ -37,6 +37,37 @@ def test_pan_pilot_configs_lock_same_baselines_and_model_revision():
     assert pan13["metrics"]["target_scope"] == "span"
 
 
+def test_executed_pan_pc11_dense_and_multiview_configs_are_locked():
+    dense_hybrid = read_json(
+        CONFIG_DIR / "pan-pc-11-dense-hybrid-pilot-v1.json"
+    )
+    multiview = read_json(
+        CONFIG_DIR / "pan-pc-11-multiview-hybrid-pilot-v1.json"
+    )
+
+    for config in (dense_hybrid, multiview):
+        assert config["candidate_retrieval_depth"] == 200
+        assert config["retrieval_depth"] == 100
+        assert config["metric_cutoffs"] == [1, 5, 10, 20, 100]
+        assert config["fixed_window"] == {"size_tokens": 256, "stride_tokens": 128}
+        assert config["bm25"] == {"k1": 1.2, "b": 0.75}
+        assert config["dense"]["model"] == "intfloat/multilingual-e5-small"
+        assert config["dense"]["revision"] == LOCKED_E5_REVISION
+        assert config["rrf"] == {"k": 60}
+        assert config["metrics"]["target_scope"] == "document"
+        assert config["protocol"]["official_pan_result"] is False
+
+    assert dense_hybrid["methods"] == [
+        "structure_dense",
+        "structure_hybrid_rrf",
+    ]
+    assert multiview["methods"] == [
+        "fixed_window_bm25",
+        "structure_dense",
+        "multiview_hybrid_rrf",
+    ]
+
+
 def test_pan_manifest_templates_remain_fail_closed_until_review():
     templates = [
         DATASET_DIR

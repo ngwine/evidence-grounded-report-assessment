@@ -37,6 +37,7 @@ from .validation import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_METHODS = {
     "fixed_window_bm25",
+    "multiview_hybrid_rrf",
     "structure_bm25",
     "structure_dense",
     "structure_hybrid_rrf",
@@ -137,13 +138,21 @@ def validate_inputs(
     _validate_unique(qrels, "qrel_id", "qrels")
 
     document_map = {document["document_id"]: document for document in documents}
-    query_ids = {query["query_id"] for query in queries}
+    query_map = {query["query_id"]: query for query in queries}
+    query_ids = set(query_map)
     for document in documents:
         if not isinstance(document.get("text"), str):
             raise ValueError(f"Document {document['document_id']} requires string text")
     for query in queries:
         if not isinstance(query.get("text"), str) or not query["text"].strip():
             raise ValueError(f"Query {query['query_id']} requires non-empty text")
+        parent_annotation_id = query.get("parent_annotation_id")
+        if parent_annotation_id is not None and (
+            not isinstance(parent_annotation_id, str) or not parent_annotation_id
+        ):
+            raise ValueError(
+                f"Query {query['query_id']} has invalid parent_annotation_id"
+            )
     for chunk in chunks:
         if not isinstance(chunk.get("text"), str) or not chunk["text"].strip():
             raise ValueError(f"Chunk {chunk['chunk_id']} requires non-empty text")
@@ -173,6 +182,13 @@ def validate_inputs(
         document_id = _require_non_empty_string(qrel.get("document_id"), "qrel.document_id")
         if query_id not in query_ids:
             raise ValueError(f"qrels[{qrel_index}] references unknown query {query_id}")
+        if qrel.get("parent_annotation_id") != query_map[query_id].get(
+            "parent_annotation_id"
+        ):
+            raise ValueError(
+                f"qrels[{qrel_index}].parent_annotation_id does not match "
+                f"query {query_id}"
+            )
         if document_id not in document_map:
             raise ValueError(f"qrels[{qrel_index}] references unknown document {document_id}")
         start, end = qrel.get("raw_start"), qrel.get("raw_end")
@@ -289,6 +305,12 @@ def validate_inputs(
     target_scope = metrics.get("target_scope", "span")
     if target_scope not in {"span", "document"}:
         raise ValueError("metrics.target_scope must be span or document")
+    if "multiview_hybrid_rrf" in methods and target_scope != "document":
+        raise ValueError(
+            "multiview_hybrid_rrf requires metrics.target_scope=document; "
+            "fixed-window and structure-aware chunk IDs are not comparable "
+            "before document-level aggregation"
+        )
     for index, qrel in enumerate(qrels):
         qrel_scope = qrel.get("target_scope", "span")
         if qrel_scope != target_scope:
@@ -384,6 +406,8 @@ def _git_metadata() -> dict[str, Any]:
             "commit": run("rev-parse", "HEAD"),
             "branch": run("rev-parse", "--abbrev-ref", "HEAD"),
             "dirty": bool(status),
+            "tracked_dirty": bool(diff),
+            "untracked_dirty": bool(untracked_records),
             "status_sha256": sha256_text(status),
             "tracked_diff_sha256": sha256_bytes(diff),
             "untracked_content_sha256": sha256_text(canonical_json(untracked_records)),
@@ -447,6 +471,9 @@ def run_experiment(
     encoder: Encoder | None = None,
     allow_test_encoder: bool = False,
 ) -> dict[str, Any]:
+    # Snapshot the executable tree before validation/model inference. A long
+    # run must not accidentally describe edits made while it was executing.
+    git_metadata = _git_metadata()
     loaded = validate_inputs(
         dataset_manifest_path,
         config_path,
@@ -478,7 +505,11 @@ def run_experiment(
     selected_methods = set(config["methods"])
     rankings: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
-    if "fixed_window_bm25" in selected_methods:
+    needs_fixed_bm25 = bool(
+        {"fixed_window_bm25", "multiview_hybrid_rrf"} & selected_methods
+    )
+    fixed_bm25: dict[str, list[dict[str, Any]]] = {}
+    if needs_fixed_bm25:
         stage_start = time.perf_counter()
         fixed_windows = build_fixed_windows(
             loaded["documents"],
@@ -495,10 +526,11 @@ def run_experiment(
             b=float(config["bm25"]["b"]),
             group_by_document=target_scope == "document",
         )
-        rankings["fixed_window_bm25"] = {
-            query_id: candidates[:depth]
-            for query_id, candidates in fixed_bm25.items()
-        }
+        if "fixed_window_bm25" in selected_methods:
+            rankings["fixed_window_bm25"] = {
+                query_id: candidates[:depth]
+                for query_id, candidates in fixed_bm25.items()
+            }
         stage_timings["fixed_window_bm25"] = time.perf_counter() - stage_start
 
     needs_structure_bm25 = bool(
@@ -523,7 +555,12 @@ def run_experiment(
             }
 
     needs_dense = bool(
-        {"structure_dense", "structure_hybrid_rrf"} & selected_methods
+        {
+            "multiview_hybrid_rrf",
+            "structure_dense",
+            "structure_hybrid_rrf",
+        }
+        & selected_methods
     )
     structure_dense: dict[str, list[dict[str, Any]]] = {}
     if needs_dense:
@@ -557,6 +594,24 @@ def run_experiment(
             key_field=rrf_key,
         )
         stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
+
+    if "multiview_hybrid_rrf" in selected_methods:
+        stage_start = time.perf_counter()
+        # Each component has already collapsed its own chunking view to one
+        # candidate per source document. Fuse the complete candidate pool, not
+        # the final-depth slices exposed as standalone baseline predictions.
+        rankings["multiview_hybrid_rrf"] = fuse_rrf(
+            {
+                "fixed_window_bm25": fixed_bm25,
+                "structure_dense": structure_dense,
+            },
+            rrf_k=int(config["rrf"]["k"]),
+            top_k=depth,
+            key_field="document_id",
+        )
+        stage_timings["multiview_hybrid_rrf"] = (
+            time.perf_counter() - stage_start
+        )
     stage_start = time.perf_counter()
     if target_scope == "document":
         metric_results = {
@@ -606,7 +661,7 @@ def run_experiment(
         "result_classification": (
             "TEST_ONLY" if dense_backend == "injected_test" else dataset_manifest.get("result_classification", "PILOT")
         ),
-        "git": _git_metadata(),
+        "git": git_metadata,
         "dataset": {
             "dataset_id": dataset_manifest["dataset_id"],
             "dataset_version": dataset_manifest["dataset_version"],
