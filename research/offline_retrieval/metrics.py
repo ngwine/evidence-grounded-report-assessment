@@ -150,15 +150,33 @@ def evaluate_document_rankings(
         raise ValueError("Metric cutoffs must contain positive integers")
 
     gold_by_query: dict[str, set[str]] = {}
+    parent_by_query: dict[str, str] = {}
+    parent_qrel_count = 0
     qrel_count = 0
     for qrel in qrels:
         query_id = str(qrel["query_id"])
         document_id = str(qrel["document_id"])
         gold_by_query.setdefault(query_id, set()).add(document_id)
+        parent_annotation_id = qrel.get("parent_annotation_id")
+        if parent_annotation_id is not None:
+            if not isinstance(parent_annotation_id, str) or not parent_annotation_id:
+                raise ValueError("parent_annotation_id must be a non-empty string")
+            previous_parent = parent_by_query.setdefault(
+                query_id, parent_annotation_id
+            )
+            if previous_parent != parent_annotation_id:
+                raise ValueError(
+                    f"Query {query_id} references multiple parent annotations"
+                )
+            parent_qrel_count += 1
         qrel_count += 1
     query_ids = sorted(gold_by_query)
     if not query_ids:
         raise ValueError("At least one qrel is required")
+    if parent_qrel_count not in {0, qrel_count}:
+        raise ValueError(
+            "parent_annotation_id must be present on every qrel or none"
+        )
 
     per_query: dict[str, Any] = {}
     aggregates = {
@@ -210,10 +228,60 @@ def evaluate_document_rankings(
         }
         for cutoff, values in aggregates.items()
     }
-    return {
+    result = {
         "target_scope": "document",
         "query_count": len(query_ids),
         "qrel_count": qrel_count,
         "macro": macro,
         "per_query": per_query,
     }
+    if parent_by_query:
+        queries_by_parent: dict[str, list[str]] = {}
+        for query_id in query_ids:
+            parent_annotation_id = parent_by_query[query_id]
+            queries_by_parent.setdefault(parent_annotation_id, []).append(query_id)
+
+        parent_macro: dict[str, dict[str, float]] = {}
+        for cutoff in sorted(set(cutoffs)):
+            key = str(cutoff)
+            parent_values = []
+            for parent_query_ids in queries_by_parent.values():
+                count = len(parent_query_ids)
+                parent_values.append(
+                    {
+                        "recall": sum(
+                            per_query[query_id][key]["recall"]
+                            for query_id in parent_query_ids
+                        )
+                        / count,
+                        "mrr": sum(
+                            per_query[query_id][key]["reciprocal_rank"]
+                            for query_id in parent_query_ids
+                        )
+                        / count,
+                        "ndcg": sum(
+                            per_query[query_id][key]["ndcg"]
+                            for query_id in parent_query_ids
+                        )
+                        / count,
+                    }
+                )
+            parent_macro[key] = {
+                metric: sum(values[metric] for values in parent_values)
+                / len(parent_values)
+                for metric in ("recall", "mrr", "ndcg")
+            }
+
+        result.update(
+            {
+                "parent_annotation_count": len(queries_by_parent),
+                "queries_per_parent": {
+                    parent_annotation_id: len(parent_query_ids)
+                    for parent_annotation_id, parent_query_ids in sorted(
+                        queries_by_parent.items()
+                    )
+                },
+                "parent_macro": parent_macro,
+            }
+        )
+    return result

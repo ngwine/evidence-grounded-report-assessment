@@ -8,13 +8,17 @@ import shutil
 
 import pytest
 
+import research.offline_retrieval.dense as dense_module
 import research.offline_retrieval.runner as runner_module
 from research.offline_retrieval.aggregation import collapse_to_documents
 from research.offline_retrieval.bm25 import rank_bm25
 from research.offline_retrieval.common import read_json, read_jsonl, sha256_file
-from research.offline_retrieval.dense import local_model_revision
+from research.offline_retrieval.dense import local_model_revision, rank_dense
 from research.offline_retrieval.fixed_window import build_fixed_windows
-from research.offline_retrieval.metrics import evaluate_rankings
+from research.offline_retrieval.metrics import (
+    evaluate_document_rankings,
+    evaluate_rankings,
+)
 from research.offline_retrieval.rrf import fuse_rrf
 from research.offline_retrieval.runner import run_experiment, validate_inputs
 
@@ -52,6 +56,25 @@ class KeywordFixtureEncoder:
                 vector = [0.1, 0.1, 0.1]
             vectors.append(vector)
         return vectors
+
+
+class LockedVectorEncoder:
+    """Return locked vectors for direct Dense ranking tests."""
+
+    metadata = {"backend": "test", "revision": "locked-vectors-v1"}
+
+    def __init__(self, document_vectors, query_vectors) -> None:
+        self.mode = "document"
+        self.document_vectors = document_vectors
+        self.query_vectors = query_vectors
+
+    def set_mode(self, mode: str) -> None:
+        self.mode = mode
+
+    def encode(self, _texts):
+        if self.mode == "document":
+            return self.document_vectors
+        return self.query_vectors
 
 
 def test_local_model_revision_hashes_paths_and_content_deterministically(tmp_path):
@@ -105,6 +128,64 @@ def test_bm25_and_rrf_use_deterministic_chunk_id_tie_breaking():
         top_k=2,
     )
     assert [candidate["chunk_id"] for candidate in fused["q"]] == ["a", "b"]
+
+
+@pytest.mark.parametrize("group_by_document", [False, True])
+def test_numpy_dense_matches_reference_with_ties_zeroes_and_document_grouping(
+    monkeypatch, group_by_document
+):
+    if dense_module._np is None:
+        pytest.skip("NumPy is installed only in the optional research environment")
+
+    corpus = [
+        {"chunk_id": "c-b", "document_id": "z", "text": "one", "source_spans": []},
+        {"chunk_id": "c-a", "document_id": "z", "text": "two", "source_spans": []},
+        {"chunk_id": "c-c", "document_id": "a", "text": "three", "source_spans": []},
+        {"chunk_id": "c-d", "document_id": "b", "text": "four", "source_spans": []},
+        {"chunk_id": "c-0", "document_id": "c", "text": "zero", "source_spans": []},
+    ]
+    queries = [
+        {"query_id": "q-x", "text": "x"},
+        {"query_id": "q-y", "text": "y"},
+        {"query_id": "q-0", "text": "zero"},
+    ]
+    document_vectors = [
+        [1.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 0.0],
+        [0.0, 1.0],
+        [0.0, 0.0],
+    ]
+    query_vectors = [[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]]
+
+    vectorized = rank_dense(
+        corpus,
+        queries,
+        encoder=LockedVectorEncoder(document_vectors, query_vectors),
+        top_k=4,
+        group_by_document=group_by_document,
+    )
+    monkeypatch.setattr(dense_module, "_np", None)
+    reference = rank_dense(
+        corpus,
+        queries,
+        encoder=LockedVectorEncoder(document_vectors, query_vectors),
+        top_k=4,
+        group_by_document=group_by_document,
+    )
+
+    assert vectorized == reference
+    if group_by_document:
+        assert vectorized["q-x"][0]["document_id"] == "a"
+        assert next(
+            item for item in vectorized["q-x"] if item["document_id"] == "z"
+        )["supporting_chunk_id"] == "c-a"
+    else:
+        assert [item["chunk_id"] for item in vectorized["q-x"][:3]] == [
+            "c-a",
+            "c-b",
+            "c-c",
+        ]
 
 
 def test_rrf_keeps_method_specific_support_provenance():
@@ -231,6 +312,48 @@ def test_span_metrics_accumulate_union_coverage_without_double_counting():
     assert metrics["macro"]["2"]["mrr"] == 0.5
 
 
+def test_document_metrics_report_parent_balanced_macro_for_uneven_windows():
+    rankings = {
+        "q-a1": [{"document_id": "wrong"}],
+        "q-a2": [{"document_id": "wrong"}],
+        "q-a3": [{"document_id": "wrong"}],
+        "q-b1": [{"document_id": "gold-b"}],
+    }
+    qrels = [
+        {
+            "query_id": "q-a1",
+            "document_id": "gold-a",
+            "parent_annotation_id": "parent-a",
+        },
+        {
+            "query_id": "q-a2",
+            "document_id": "gold-a",
+            "parent_annotation_id": "parent-a",
+        },
+        {
+            "query_id": "q-a3",
+            "document_id": "gold-a",
+            "parent_annotation_id": "parent-a",
+        },
+        {
+            "query_id": "q-b1",
+            "document_id": "gold-b",
+            "parent_annotation_id": "parent-b",
+        },
+    ]
+
+    metrics = evaluate_document_rankings(rankings, qrels, cutoffs=[1])
+
+    assert metrics["macro"]["1"] == {"recall": 0.25, "mrr": 0.25, "ndcg": 0.25}
+    assert metrics["parent_annotation_count"] == 2
+    assert metrics["queries_per_parent"] == {"parent-a": 3, "parent-b": 1}
+    assert metrics["parent_macro"]["1"] == {
+        "recall": 0.5,
+        "mrr": 0.5,
+        "ndcg": 0.5,
+    }
+
+
 def test_document_aggregation_keeps_one_best_chunk_per_source():
     collapsed = collapse_to_documents(
         {
@@ -318,6 +441,45 @@ def test_dataset_gate_rejects_unapproved_manifest(tmp_path):
         )
 
 
+def test_dataset_gate_rejects_query_qrel_parent_mismatch(tmp_path):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    queries_path = copied / "queries.jsonl"
+    qrels_path = copied / "qrels.jsonl"
+    queries = read_jsonl(queries_path)
+    qrels = read_jsonl(qrels_path)
+    queries[0]["parent_annotation_id"] = "parent-query"
+    qrels[0]["parent_annotation_id"] = "parent-qrel"
+    queries_path.write_text(
+        "".join(
+            json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+            for record in queries
+        ),
+        encoding="utf-8",
+    )
+    qrels_path.write_text(
+        "".join(
+            json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n"
+            for record in qrels
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = copied / "dataset-manifest.json"
+    manifest = read_json(manifest_path)
+    manifest["files"]["queries"]["sha256"] = sha256_file(queries_path)
+    manifest["files"]["qrels"]["sha256"] = sha256_file(qrels_path)
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+    )
+
+    with pytest.raises(ValueError, match="does not match query"):
+        validate_inputs(
+            manifest_path,
+            copied / "config.json",
+            allow_test_encoder=True,
+        )
+
+
 def test_runner_cannot_misclassify_an_injected_encoder_as_scientific(tmp_path):
     copied = tmp_path / "fixture"
     shutil.copytree(FIXTURE_DIR, copied)
@@ -381,6 +543,142 @@ def test_document_scope_runner_collapses_before_metrics_and_rrf(tmp_path):
     metrics = read_json(result["metrics_path"])
     assert metrics["structure_hybrid_rrf"]["target_scope"] == "document"
     assert metrics["structure_hybrid_rrf"]["macro"]["3"]["recall"] == 1.0
+
+
+def test_multiview_rrf_requires_document_target_scope(tmp_path):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    config_path = copied / "config.json"
+    config = read_json(config_path)
+    config["methods"] = ["multiview_hybrid_rrf"]
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match="multiview_hybrid_rrf requires metrics.target_scope=document",
+    ):
+        validate_inputs(
+            copied / "dataset-manifest.json",
+            config_path,
+            allow_test_encoder=True,
+        )
+
+
+def test_multiview_rrf_fuses_fixed_bm25_and_structure_dense_at_document_scope(
+    tmp_path, monkeypatch
+):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+
+    qrels_path = copied / "qrels.jsonl"
+    qrels = read_jsonl(qrels_path)
+    for qrel in qrels:
+        qrel["target_scope"] = "document"
+    qrels_path.write_text(
+        "".join(
+            json.dumps(qrel, ensure_ascii=False, sort_keys=True) + "\n"
+            for qrel in qrels
+        ),
+        encoding="utf-8",
+    )
+    manifest_path = copied / "dataset-manifest.json"
+    manifest = read_json(manifest_path)
+    manifest["files"]["qrels"]["sha256"] = sha256_file(qrels_path)
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False), encoding="utf-8"
+    )
+
+    config_path = copied / "config.json"
+    config = read_json(config_path)
+    config["methods"] = ["multiview_hybrid_rrf"]
+    config["retrieval_depth"] = 1
+    config["candidate_retrieval_depth"] = 2
+    config["metric_cutoffs"] = [1]
+    config["metrics"]["target_scope"] = "document"
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+
+    calls = {"bm25": 0, "dense": 0}
+
+    def ranked_candidate(item, rank, score):
+        return {
+            "document_id": item["document_id"],
+            "supporting_chunk_id": item["chunk_id"],
+            "rank": rank,
+            "score": score,
+            "source_spans": item["source_spans"],
+        }
+
+    def fake_bm25(corpus, queries, *, top_k, group_by_document, **_kwargs):
+        calls["bm25"] += 1
+        items = list(corpus)
+        assert top_k == 2
+        assert group_by_document is True
+        assert items and all(item["chunk_id"].startswith("fw-") for item in items)
+        by_document = {item["document_id"]: item for item in items}
+        ordered = [
+            ranked_candidate(by_document["doc-supervised"], 1, 2.0),
+            ranked_candidate(by_document["doc-tree"], 2, 1.0),
+        ]
+        return {
+            str(query["query_id"]): [dict(candidate) for candidate in ordered]
+            for query in queries
+        }
+
+    def fake_dense(corpus, queries, *, top_k, group_by_document, **_kwargs):
+        calls["dense"] += 1
+        items = list(corpus)
+        assert top_k == 2
+        assert group_by_document is True
+        assert items and all(not item["chunk_id"].startswith("fw-") for item in items)
+        by_document = {item["document_id"]: item for item in items}
+        ordered = [
+            ranked_candidate(by_document["doc-unsupervised"], 1, 0.9),
+            ranked_candidate(by_document["doc-tree"], 2, 0.8),
+        ]
+        return {
+            str(query["query_id"]): [dict(candidate) for candidate in ordered]
+            for query in queries
+        }
+
+    monkeypatch.setattr(runner_module, "rank_bm25", fake_bm25)
+    monkeypatch.setattr(runner_module, "rank_dense", fake_dense)
+
+    result = run_experiment(
+        manifest_path,
+        config_path,
+        tmp_path / "run",
+        encoder=KeywordFixtureEncoder(),
+        allow_test_encoder=True,
+    )
+
+    assert calls == {"bm25": 1, "dense": 1}
+    predictions = read_jsonl(result["predictions_path"])
+    assert {record["method"] for record in predictions} == {
+        "multiview_hybrid_rrf"
+    }
+    for record in predictions:
+        [winner] = record["candidates"]
+        assert winner["document_id"] == "doc-tree"
+        assert winner["rrf_ranks"] == {
+            "fixed_window_bm25": 2,
+            "structure_dense": 2,
+        }
+        assert set(winner["supports_by_method"]) == {
+            "fixed_window_bm25",
+            "structure_dense",
+        }
+        assert set(winner["rrf_supporting_ids"]) == {
+            "fixed_window_bm25",
+            "structure_dense",
+        }
+
+    assert set(result["run_manifest"]["timing_seconds"]) == {
+        "fixed_window_build",
+        "fixed_window_bm25",
+        "structure_dense",
+        "multiview_hybrid_rrf",
+        "evaluation",
+    }
 
 
 def test_span_runner_fuses_candidate_depth_before_final_truncation(
