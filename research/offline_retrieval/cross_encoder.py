@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 import re
+import time
 from copy import deepcopy
 from typing import Any, Protocol, Sequence, runtime_checkable
 
@@ -140,11 +141,73 @@ class MemoizedPairScorer:
         if missing:
             new_scores = score_pairs(missing, scorer=self._scorer)
             self._cache.update(zip(missing, new_scores))
+            tokenization = getattr(self._scorer, "metadata", {}).get("tokenization")
+            if isinstance(tokenization, dict):
+                self.metadata["tokenization"] = deepcopy(tokenization)
         stats = self.metadata["exact_pair_memoization"]
         stats["requests"] += len(validated)
         stats["cache_hits"] += hits
         stats["unique_pairs_scored"] = len(self._cache)
         return [self._cache[pair] for pair in validated]
+
+    def pair_diagnostics(self, pairs: Sequence[TextPair]) -> list[dict[str, Any]]:
+        """Expose diagnostics from the scorer that actually tokenized the pairs."""
+
+        validated = _validate_pairs(pairs)
+        diagnostics = getattr(self._scorer, "pair_diagnostics", None)
+        if not callable(diagnostics):
+            return [
+                {
+                    "available": False,
+                    "truncated": None,
+                    "reason": "scorer_does_not_expose_tokenization_diagnostics",
+                }
+                for _pair in validated
+            ]
+        values = diagnostics(validated)
+        if not isinstance(values, list) or len(values) != len(validated):
+            raise ValueError(
+                "Cross-Encoder tokenization diagnostics must align with scored pairs"
+            )
+        return [deepcopy(value) for value in values]
+
+    def set_deadline(self, deadline_monotonic: float | None) -> None:
+        """Forward an optional cooperative deadline to the underlying scorer."""
+
+        setter = getattr(self._scorer, "set_deadline", None)
+        if callable(setter):
+            setter(deadline_monotonic)
+        self.metadata["cooperative_deadline_enabled"] = (
+            deadline_monotonic is not None
+        )
+
+
+def pair_diagnostics(
+    pairs: Sequence[TextPair],
+    *,
+    scorer: PairScorer,
+) -> list[dict[str, Any]]:
+    """Return aligned model-input diagnostics, or an explicit unavailable marker."""
+
+    validated = _validate_pairs(pairs)
+    diagnostics = getattr(scorer, "pair_diagnostics", None)
+    if not callable(diagnostics):
+        return [
+            {
+                "available": False,
+                "truncated": None,
+                "reason": "scorer_does_not_expose_tokenization_diagnostics",
+            }
+            for _pair in validated
+        ]
+    values = diagnostics(validated)
+    if not isinstance(values, list) or len(values) != len(validated):
+        raise ValueError(
+            "Cross-Encoder tokenization diagnostics must align with scored pairs"
+        )
+    if any(not isinstance(value, dict) for value in values):
+        raise ValueError("Cross-Encoder tokenization diagnostics must be objects")
+    return [deepcopy(value) for value in values]
 
 
 def locked_model_revision(model: str | Path, revision: str) -> tuple[str, str]:
@@ -201,6 +264,7 @@ class SentenceTransformersCrossEncoder:
         device: str = "cpu",
         batch_size: int = 16,
         max_length: int | None = None,
+        score_output: str = "raw_logit",
     ) -> None:
         if _EXPLICIT_DEVICE.fullmatch(device) is None:
             raise ValueError(
@@ -214,20 +278,25 @@ class SentenceTransformersCrossEncoder:
             or max_length <= 0
         ):
             raise ValueError("Cross-Encoder max_length must be a positive integer")
+        if score_output != "raw_logit":
+            raise ValueError("Cross-Encoder score_output must be raw_logit")
 
         model_reference, resolved_revision = locked_model_revision(model, revision)
         is_local = Path(model_reference).is_dir()
         try:
             from sentence_transformers import CrossEncoder
+            from torch.nn import Identity
         except ImportError as exc:  # pragma: no cover - optional environment.
             raise RuntimeError(
                 "Cross-Encoder reranking requires the optional research "
                 "environment; install research/requirements-research.txt"
             ) from exc
 
+        self._activation_fn = Identity()
         model_kwargs: dict[str, Any] = {
             "device": device,
             "local_files_only": True,
+            "activation_fn": self._activation_fn,
         }
         if max_length is not None:
             model_kwargs["max_length"] = max_length
@@ -240,6 +309,16 @@ class SentenceTransformersCrossEncoder:
         if callable(eval_method):
             eval_method()
         self._batch_size = batch_size
+        effective_max_length = getattr(self._model, "max_seq_length", None)
+        if (
+            isinstance(effective_max_length, bool)
+            or not isinstance(effective_max_length, int)
+            or effective_max_length <= 0
+        ):
+            effective_max_length = max_length
+        self._max_length = effective_max_length
+        self._pair_diagnostics: dict[TextPair, dict[str, Any]] = {}
+        self._deadline_monotonic: float | None = None
         self.metadata = {
             "backend": "sentence_transformers_cross_encoder",
             "model": str(model),
@@ -250,20 +329,141 @@ class SentenceTransformersCrossEncoder:
             "max_length": max_length,
             "local_files_only": True,
             "output": "scalar_float",
+            "score_output": "raw_logit",
+            "activation": "torch.nn.Identity",
+            "apply_softmax": False,
+            "cooperative_deadline_enabled": False,
+            "tokenization": {
+                "available": callable(getattr(self._model, "tokenizer", None)),
+                "truncation_strategy": "longest_first",
+                "max_length": effective_max_length,
+                "unique_pairs_inspected": 0,
+                "pairs_truncated": 0,
+                "max_tokens_before_truncation": None,
+                "max_tokens_model_input": None,
+            },
         }
+
+    def set_deadline(self, deadline_monotonic: float | None) -> None:
+        """Set a monotonic deadline checked around every inference batch."""
+
+        if deadline_monotonic is not None and (
+            isinstance(deadline_monotonic, bool)
+            or not isinstance(deadline_monotonic, (int, float))
+            or not math.isfinite(float(deadline_monotonic))
+        ):
+            raise ValueError("Cross-Encoder deadline must be a finite number")
+        self._deadline_monotonic = (
+            None if deadline_monotonic is None else float(deadline_monotonic)
+        )
+        self.metadata["cooperative_deadline_enabled"] = (
+            self._deadline_monotonic is not None
+        )
+
+    def _check_deadline(self) -> None:
+        if (
+            self._deadline_monotonic is not None
+            and time.perf_counter() >= self._deadline_monotonic
+        ):
+            raise TimeoutError(
+                "Cross-Encoder cooperative stage timeout exceeded between batches"
+            )
+
+    def _inspect_pair(self, pair: TextPair) -> dict[str, Any]:
+        cached = self._pair_diagnostics.get(pair)
+        if cached is not None:
+            return cached
+
+        tokenizer = getattr(self._model, "tokenizer", None)
+        if not callable(tokenizer):
+            diagnostic = {
+                "available": False,
+                "truncated": None,
+                "reason": "cross_encoder_tokenizer_unavailable",
+            }
+        else:
+            query, passage = pair
+            common_kwargs = {
+                "add_special_tokens": True,
+                "padding": False,
+                "return_attention_mask": False,
+                "return_token_type_ids": False,
+            }
+            full = tokenizer(
+                query,
+                passage,
+                truncation=False,
+                **common_kwargs,
+            )
+            model_input = tokenizer(
+                query,
+                passage,
+                truncation="longest_first",
+                max_length=self._max_length,
+                **common_kwargs,
+            )
+            full_count = len(full["input_ids"])
+            model_count = len(model_input["input_ids"])
+            diagnostic = {
+                "available": True,
+                "truncated": model_count < full_count,
+                "tokens_before_truncation": full_count,
+                "tokens_model_input": model_count,
+                "max_length": self._max_length,
+                "truncation_strategy": "longest_first",
+                "source_span_scope": (
+                    "candidate_passage_before_model_tokenization"
+                ),
+            }
+        self._pair_diagnostics[pair] = diagnostic
+        self._record_tokenization_diagnostic(diagnostic)
+        return diagnostic
+
+    def _record_tokenization_diagnostic(self, diagnostic: dict[str, Any]) -> None:
+        """Update aggregate counters once, without rescanning every prior pair."""
+
+        metadata = self.metadata["tokenization"]
+        metadata["unique_pairs_inspected"] += 1
+        if diagnostic.get("available") is not True:
+            return
+        metadata["pairs_truncated"] += int(diagnostic.get("truncated") is True)
+        before = int(diagnostic["tokens_before_truncation"])
+        model_input = int(diagnostic["tokens_model_input"])
+        previous_before = metadata["max_tokens_before_truncation"]
+        previous_model = metadata["max_tokens_model_input"]
+        metadata["max_tokens_before_truncation"] = (
+            before if previous_before is None else max(int(previous_before), before)
+        )
+        metadata["max_tokens_model_input"] = (
+            model_input
+            if previous_model is None
+            else max(int(previous_model), model_input)
+        )
+
+    def pair_diagnostics(self, pairs: Sequence[TextPair]) -> list[dict[str, Any]]:
+        """Describe the exact token-length/truncation treatment of each pair."""
+
+        return [deepcopy(self._inspect_pair(pair)) for pair in _validate_pairs(pairs)]
 
     def score_pairs(self, pairs: Sequence[TextPair]) -> list[float]:
         validated = _validate_pairs(pairs)
+        self._check_deadline()
+        self.pair_diagnostics(validated)
+        self._check_deadline()
         scores: list[float] = []
         for start in range(0, len(validated), self._batch_size):
+            self._check_deadline()
             batch = validated[start : start + self._batch_size]
             predicted = self._model.predict(
                 batch,
                 batch_size=self._batch_size,
                 show_progress_bar=False,
+                activation_fn=self._activation_fn,
+                apply_softmax=False,
                 convert_to_numpy=True,
             )
             scores.extend(_normalise_scores(predicted, expected=len(batch)))
+            self._check_deadline()
         return scores
 
 

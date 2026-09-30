@@ -69,7 +69,9 @@
     "max_length": 512,
     "rerank_depth": 50,
     "support_aggregation": "max",
-    "score_output": "raw_logit"
+    "score_output": "raw_logit",
+    "failure_policy": "write_partial_baselines_and_fail",
+    "stage_timeout_seconds": 7200
   },
   "metrics": {
     "target_scope": "document",
