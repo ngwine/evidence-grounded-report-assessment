@@ -17,7 +17,9 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--dataset-manifest", type=Path, required=True)
     validate.add_argument("--config", type=Path, required=True)
 
-    run = subparsers.add_parser("run", help="Run all four retrieval variants")
+    run = subparsers.add_parser(
+        "run", help="Run the retrieval/reranking variants selected in config"
+    )
     run.add_argument("--dataset-manifest", type=Path, required=True)
     run.add_argument("--config", type=Path, required=True)
     run.add_argument("--output-dir", type=Path, required=True)

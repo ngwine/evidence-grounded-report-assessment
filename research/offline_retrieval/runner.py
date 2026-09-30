@@ -25,8 +25,14 @@ from .common import (
     write_jsonl,
 )
 from .dense import Encoder, SentenceTransformerEncoder, rank_dense
+from .cross_encoder import (
+    MemoizedPairScorer,
+    PairScorer,
+    SentenceTransformersCrossEncoder,
+)
 from .fixed_window import build_fixed_windows
 from .metrics import evaluate_document_rankings, evaluate_rankings
+from .reranking import rerank_documents
 from .rrf import fuse_rrf
 from .validation import (
     validate_approved_governance,
@@ -36,7 +42,9 @@ from .validation import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_METHODS = {
+    "dense_cross_encoder",
     "fixed_window_bm25",
+    "multiview_hybrid_cross_encoder",
     "multiview_hybrid_rrf",
     "structure_bm25",
     "structure_dense",
@@ -102,6 +110,7 @@ def validate_inputs(
     config_path: str | Path,
     *,
     allow_test_encoder: bool = False,
+    allow_test_reranker: bool = False,
 ) -> dict[str, Any]:
     dataset_manifest_path = Path(dataset_manifest_path).resolve()
     config_path = Path(config_path).resolve()
@@ -311,6 +320,12 @@ def validate_inputs(
             "fixed-window and structure-aware chunk IDs are not comparable "
             "before document-level aggregation"
         )
+    cross_encoder_methods = {
+        "dense_cross_encoder",
+        "multiview_hybrid_cross_encoder",
+    }
+    if cross_encoder_methods & set(methods) and target_scope != "document":
+        raise ValueError("Cross-Encoder methods require metrics.target_scope=document")
     for index, qrel in enumerate(qrels):
         qrel_scope = qrel.get("target_scope", "span")
         if qrel_scope != target_scope:
@@ -345,6 +360,66 @@ def validate_inputs(
                 raise ValueError("A local Dense model requires revision=sha256:<64 hex>")
         elif not re.fullmatch(r"[0-9a-fA-F]{40,64}", revision):
             raise ValueError("A cached model id requires an immutable 40–64 hex revision")
+
+    if cross_encoder_methods & set(methods):
+        cross_encoder = config.get("cross_encoder")
+        if not isinstance(cross_encoder, dict):
+            raise ValueError("config.cross_encoder must be an object")
+        backend = cross_encoder.get("backend")
+        if backend == "injected_test":
+            if not allow_test_reranker:
+                raise ValueError("injected_test Cross-Encoder backend is test-only")
+        elif backend != "sentence_transformers_cross_encoder":
+            raise ValueError(
+                "cross_encoder.backend must be sentence_transformers_cross_encoder"
+            )
+        model_value = _require_non_empty_string(
+            cross_encoder.get("model"), "cross_encoder.model"
+        )
+        cross_revision = _require_non_empty_string(
+            cross_encoder.get("revision"), "cross_encoder.revision"
+        )
+        if cross_revision.startswith("SET_"):
+            raise ValueError(
+                "cross_encoder.revision must be an exact revision/checksum"
+            )
+        configured_path = Path(model_value).expanduser()
+        if not configured_path.is_absolute():
+            configured_path = (config_path.parent / configured_path).resolve()
+        if configured_path.exists():
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", cross_revision):
+                raise ValueError(
+                    "A local Cross-Encoder model requires revision=sha256:<64 hex>"
+                )
+        elif not re.fullmatch(r"[0-9a-fA-F]{40,64}", cross_revision):
+            raise ValueError(
+                "A cached Cross-Encoder model requires an immutable 40–64 hex revision"
+            )
+        rerank_depth = cross_encoder.get("rerank_depth")
+        if (
+            isinstance(rerank_depth, bool)
+            or not isinstance(rerank_depth, int)
+            or not 0 < rerank_depth <= retrieval_depth
+        ):
+            raise ValueError(
+                "cross_encoder.rerank_depth must be in [1, retrieval_depth]"
+            )
+        batch_size = cross_encoder.get("batch_size", 16)
+        if (
+            isinstance(batch_size, bool)
+            or not isinstance(batch_size, int)
+            or batch_size <= 0
+        ):
+            raise ValueError("cross_encoder.batch_size must be a positive integer")
+        max_length = cross_encoder.get("max_length")
+        if max_length is not None and (
+            isinstance(max_length, bool)
+            or not isinstance(max_length, int)
+            or max_length <= 0
+        ):
+            raise ValueError("cross_encoder.max_length must be a positive integer")
+        if cross_encoder.get("support_aggregation", "max") != "max":
+            raise ValueError("cross_encoder.support_aggregation must be max")
 
     validate_pan_semantic_provenance(
         manifest,
@@ -463,13 +538,36 @@ def _make_encoder(config: dict[str, Any], config_path: Path) -> Encoder:
     return encoder
 
 
+def _make_reranker(config: dict[str, Any], config_path: Path) -> PairScorer:
+    cross_encoder = config["cross_encoder"]
+    model = cross_encoder["model"]
+    configured_path = Path(model).expanduser()
+    if not configured_path.is_absolute():
+        candidate = (config_path.parent / configured_path).resolve()
+        if candidate.exists():
+            configured_path = candidate
+    if configured_path.exists():
+        model = str(configured_path)
+    reranker = SentenceTransformersCrossEncoder(
+        model=model,
+        revision=cross_encoder["revision"],
+        device=cross_encoder.get("device", "cpu"),
+        batch_size=int(cross_encoder.get("batch_size", 16)),
+        max_length=cross_encoder.get("max_length"),
+    )
+    reranker.metadata["model"] = cross_encoder["model"]
+    return reranker
+
+
 def run_experiment(
     dataset_manifest_path: str | Path,
     config_path: str | Path,
     output_dir: str | Path,
     *,
     encoder: Encoder | None = None,
+    reranker: PairScorer | None = None,
     allow_test_encoder: bool = False,
+    allow_test_reranker: bool = False,
 ) -> dict[str, Any]:
     # Snapshot the executable tree before validation/model inference. A long
     # run must not accidentally describe edits made while it was executing.
@@ -478,6 +576,7 @@ def run_experiment(
         dataset_manifest_path,
         config_path,
         allow_test_encoder=allow_test_encoder,
+        allow_test_reranker=allow_test_reranker,
     )
     config = loaded["config"]
     dense_backend = config["dense"]["backend"]
@@ -485,6 +584,13 @@ def run_experiment(
         raise ValueError(
             "An injected encoder is allowed only with dense.backend=injected_test; "
             "scientific runs must load the locked model from config"
+        )
+    cross_encoder_config = config.get("cross_encoder", {})
+    cross_encoder_backend = cross_encoder_config.get("backend")
+    if reranker is not None and cross_encoder_backend != "injected_test":
+        raise ValueError(
+            "An injected reranker is allowed only with "
+            "cross_encoder.backend=injected_test"
         )
     random.seed(config["seed"])
     try:
@@ -506,8 +612,14 @@ def run_experiment(
     rankings: dict[str, dict[str, list[dict[str, Any]]]] = {}
 
     needs_fixed_bm25 = bool(
-        {"fixed_window_bm25", "multiview_hybrid_rrf"} & selected_methods
+        {
+            "fixed_window_bm25",
+            "multiview_hybrid_cross_encoder",
+            "multiview_hybrid_rrf",
+        }
+        & selected_methods
     )
+    fixed_windows: list[dict[str, Any]] = []
     fixed_bm25: dict[str, list[dict[str, Any]]] = {}
     if needs_fixed_bm25:
         stage_start = time.perf_counter()
@@ -556,6 +668,8 @@ def run_experiment(
 
     needs_dense = bool(
         {
+            "dense_cross_encoder",
+            "multiview_hybrid_cross_encoder",
             "multiview_hybrid_rrf",
             "structure_dense",
             "structure_hybrid_rrf",
@@ -595,23 +709,83 @@ def run_experiment(
         )
         stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
 
-    if "multiview_hybrid_rrf" in selected_methods:
+    needs_multiview = bool(
+        {"multiview_hybrid_rrf", "multiview_hybrid_cross_encoder"}
+        & selected_methods
+    )
+    multiview_rrf: dict[str, list[dict[str, Any]]] = {}
+    if needs_multiview:
         stage_start = time.perf_counter()
         # Each component has already collapsed its own chunking view to one
         # candidate per source document. Fuse the complete candidate pool, not
         # the final-depth slices exposed as standalone baseline predictions.
-        rankings["multiview_hybrid_rrf"] = fuse_rrf(
+        multiview_rrf = fuse_rrf(
             {
                 "fixed_window_bm25": fixed_bm25,
                 "structure_dense": structure_dense,
             },
             rrf_k=int(config["rrf"]["k"]),
-            top_k=depth,
+            top_k=candidate_depth,
             key_field="document_id",
         )
+        if "multiview_hybrid_rrf" in selected_methods:
+            rankings["multiview_hybrid_rrf"] = {
+                query_id: candidates[:depth]
+                for query_id, candidates in multiview_rrf.items()
+            }
         stage_timings["multiview_hybrid_rrf"] = (
             time.perf_counter() - stage_start
         )
+
+    cross_encoder_methods = {
+        "dense_cross_encoder",
+        "multiview_hybrid_cross_encoder",
+    }
+    if cross_encoder_methods & selected_methods:
+        if reranker is None:
+            reranker = _make_reranker(config, loaded["config_path"])
+        reranker = MemoizedPairScorer(reranker)
+        passage_map: dict[str, dict[str, Any]] = {}
+        for passage in [*loaded["chunks"], *fixed_windows]:
+            passage_id = passage.get("chunk_id")
+            if not isinstance(passage_id, str) or not passage_id:
+                raise ValueError("Every reranking passage requires chunk_id")
+            if passage_id in passage_map:
+                raise ValueError(f"Duplicate reranking passage id: {passage_id}")
+            passage_map[passage_id] = passage
+        rerank_depth = int(config["cross_encoder"]["rerank_depth"])
+
+        if "dense_cross_encoder" in selected_methods:
+            stage_start = time.perf_counter()
+            rankings["dense_cross_encoder"] = rerank_documents(
+                structure_dense,
+                loaded["queries"],
+                passage_map,
+                scorer=reranker,
+                rerank_depth=rerank_depth,
+                top_k=depth,
+                support_methods=("structure_dense",),
+                default_support_method="structure_dense",
+            )
+            stage_timings["dense_cross_encoder"] = (
+                time.perf_counter() - stage_start
+            )
+
+        if "multiview_hybrid_cross_encoder" in selected_methods:
+            stage_start = time.perf_counter()
+            rankings["multiview_hybrid_cross_encoder"] = rerank_documents(
+                multiview_rrf,
+                loaded["queries"],
+                passage_map,
+                scorer=reranker,
+                rerank_depth=rerank_depth,
+                top_k=depth,
+                support_methods=("fixed_window_bm25", "structure_dense"),
+                default_support_method="multiview_hybrid_rrf",
+            )
+            stage_timings["multiview_hybrid_cross_encoder"] = (
+                time.perf_counter() - stage_start
+            )
     stage_start = time.perf_counter()
     if target_scope == "document":
         metric_results = {
@@ -659,7 +833,10 @@ def run_experiment(
         "finished_at": finished_at.isoformat(),
         "duration_seconds": (finished_at - started_at).total_seconds(),
         "result_classification": (
-            "TEST_ONLY" if dense_backend == "injected_test" else dataset_manifest.get("result_classification", "PILOT")
+            "TEST_ONLY"
+            if dense_backend == "injected_test"
+            or cross_encoder_backend == "injected_test"
+            else dataset_manifest.get("result_classification", "PILOT")
         ),
         "git": git_metadata,
         "dataset": {
@@ -684,6 +861,11 @@ def run_experiment(
         },
         "seed": config["seed"],
         "dense_encoder": getattr(encoder, "metadata", {"backend": dense_backend}),
+        "cross_encoder": (
+            getattr(reranker, "metadata", {"backend": cross_encoder_backend})
+            if cross_encoder_methods & selected_methods
+            else None
+        ),
         "hardware": _environment_metadata(),
         "timing_seconds": stage_timings,
         "artifacts": {

@@ -23,6 +23,18 @@ vựng và tương đồng ngữ nghĩa.
 4. BM25 + Dense + RRF + Semantic Re-ranking
 5. Pipeline nhiều tầng hoàn chỉnh
 
+Ánh xạ ablation retrieval/reranking hiện tại:
+
+- A1: fixed-window BM25;
+- A2: structure-aware Dense;
+- A3: A1 + A2, RRF `k=60`;
+- A4: A2 candidates + Cross-Encoder;
+- A5: A3 candidates + Cross-Encoder.
+
+Ba mươi parent annotation hiện có được giữ cố định dưới vai trò `DEV0` để
+phân tích cơ chế và kiểm tra code. Không tiếp tục chọn tham số trên DEV0; model
+selection cần development split mới và kết luận cuối cần test split chưa mở.
+
 ## Chỉ số đánh giá
 
 - Recall@K, MRR, nDCG
