@@ -36,6 +36,13 @@ nhưng có `score=null`, `reranked=false` để không giả vờ đã được 
 chấm. Các cặp query–passage giống hệt giữa A4/A5 được memoize; số cache hit và
 số cặp thật sự inference được ghi trong run manifest.
 
+Kết quả `DEV0` đã cho thấy một giới hạn quan trọng: reranking không thể cứu
+source bị RRF đẩy ra ngoài `rerank_depth`, và đúng source document chưa chắc đã
+được đại diện bằng đúng evidence passage. Báo cáo A1–A5 cùng phân tích hai nhóm
+36/22 trường hợp nằm tại
+`docs/benchmarks/pan-pc-11-cross-encoder-ablation-dev0-result.md`. `DEV0` được
+đóng băng sau phân tích này; không điều chỉnh tham số tiếp trên 30 parent đó.
+
 ## Input
 
 Dataset manifest phải khóa checksum cho bốn JSONL:
@@ -119,3 +126,14 @@ Không được dùng encoder fixture hoặc số liệu synthetic làm kết qu
 
 Bộ test dùng một encoder được inject rõ là test-only để kiểm tra orchestration,
 Dense ranking và RRF; nó không giả danh model embedding nghiên cứu.
+
+Kiểm tra lại artifact A1–A5 mà không chạy model:
+
+```bash
+python3 research/offline_retrieval/analysis/analyze_cross_encoder_ablation.py \
+  --predictions /path/to/predictions.jsonl \
+  --metrics /path/to/metrics.json \
+  --run-manifest /path/to/run_manifest.json \
+  --dataset-dir /path/to/pan-pc-11-pilot-v1 \
+  --cutoff 10 --pretty
+```
