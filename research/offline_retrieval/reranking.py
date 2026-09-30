@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from .cross_encoder import PairScorer, score_pairs
+from .cross_encoder import PairScorer, pair_diagnostics, score_pairs
 
 
 @dataclass(frozen=True)
@@ -161,9 +161,12 @@ def rerank_documents(
                 )
 
     scores = score_pairs(pair_values, scorer=scorer)
+    input_diagnostics = pair_diagnostics(pair_values, scorer=scorer)
 
     scored_supports: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for reference, score in zip(references, scores):
+    for reference, score, diagnostic in zip(
+        references, scores, input_diagnostics
+    ):
         scored_supports.setdefault(
             (reference.query_id, reference.document_id), []
         ).append(
@@ -172,6 +175,12 @@ def rerank_documents(
                 "support_id": reference.support_id,
                 "score": score,
                 "source_spans": deepcopy(reference.source_spans),
+                "cross_encoder_input": deepcopy(diagnostic),
+                "model_visible_source_spans": (
+                    deepcopy(reference.source_spans)
+                    if diagnostic.get("truncated") is False
+                    else None
+                ),
             }
         )
 
@@ -202,6 +211,16 @@ def rerank_documents(
             record["cross_encoder_support_id"] = str(winner["support_id"])
             record["cross_encoder_support_method"] = str(winner["method"])
             record["cross_encoder_scores_by_support"] = support_scores
+            record["cross_encoder_input"] = deepcopy(
+                winner["cross_encoder_input"]
+            )
+            record["model_visible_source_spans"] = deepcopy(
+                winner["model_visible_source_spans"]
+            )
+            record["source_spans_semantics"] = (
+                "candidate_passage_origin; consult cross_encoder_input.truncated "
+                "before treating the full span as model-visible"
+            )
             record["supporting_chunk_id"] = str(winner["support_id"])
             record["source_spans"] = deepcopy(winner["source_spans"])
             record["reranked"] = True
@@ -210,6 +229,7 @@ def rerank_documents(
         head.sort(
             key=lambda item: (
                 -float(item["cross_encoder_score"]),
+                int(item["pre_rerank_rank"]),
                 str(item["document_id"]),
                 str(item["cross_encoder_support_id"]),
             )

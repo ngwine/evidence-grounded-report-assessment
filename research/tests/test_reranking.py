@@ -79,6 +79,9 @@ def test_dense_reranking_preserves_tail_and_provenance():
     assert result[0]["candidate_score"] == 0.8
     assert result[0]["cross_encoder_score"] == 0.9
     assert result[0]["source_spans"] == passages["c2"]["source_spans"]
+    assert result[0]["cross_encoder_input"]["truncated"] is None
+    assert result[0]["model_visible_source_spans"] is None
+    assert "candidate_passage_origin" in result[0]["source_spans_semantics"]
     assert result[2]["score"] is None
     assert result[2]["candidate_score"] == 0.7
     assert result[2]["reranked"] is False
@@ -149,6 +152,48 @@ def test_multiview_uses_max_passage_score_and_keeps_winning_method():
     assert result[1]["cross_encoder_support_method"] == "fixed_window_bm25"
     assert result[1]["supporting_chunk_id"] == "b2"
     assert len(result[0]["cross_encoder_scores_by_support"]) == 2
+
+
+def test_equal_cross_encoder_scores_preserve_upstream_rank_before_ids():
+    rankings = {
+        "q": [
+            {
+                "document_id": "z-document",
+                "supporting_chunk_id": "z-support",
+                "score": 0.9,
+                "rank": 1,
+                "source_spans": [],
+            },
+            {
+                "document_id": "a-document",
+                "supporting_chunk_id": "a-support",
+                "score": 0.8,
+                "rank": 2,
+                "source_spans": [],
+            },
+        ]
+    }
+    passages = {
+        "z-support": _passage("z-support", "z-document", "first", 0),
+        "a-support": _passage("a-support", "a-document", "second", 5),
+    }
+
+    result = rerank_documents(
+        rankings,
+        [{"query_id": "q", "text": "query"}],
+        passages,
+        scorer=InjectedScorer([0.5, 0.5]),
+        rerank_depth=2,
+        top_k=2,
+        support_methods=("structure_dense",),
+        default_support_method="structure_dense",
+    )["q"]
+
+    assert [item["document_id"] for item in result] == [
+        "z-document",
+        "a-document",
+    ]
+    assert [item["pre_rerank_rank"] for item in result] == [1, 2]
 
 
 def test_reranking_rejects_missing_or_mismatched_support():

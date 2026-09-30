@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import time
 import types
 
 import pytest
@@ -113,10 +114,18 @@ def test_sentence_transformers_adapter_is_offline_batched_and_deterministic(
         def eval(self):
             calls["eval"] += 1
 
+    class FakeTokenizer:
+        def __call__(self, query, passage, *, truncation, max_length=None, **_kwargs):
+            token_count = len(query.split()) + len(passage.split()) + 3
+            if truncation:
+                token_count = min(token_count, max_length)
+            return {"input_ids": list(range(token_count))}
+
     class FakeCrossEncoder:
         def __init__(self, model, **kwargs):
             calls["init"] = (model, kwargs)
             self.model = FakeUnderlyingModel()
+            self.tokenizer = FakeTokenizer()
 
         def predict(self, pairs, **kwargs):
             calls["predict"].append((list(pairs), kwargs))
@@ -139,14 +148,12 @@ def test_sentence_transformers_adapter_is_offline_batched_and_deterministic(
     second = scorer.score_pairs(pairs)
 
     assert first == second == [0.1, 0.2, 0.3]
-    assert calls["init"] == (
-        str(model_dir.resolve()),
-        {
-            "device": "mps",
-            "local_files_only": True,
-            "max_length": 256,
-        },
-    )
+    loaded_model, init_kwargs = calls["init"]
+    assert loaded_model == str(model_dir.resolve())
+    assert init_kwargs["device"] == "mps"
+    assert init_kwargs["local_files_only"] is True
+    assert init_kwargs["max_length"] == 256
+    assert init_kwargs["activation_fn"].__class__.__name__ == "Identity"
     assert calls["eval"] == 1
     assert [len(batch) for batch, _kwargs in calls["predict"]] == [2, 1, 2, 1]
     assert all(
@@ -154,6 +161,8 @@ def test_sentence_transformers_adapter_is_offline_batched_and_deterministic(
         == {
             "batch_size": 2,
             "show_progress_bar": False,
+            "activation_fn": init_kwargs["activation_fn"],
+            "apply_softmax": False,
             "convert_to_numpy": True,
         }
         for _batch, kwargs in calls["predict"]
@@ -168,6 +177,19 @@ def test_sentence_transformers_adapter_is_offline_batched_and_deterministic(
         "max_length": 256,
         "local_files_only": True,
         "output": "scalar_float",
+        "score_output": "raw_logit",
+        "activation": "torch.nn.Identity",
+        "apply_softmax": False,
+        "cooperative_deadline_enabled": False,
+        "tokenization": {
+            "available": True,
+            "truncation_strategy": "longest_first",
+            "max_length": 256,
+            "unique_pairs_inspected": 3,
+            "pairs_truncated": 0,
+            "max_tokens_before_truncation": 5,
+            "max_tokens_model_input": 5,
+        },
     }
 
 
@@ -191,14 +213,11 @@ def test_cached_model_passes_exact_revision_without_network(monkeypatch):
         device="cpu",
     )
 
-    assert captured == {
-        "model": "org/locked-model",
-        "kwargs": {
-            "device": "cpu",
-            "local_files_only": True,
-            "revision": revision,
-        },
-    }
+    assert captured["model"] == "org/locked-model"
+    assert captured["kwargs"]["device"] == "cpu"
+    assert captured["kwargs"]["local_files_only"] is True
+    assert captured["kwargs"]["revision"] == revision
+    assert captured["kwargs"]["activation_fn"].__class__.__name__ == "Identity"
     assert scorer.metadata["revision"] == revision
     assert scorer.metadata["local_files_only"] is True
 
@@ -221,5 +240,66 @@ def test_adapter_validates_batch_device_and_pair_shape_before_inference(tmp_path
             revision=revision,
             device="auto",
         )
+    with pytest.raises(ValueError, match="score_output"):
+        SentenceTransformersCrossEncoder(
+            model=model_dir,
+            revision=revision,
+            score_output="sigmoid_probability",
+        )
     with pytest.raises(ValueError, match="two texts"):
         score_pairs([("only one",)], scorer=_InjectedScorer())
+
+
+def test_adapter_records_pair_level_truncation_without_relabeling_source_span(
+    tmp_path, monkeypatch
+):
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    (model_dir / "config.json").write_text("{}\n", encoding="utf-8")
+    revision = local_model_revision(model_dir)
+
+    class FakeTokenizer:
+        def __call__(self, query, passage, *, truncation, max_length=None, **_kwargs):
+            token_count = len(query.split()) + len(passage.split()) + 3
+            if truncation:
+                token_count = min(token_count, max_length)
+            return {"input_ids": list(range(token_count))}
+
+    class FakeCrossEncoder:
+        model = None
+        tokenizer = FakeTokenizer()
+
+        def __init__(self, _model, **_kwargs):
+            pass
+
+        def predict(self, pairs, **_kwargs):
+            return [0.5 for _pair in pairs]
+
+    fake_module = types.ModuleType("sentence_transformers")
+    fake_module.CrossEncoder = FakeCrossEncoder
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+
+    scorer = SentenceTransformersCrossEncoder(
+        model=model_dir,
+        revision=revision,
+        max_length=6,
+    )
+    pair = ("one two three", "four five six seven")
+
+    assert scorer.score_pairs([pair]) == [0.5]
+    [diagnostic] = scorer.pair_diagnostics([pair])
+    assert diagnostic == {
+        "available": True,
+        "truncated": True,
+        "tokens_before_truncation": 10,
+        "tokens_model_input": 6,
+        "max_length": 6,
+        "truncation_strategy": "longest_first",
+        "source_span_scope": "candidate_passage_before_model_tokenization",
+    }
+    assert scorer.metadata["tokenization"]["pairs_truncated"] == 1
+
+    scorer.set_deadline(time.perf_counter() - 1.0)
+    with pytest.raises(TimeoutError, match="between batches"):
+        scorer.score_pairs([pair])
+    assert scorer.metadata["cooperative_deadline_enabled"] is True

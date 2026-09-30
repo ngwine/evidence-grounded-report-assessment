@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import importlib.metadata
+import math
 import os
 from pathlib import Path
 import platform
@@ -50,6 +51,19 @@ ALLOWED_METHODS = {
     "structure_dense",
     "structure_hybrid_rrf",
 }
+CROSS_ENCODER_METHODS = {
+    "dense_cross_encoder",
+    "multiview_hybrid_cross_encoder",
+}
+CROSS_ENCODER_FAILURE_POLICY = "write_partial_baselines_and_fail"
+
+
+class ExperimentStageError(RuntimeError):
+    """Raised after a failed stage has written a reproducible partial checkpoint."""
+
+    def __init__(self, message: str, *, partial_manifest_path: Path) -> None:
+        super().__init__(message)
+        self.partial_manifest_path = partial_manifest_path
 
 
 def _portable_path(path: Path) -> str:
@@ -105,6 +119,48 @@ def _resolve_dataset_files(manifest_path: Path, manifest: dict[str, Any]) -> dic
     return resolved
 
 
+def _capture_dataset_snapshot(
+    manifest_path: Path,
+    manifest: dict[str, Any],
+    paths: dict[str, Path],
+    *,
+    manifest_sha256: str,
+) -> dict[str, Any]:
+    """Lock the exact dataset bytes that validation and inference will use."""
+
+    files: dict[str, dict[str, Any]] = {}
+    for name, path in sorted(paths.items()):
+        checksum = sha256_file(path)
+        expected = manifest["files"][name]["sha256"]
+        if checksum != expected:
+            raise ValueError(
+                f"Dataset file {name} changed during validation: "
+                f"expected {expected}, got {checksum}"
+            )
+        files[name] = {"path": path, "sha256": checksum}
+    return {
+        "manifest": {"path": manifest_path, "sha256": manifest_sha256},
+        "files": files,
+    }
+
+
+def _assert_dataset_snapshot_unchanged(snapshot: dict[str, Any]) -> None:
+    """Fail closed if any validated dataset byte changed during the run."""
+
+    records = {"manifest": snapshot["manifest"], **snapshot["files"]}
+    changed: list[str] = []
+    for name, record in sorted(records.items()):
+        path = record["path"]
+        actual = sha256_file(path) if path.is_file() else None
+        if actual != record["sha256"]:
+            changed.append(name)
+    if changed:
+        raise RuntimeError(
+            "Dataset inputs changed during the experiment; refusing to write "
+            f"results for mutated inputs: {', '.join(changed)}"
+        )
+
+
 def validate_inputs(
     dataset_manifest_path: str | Path,
     config_path: str | Path,
@@ -114,7 +170,10 @@ def validate_inputs(
 ) -> dict[str, Any]:
     dataset_manifest_path = Path(dataset_manifest_path).resolve()
     config_path = Path(config_path).resolve()
+    manifest_sha256 = sha256_file(dataset_manifest_path)
     manifest = read_json(dataset_manifest_path)
+    if sha256_file(dataset_manifest_path) != manifest_sha256:
+        raise ValueError("Dataset manifest changed while it was being read")
     config = read_json(config_path)
     if not isinstance(manifest, dict) or not isinstance(config, dict):
         raise ValueError("Dataset manifest and config must be JSON objects")
@@ -135,6 +194,12 @@ def validate_inputs(
     _require_non_empty_string(manifest.get("dataset_version"), "dataset_version")
 
     paths = _resolve_dataset_files(dataset_manifest_path, manifest)
+    dataset_snapshot = _capture_dataset_snapshot(
+        dataset_manifest_path,
+        manifest,
+        paths,
+        manifest_sha256=manifest_sha256,
+    )
     documents = read_jsonl(paths["documents"])
     chunks = read_jsonl(paths["chunks"])
     queries = read_jsonl(paths["queries"])
@@ -320,11 +385,7 @@ def validate_inputs(
             "fixed-window and structure-aware chunk IDs are not comparable "
             "before document-level aggregation"
         )
-    cross_encoder_methods = {
-        "dense_cross_encoder",
-        "multiview_hybrid_cross_encoder",
-    }
-    if cross_encoder_methods & set(methods) and target_scope != "document":
+    if CROSS_ENCODER_METHODS & set(methods) and target_scope != "document":
         raise ValueError("Cross-Encoder methods require metrics.target_scope=document")
     for index, qrel in enumerate(qrels):
         qrel_scope = qrel.get("target_scope", "span")
@@ -361,7 +422,7 @@ def validate_inputs(
         elif not re.fullmatch(r"[0-9a-fA-F]{40,64}", revision):
             raise ValueError("A cached model id requires an immutable 40–64 hex revision")
 
-    if cross_encoder_methods & set(methods):
+    if CROSS_ENCODER_METHODS & set(methods):
         cross_encoder = config.get("cross_encoder")
         if not isinstance(cross_encoder, dict):
             raise ValueError("config.cross_encoder must be an object")
@@ -420,6 +481,23 @@ def validate_inputs(
             raise ValueError("cross_encoder.max_length must be a positive integer")
         if cross_encoder.get("support_aggregation", "max") != "max":
             raise ValueError("cross_encoder.support_aggregation must be max")
+        if cross_encoder.get("score_output") != "raw_logit":
+            raise ValueError("cross_encoder.score_output must be raw_logit")
+        if cross_encoder.get("failure_policy") != CROSS_ENCODER_FAILURE_POLICY:
+            raise ValueError(
+                "cross_encoder.failure_policy must be "
+                f"{CROSS_ENCODER_FAILURE_POLICY}"
+            )
+        stage_timeout = cross_encoder.get("stage_timeout_seconds")
+        if stage_timeout is not None and (
+            isinstance(stage_timeout, bool)
+            or not isinstance(stage_timeout, (int, float))
+            or not math.isfinite(float(stage_timeout))
+            or not float(stage_timeout) > 0
+        ):
+            raise ValueError(
+                "cross_encoder.stage_timeout_seconds must be a positive number"
+            )
 
     validate_pan_semantic_provenance(
         manifest,
@@ -428,6 +506,7 @@ def validate_inputs(
         queries,
         qrels,
     )
+    _assert_dataset_snapshot_unchanged(dataset_snapshot)
 
     return {
         "dataset_manifest_path": dataset_manifest_path,
@@ -435,6 +514,7 @@ def validate_inputs(
         "dataset_manifest": manifest,
         "config": config,
         "paths": paths,
+        "dataset_snapshot": dataset_snapshot,
         "documents": documents,
         "chunks": chunks,
         "queries": queries,
@@ -500,7 +580,15 @@ def _total_memory_bytes() -> int | None:
 
 def _environment_metadata() -> dict[str, Any]:
     packages = {}
-    for package in ("sentence-transformers", "torch", "numpy"):
+    for package in (
+        "sentence-transformers",
+        "torch",
+        "numpy",
+        "transformers",
+        "tokenizers",
+        "safetensors",
+        "huggingface-hub",
+    ):
         try:
             packages[package] = importlib.metadata.version(package)
         except importlib.metadata.PackageNotFoundError:
@@ -554,9 +642,169 @@ def _make_reranker(config: dict[str, Any], config_path: Path) -> PairScorer:
         device=cross_encoder.get("device", "cpu"),
         batch_size=int(cross_encoder.get("batch_size", 16)),
         max_length=cross_encoder.get("max_length"),
+        score_output=cross_encoder["score_output"],
     )
     reranker.metadata["model"] = cross_encoder["model"]
     return reranker
+
+
+def _evaluate_methods(
+    rankings: dict[str, dict[str, list[dict[str, Any]]]],
+    loaded: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    cutoffs = sorted(set(config["metric_cutoffs"]))
+    if config["metrics"].get("target_scope", "span") == "document":
+        return {
+            method: evaluate_document_rankings(
+                result,
+                loaded["qrels"],
+                cutoffs=cutoffs,
+            )
+            for method, result in rankings.items()
+        }
+    return {
+        method: evaluate_rankings(
+            result,
+            loaded["qrels"],
+            cutoffs=cutoffs,
+            overlap_threshold=float(config["metrics"]["gold_overlap_threshold"]),
+        )
+        for method, result in rankings.items()
+    }
+
+
+def _prediction_records(
+    rankings: dict[str, dict[str, list[dict[str, Any]]]],
+) -> list[dict[str, Any]]:
+    return [
+        {"method": method, "query_id": query_id, "candidates": candidates}
+        for method in sorted(rankings)
+        for query_id, candidates in sorted(rankings[method].items())
+    ]
+
+
+def _dataset_run_record(loaded: dict[str, Any]) -> dict[str, Any]:
+    dataset_manifest = loaded["dataset_manifest"]
+    dataset_snapshot = loaded["dataset_snapshot"]
+    return {
+        "dataset_id": dataset_manifest["dataset_id"],
+        "dataset_version": dataset_manifest["dataset_version"],
+        "manifest_path": _portable_path(loaded["dataset_manifest_path"]),
+        "manifest_sha256": dataset_snapshot["manifest"]["sha256"],
+        "files": {
+            name: {
+                "path": dataset_manifest["files"][name]["path"],
+                "sha256": dataset_snapshot["files"][name]["sha256"],
+            }
+            for name in sorted(loaded["paths"])
+        },
+        "split": dataset_manifest["split"],
+        "governance": dataset_manifest["governance"],
+    }
+
+
+def _write_partial_baseline_checkpoint(
+    *,
+    output_dir: Path,
+    rankings: dict[str, dict[str, list[dict[str, Any]]]],
+    loaded: dict[str, Any],
+    config: dict[str, Any],
+    git_metadata: dict[str, Any],
+    started_at: datetime,
+    stage_timings: dict[str, float],
+    timing_context: dict[str, Any],
+    failure: Exception,
+    encoder: Encoder | None,
+    reranker: PairScorer | None,
+) -> Path:
+    """Persist valid non-CE baselines, then let the overall experiment fail."""
+
+    baseline_rankings = {
+        method: result
+        for method, result in rankings.items()
+        if method not in CROSS_ENCODER_METHODS
+    }
+    evaluation_started = time.perf_counter()
+    baseline_metrics = _evaluate_methods(baseline_rankings, loaded, config)
+    partial_timings = dict(stage_timings)
+    partial_timings["partial_baseline_evaluation"] = (
+        time.perf_counter() - evaluation_started
+    )
+    _assert_dataset_snapshot_unchanged(loaded["dataset_snapshot"])
+
+    predictions_path = output_dir / "partial_baseline_predictions.jsonl"
+    metrics_path = output_dir / "partial_baseline_metrics.json"
+    write_jsonl(predictions_path, _prediction_records(baseline_rankings))
+    write_json(metrics_path, baseline_metrics)
+
+    finished_at = datetime.now(timezone.utc)
+    config_sha256 = sha256_text(canonical_json(config))
+    cross_encoder_backend = config["cross_encoder"]["backend"]
+    manifest = {
+        "schema_version": 1,
+        "run_id": (
+            f"{config['experiment_id']}-{started_at.strftime('%Y%m%dT%H%M%S%fZ')}-"
+            f"{config_sha256[:10]}-partial"
+        ),
+        "status": "FAILED",
+        "result_scope": "PARTIAL_BASELINES_ONLY",
+        "started_at": started_at.isoformat(),
+        "finished_at": finished_at.isoformat(),
+        "duration_seconds": (finished_at - started_at).total_seconds(),
+        "result_classification": (
+            "TEST_ONLY"
+            if config["dense"]["backend"] == "injected_test"
+            or cross_encoder_backend == "injected_test"
+            else loaded["dataset_manifest"].get("result_classification", "PILOT")
+        ),
+        "git": git_metadata,
+        "dataset": _dataset_run_record(loaded),
+        "config": {
+            "path": _portable_path(loaded["config_path"]),
+            "sha256": config_sha256,
+            "resolved": config,
+        },
+        "seed": config["seed"],
+        "dense_encoder": getattr(
+            encoder, "metadata", {"backend": config["dense"]["backend"]}
+        ),
+        "failure": {
+            "stage": "cross_encoder",
+            "active_operation": timing_context.get("cross_encoder", {}).get(
+                "active_operation"
+            ),
+            "exception_type": type(failure).__name__,
+            "message": str(failure),
+            "policy": CROSS_ENCODER_FAILURE_POLICY,
+            "completed_methods": sorted(baseline_rankings),
+            "withheld_cross_encoder_methods": sorted(
+                CROSS_ENCODER_METHODS & set(config["methods"])
+            ),
+            "full_ablation_valid": False,
+        },
+        "cross_encoder": (
+            getattr(reranker, "metadata", {"backend": cross_encoder_backend})
+            if reranker is not None
+            else {"backend": cross_encoder_backend, "construction_completed": False}
+        ),
+        "hardware": _environment_metadata(),
+        "timing_seconds": partial_timings,
+        "timing_context": timing_context,
+        "artifacts": {
+            "partial_baseline_predictions": {
+                "path": predictions_path.name,
+                "sha256": sha256_file(predictions_path),
+            },
+            "partial_baseline_metrics": {
+                "path": metrics_path.name,
+                "sha256": sha256_file(metrics_path),
+            },
+        },
+    }
+    manifest_path = output_dir / "partial_run_manifest.json"
+    write_json(manifest_path, manifest)
+    return manifest_path
 
 
 def run_experiment(
@@ -604,6 +852,7 @@ def run_experiment(
     output_dir.mkdir(parents=True, exist_ok=True)
     started_at = datetime.now(timezone.utc)
     stage_timings: dict[str, float] = {}
+    timing_context: dict[str, Any] = {}
 
     depth = int(config["retrieval_depth"])
     candidate_depth = int(config.get("candidate_retrieval_depth", depth))
@@ -737,84 +986,187 @@ def run_experiment(
             time.perf_counter() - stage_start
         )
 
-    cross_encoder_methods = {
-        "dense_cross_encoder",
-        "multiview_hybrid_cross_encoder",
-    }
-    if cross_encoder_methods & selected_methods:
-        if reranker is None:
-            reranker = _make_reranker(config, loaded["config_path"])
-        reranker = MemoizedPairScorer(reranker)
-        passage_map: dict[str, dict[str, Any]] = {}
-        for passage in [*loaded["chunks"], *fixed_windows]:
-            passage_id = passage.get("chunk_id")
-            if not isinstance(passage_id, str) or not passage_id:
-                raise ValueError("Every reranking passage requires chunk_id")
-            if passage_id in passage_map:
-                raise ValueError(f"Duplicate reranking passage id: {passage_id}")
-            passage_map[passage_id] = passage
-        rerank_depth = int(config["cross_encoder"]["rerank_depth"])
+    if CROSS_ENCODER_METHODS & selected_methods:
+        cross_encoder_config = config["cross_encoder"]
+        stage_timeout = cross_encoder_config.get("stage_timeout_seconds")
+        shared_start = time.perf_counter()
+        deadline = (
+            None
+            if stage_timeout is None
+            else shared_start + float(stage_timeout)
+        )
+        cross_encoder_timing = {
+            "failure_policy": CROSS_ENCODER_FAILURE_POLICY,
+            "stage_timeout_seconds": stage_timeout,
+            "timeout_semantics": (
+                "cooperative_between_inference_batches; a single blocking model "
+                "load or predict call cannot be preempted"
+            ),
+            "shared_pair_memoization": True,
+            "method_timings_include_model_load": False,
+            "recommended_end_to_end_timing": "cross_encoder_shared_run_total",
+            "method_measurements": {},
+        }
+        timing_context["cross_encoder"] = cross_encoder_timing
 
-        if "dense_cross_encoder" in selected_methods:
-            stage_start = time.perf_counter()
-            rankings["dense_cross_encoder"] = rerank_documents(
-                structure_dense,
-                loaded["queries"],
-                passage_map,
-                scorer=reranker,
-                rerank_depth=rerank_depth,
-                top_k=depth,
-                support_methods=("structure_dense",),
-                default_support_method="structure_dense",
-            )
-            stage_timings["dense_cross_encoder"] = (
-                time.perf_counter() - stage_start
-            )
+        def ensure_cross_encoder_deadline() -> None:
+            if deadline is not None and time.perf_counter() >= deadline:
+                raise TimeoutError(
+                    "Cross-Encoder cooperative stage timeout exceeded"
+                )
 
-        if "multiview_hybrid_cross_encoder" in selected_methods:
-            stage_start = time.perf_counter()
-            rankings["multiview_hybrid_cross_encoder"] = rerank_documents(
-                multiview_rrf,
-                loaded["queries"],
-                passage_map,
-                scorer=reranker,
-                rerank_depth=rerank_depth,
-                top_k=depth,
-                support_methods=("fixed_window_bm25", "structure_dense"),
-                default_support_method="multiview_hybrid_rrf",
+        try:
+            if reranker is None:
+                cross_encoder_timing["active_operation"] = "model_load"
+                model_load_started = time.perf_counter()
+                cross_encoder_timing["model_load_measurement"] = (
+                    "runner_constructed_timed"
+                )
+                try:
+                    reranker = _make_reranker(config, loaded["config_path"])
+                finally:
+                    model_load_seconds = time.perf_counter() - model_load_started
+                    stage_timings["cross_encoder_model_load"] = model_load_seconds
+                    cross_encoder_timing["model_load_seconds"] = model_load_seconds
+            else:
+                cross_encoder_timing["active_operation"] = "preloaded_reranker_setup"
+                cross_encoder_timing["model_load_measurement"] = (
+                    "not_measured_injected_preloaded"
+                )
+                cross_encoder_timing["model_load_seconds"] = None
+            ensure_cross_encoder_deadline()
+
+            reranker = MemoizedPairScorer(reranker)
+            reranker.metadata.setdefault(
+                "score_output", cross_encoder_config["score_output"]
             )
-            stage_timings["multiview_hybrid_cross_encoder"] = (
-                time.perf_counter() - stage_start
+            deadline_setter = getattr(reranker, "set_deadline", None)
+            if callable(deadline_setter):
+                deadline_setter(deadline)
+
+            passage_map: dict[str, dict[str, Any]] = {}
+            cross_encoder_timing["active_operation"] = "candidate_preparation"
+            for passage in [*loaded["chunks"], *fixed_windows]:
+                passage_id = passage.get("chunk_id")
+                if not isinstance(passage_id, str) or not passage_id:
+                    raise ValueError("Every reranking passage requires chunk_id")
+                if passage_id in passage_map:
+                    raise ValueError(f"Duplicate reranking passage id: {passage_id}")
+                passage_map[passage_id] = passage
+            rerank_depth = int(cross_encoder_config["rerank_depth"])
+
+            if "dense_cross_encoder" in selected_methods:
+                cross_encoder_timing["active_operation"] = "dense_cross_encoder"
+                ensure_cross_encoder_deadline()
+                cache_before = dict(
+                    reranker.metadata["exact_pair_memoization"]
+                )
+                stage_start = time.perf_counter()
+                rankings["dense_cross_encoder"] = rerank_documents(
+                    structure_dense,
+                    loaded["queries"],
+                    passage_map,
+                    scorer=reranker,
+                    rerank_depth=rerank_depth,
+                    top_k=depth,
+                    support_methods=("structure_dense",),
+                    default_support_method="structure_dense",
+                )
+                stage_timings["dense_cross_encoder"] = (
+                    time.perf_counter() - stage_start
+                )
+                ensure_cross_encoder_deadline()
+                cross_encoder_timing["method_measurements"][
+                    "dense_cross_encoder"
+                ] = {
+                    "cache_state": "cold",
+                    "cache_before": cache_before,
+                    "cache_after": dict(
+                        reranker.metadata["exact_pair_memoization"]
+                    ),
+                    "independent_cold_latency_comparable": True,
+                }
+
+            if "multiview_hybrid_cross_encoder" in selected_methods:
+                cross_encoder_timing["active_operation"] = (
+                    "multiview_hybrid_cross_encoder"
+                )
+                ensure_cross_encoder_deadline()
+                cache_before = dict(
+                    reranker.metadata["exact_pair_memoization"]
+                )
+                stage_start = time.perf_counter()
+                rankings["multiview_hybrid_cross_encoder"] = rerank_documents(
+                    multiview_rrf,
+                    loaded["queries"],
+                    passage_map,
+                    scorer=reranker,
+                    rerank_depth=rerank_depth,
+                    top_k=depth,
+                    support_methods=("fixed_window_bm25", "structure_dense"),
+                    default_support_method="multiview_hybrid_rrf",
+                )
+                stage_timings["multiview_hybrid_cross_encoder"] = (
+                    time.perf_counter() - stage_start
+                )
+                ensure_cross_encoder_deadline()
+                warmed_by_a4 = "dense_cross_encoder" in selected_methods
+                cross_encoder_timing["method_measurements"][
+                    "multiview_hybrid_cross_encoder"
+                ] = {
+                    "cache_state": (
+                        "warm_after_dense_cross_encoder" if warmed_by_a4 else "cold"
+                    ),
+                    "cache_before": cache_before,
+                    "cache_after": dict(
+                        reranker.metadata["exact_pair_memoization"]
+                    ),
+                    "independent_cold_latency_comparable": not warmed_by_a4,
+                    "comparison_note": (
+                        "sequential A5 timing benefits from A4 memoized pair scores"
+                        if warmed_by_a4
+                        else "A5 was the first Cross-Encoder method in this run"
+                    ),
+                }
+        except Exception as exc:
+            stage_timings["cross_encoder_shared_run_total"] = (
+                time.perf_counter() - shared_start
             )
+            cross_encoder_timing["status"] = "FAILED"
+            partial_manifest_path = _write_partial_baseline_checkpoint(
+                output_dir=output_dir,
+                rankings=rankings,
+                loaded=loaded,
+                config=config,
+                git_metadata=git_metadata,
+                started_at=started_at,
+                stage_timings=stage_timings,
+                timing_context=timing_context,
+                failure=exc,
+                encoder=encoder,
+                reranker=reranker,
+            )
+            raise ExperimentStageError(
+                "Cross-Encoder stage failed; valid non-CE baselines were saved "
+                f"to {partial_manifest_path}",
+                partial_manifest_path=partial_manifest_path,
+            ) from exc
+        else:
+            stage_timings["cross_encoder_shared_run_total"] = (
+                time.perf_counter() - shared_start
+            )
+            cross_encoder_timing["status"] = "COMPLETED"
+            cross_encoder_timing["active_operation"] = None
     stage_start = time.perf_counter()
-    if target_scope == "document":
-        metric_results = {
-            method: evaluate_document_rankings(
-                result,
-                loaded["qrels"],
-                cutoffs=sorted(set(config["metric_cutoffs"])),
-            )
-            for method, result in rankings.items()
-        }
-    else:
-        metric_results = {
-            method: evaluate_rankings(
-                result,
-                loaded["qrels"],
-                cutoffs=sorted(set(config["metric_cutoffs"])),
-                overlap_threshold=float(
-                    config["metrics"]["gold_overlap_threshold"]
-                ),
-            )
-            for method, result in rankings.items()
-        }
+    metric_results = _evaluate_methods(rankings, loaded, config)
     stage_timings["evaluation"] = time.perf_counter() - stage_start
 
-    prediction_records = [
-        {"method": method, "query_id": query_id, "candidates": candidates}
-        for method in sorted(rankings)
-        for query_id, candidates in sorted(rankings[method].items())
-    ]
+    # Never publish metrics for a moving dataset. The manifest below retains
+    # the checksums captured before inference rather than describing whatever
+    # bytes happen to exist after a long run.
+    _assert_dataset_snapshot_unchanged(loaded["dataset_snapshot"])
+
+    prediction_records = _prediction_records(rankings)
     predictions_path = output_dir / "predictions.jsonl"
     metrics_path = output_dir / "metrics.json"
     write_jsonl(predictions_path, prediction_records)
@@ -839,21 +1191,7 @@ def run_experiment(
             else dataset_manifest.get("result_classification", "PILOT")
         ),
         "git": git_metadata,
-        "dataset": {
-            "dataset_id": dataset_manifest["dataset_id"],
-            "dataset_version": dataset_manifest["dataset_version"],
-            "manifest_path": _portable_path(loaded["dataset_manifest_path"]),
-            "manifest_sha256": sha256_file(loaded["dataset_manifest_path"]),
-            "files": {
-                name: {
-                    "path": dataset_manifest["files"][name]["path"],
-                    "sha256": sha256_file(path),
-                }
-                for name, path in sorted(loaded["paths"].items())
-            },
-            "split": dataset_manifest["split"],
-            "governance": dataset_manifest["governance"],
-        },
+        "dataset": _dataset_run_record(loaded),
         "config": {
             "path": _portable_path(loaded["config_path"]),
             "sha256": config_sha256,
@@ -863,11 +1201,12 @@ def run_experiment(
         "dense_encoder": getattr(encoder, "metadata", {"backend": dense_backend}),
         "cross_encoder": (
             getattr(reranker, "metadata", {"backend": cross_encoder_backend})
-            if cross_encoder_methods & selected_methods
+            if CROSS_ENCODER_METHODS & selected_methods
             else None
         ),
         "hardware": _environment_metadata(),
         "timing_seconds": stage_timings,
+        "timing_context": timing_context,
         "artifacts": {
             "predictions": {
                 "path": predictions_path.name,
