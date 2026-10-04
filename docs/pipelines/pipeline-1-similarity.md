@@ -3,7 +3,8 @@
 ## Tổng quan
 
 Pipeline sử dụng chiến lược **Hybrid Retrieval**, kết hợp tìm kiếm từ vựng và
-tìm kiếm ngữ nghĩa ngay từ bước truy xuất ứng viên.
+tìm kiếm ngữ nghĩa ngay từ bước truy xuất ứng viên. Tập ứng viên chỉ đến từ
+source corpus đã được nạp, duyệt quyền sử dụng và khóa version cho run.
 
 ## Luồng xử lý
 
@@ -13,7 +14,7 @@ Report Passage
 → Reciprocal Rank Fusion (RRF)
 → Top-K Candidates
 → Cross-Encoder Re-ranking
-→ Similarity / Plagiarism Classification
+→ Similarity Type Classification
 → Document-level Aggregation
 → Similarity Report
 ```
@@ -37,6 +38,7 @@ chất lượng xếp hạng trước phân tích chi tiết.
 
 ### Similarity Classification
 Xác định các dạng tương đồng:
+
 - **Verbatim**: sao chép gần nguyên văn
 - **Paraphrase**: diễn giải lại
 - **Summary**: tóm tắt
@@ -50,4 +52,5 @@ Gồm tỷ lệ tương đồng, đoạn nghi vấn, vị trí, loại tương �
 nguồn để giảng viên kiểm tra.
 
 > **Lưu ý**: Tỷ lệ tương đồng **không** đồng nghĩa với tỷ lệ đạo văn. Hệ thống
-> cung cấp bằng chứng và nguồn đối chứng để giảng viên đưa ra kết luận.
+> cung cấp bằng chứng và nguồn đối chứng để giảng viên đưa ra kết luận; pipeline
+> không tự gán nhãn gian lận hay đạo văn.

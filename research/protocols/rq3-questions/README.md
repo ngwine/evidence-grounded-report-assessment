@@ -1,5 +1,10 @@
 # RQ3 – Sinh câu hỏi có mục tiêu dựa trên vấn đề được phát hiện
 
+> Trạng thái: **CONDITIONAL**. Protocol này chỉ được kích hoạt sau khi RQ1/RQ2
+> đạt core gate, dữ liệu có issue/evidence hợp lệ và phần việc không ảnh hưởng
+> tiến độ hai pipeline chính. Kết quả phải được giảng viên review/edit/reject
+> trước khi export; hệ thống không triển khai luồng sinh viên trả lời trực tuyến.
+
 ## Mô tả
 
 Sử dụng đầu ra từ RQ1 và RQ2 (vấn đề, evidence, đoạn tương đồng, tiêu chí
