@@ -36,9 +36,9 @@ var/**
 # Generated research outputs
 research/results/**
 !research/results/.gitignore
+research/configs/**/*.local.json
 research/notebooks/.ipynb_checkpoints/
 
 # Tool caches
 .cache/
 .tmp/
-

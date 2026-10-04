@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "experiment_id": "retrieval-synthetic-pilot-v1",
+  "seed": 20260923,
+  "methods": [
+    "fixed_window_bm25",
+    "structure_bm25",
+    "structure_dense",
+    "structure_hybrid_rrf"
+  ],
+  "retrieval_depth": 5,
+  "metric_cutoffs": [1, 3],
+  "fixed_window": {
+    "size_tokens": 8,
+    "stride_tokens": 4
+  },
+  "bm25": {
+    "k1": 1.2,
+    "b": 0.75
+  },
+  "dense": {
+    "backend": "injected_test",
+    "model": "keyword-fixture-encoder",
+    "revision": "synthetic-fixture-v1",
+    "device": "cpu",
+    "batch_size": 8,
+    "query_prefix": "",
+    "document_prefix": ""
+  },
+  "rrf": {
+    "k": 60
+  },
+  "metrics": {
+    "gold_overlap_threshold": 0.5
+  }
+}

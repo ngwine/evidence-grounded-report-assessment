@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "experiment_id": "rq1-retrieval-pilot-v1",
+  "seed": 20260923,
+  "methods": [
+    "fixed_window_bm25",
+    "structure_bm25",
+    "structure_dense",
+    "structure_hybrid_rrf"
+  ],
+  "retrieval_depth": 100,
+  "metric_cutoffs": [1, 5, 10, 20],
+  "fixed_window": {
+    "size_tokens": 256,
+    "stride_tokens": 128
+  },
+  "bm25": {
+    "k1": 1.2,
+    "b": 0.75
+  },
+  "dense": {
+    "backend": "sentence_transformers",
+    "model": "intfloat/multilingual-e5-small",
+    "revision": "SET_EXACT_MODEL_REVISION_OR_LOCAL_CHECKSUM",
+    "device": "cpu",
+    "batch_size": 16,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
+  },
+  "rrf": {
+    "k": 60
+  },
+  "metrics": {
+    "gold_overlap_threshold": 0.5
+  }
+}

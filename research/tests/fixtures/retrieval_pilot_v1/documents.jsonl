@@ -1,0 +1,3 @@
+{"document_id":"doc-supervised","text":"Học máy có giám sát sử dụng dữ liệu đã gán nhãn. Mô hình học từ cặp đầu vào và nhãn để dự đoán.","version":"1"}
+{"document_id":"doc-unsupervised","text":"Học không giám sát tìm cấu trúc trong dữ liệu chưa gán nhãn. Phân cụm là một bài toán phổ biến.","version":"1"}
+{"document_id":"doc-tree","text":"Cây quyết định chia dữ liệu theo các thuộc tính và có thể dùng cho phân loại.","version":"1"}

@@ -1,0 +1,3 @@
+{"document_id":"doc-supervised","qrel_id":"q-supervised-g1","query_id":"q-supervised","raw_end":48,"raw_start":0,"relevance":1}
+{"document_id":"doc-unsupervised","qrel_id":"q-unsupervised-g1","query_id":"q-unsupervised","raw_end":95,"raw_start":61,"relevance":1}
+{"document_id":"doc-tree","qrel_id":"q-tree-g1","query_id":"q-tree","raw_end":77,"raw_start":0,"relevance":1}

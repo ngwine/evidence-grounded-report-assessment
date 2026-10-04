@@ -1,0 +1,5 @@
+{"chunk_id":"doc-supervised-c1","document_id":"doc-supervised","source_spans":[{"document_id":"doc-supervised","raw_end":48,"raw_start":0}],"text":"Học máy có giám sát sử dụng dữ liệu đã gán nhãn."}
+{"chunk_id":"doc-supervised-c2","document_id":"doc-supervised","source_spans":[{"document_id":"doc-supervised","raw_end":95,"raw_start":49}],"text":"Mô hình học từ cặp đầu vào và nhãn để dự đoán."}
+{"chunk_id":"doc-unsupervised-c1","document_id":"doc-unsupervised","source_spans":[{"document_id":"doc-unsupervised","raw_end":60,"raw_start":0}],"text":"Học không giám sát tìm cấu trúc trong dữ liệu chưa gán nhãn."}
+{"chunk_id":"doc-unsupervised-c2","document_id":"doc-unsupervised","source_spans":[{"document_id":"doc-unsupervised","raw_end":95,"raw_start":61}],"text":"Phân cụm là một bài toán phổ biến."}
+{"chunk_id":"doc-tree-c1","document_id":"doc-tree","source_spans":[{"document_id":"doc-tree","raw_end":77,"raw_start":0}],"text":"Cây quyết định chia dữ liệu theo các thuộc tính và có thể dùng cho phân loại."}
