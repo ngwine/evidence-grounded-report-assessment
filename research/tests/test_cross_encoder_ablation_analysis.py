@@ -51,6 +51,20 @@ def test_group_summary_keeps_parent_count_and_median_rank() -> None:
         "A4": 3,
         "A5": 1,
     }
+    assert result["retrieved_in_output"] == {
+        "A1": 2,
+        "A2": 3,
+        "A3": 3,
+        "A4": 3,
+        "A5": 2,
+    }
+    assert result["missing_from_output"] == {
+        "A1": 1,
+        "A2": 0,
+        "A3": 0,
+        "A4": 0,
+        "A5": 1,
+    }
     assert result["median_rank"]["A2"] == 3
     assert result["median_rank"]["A3"] == 25
 

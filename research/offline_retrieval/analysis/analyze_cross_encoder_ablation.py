@@ -201,6 +201,17 @@ def group_summary(
             )
             for method in rank_fields
         },
+        "retrieved_in_output": {
+            method: sum(row[method] is not None for row in selected)
+            for method in rank_fields
+        },
+        "missing_from_output": {
+            method: sum(row[method] is None for row in selected)
+            for method in rank_fields
+        },
+        # This median is intentionally labelled "observed": missing candidates
+        # are right-censored by the output depth and must not be silently
+        # treated as if they had a known rank.
         "median_rank": {
             method: median_or_none(
                 [int(row[method]) for row in selected if row[method] is not None]
@@ -273,7 +284,7 @@ def analyse(
                 row[reranked] is not None and row[reranked] <= cutoff
                 for row in eligible
             ),
-            "pushed_below_top_10": sum(
+            "not_in_top_10_after": sum(
                 row[reranked] is None or row[reranked] > cutoff for row in eligible
             ),
             "median_rank_before": median_or_none(
@@ -314,6 +325,22 @@ def analyse(
                 raw_start=raw_start,
                 raw_end=raw_end,
             )
+            support_truncation = [
+                support.get("cross_encoder_input", {}).get("truncated")
+                for support in support_rows
+                if isinstance(support, dict)
+                and isinstance(support.get("cross_encoder_input"), dict)
+            ]
+            available_truncation = [
+                value for value in support_truncation if isinstance(value, bool)
+            ]
+            any_support_truncated = any(available_truncation)
+            all_supports_truncated = bool(available_truncation) and all(
+                available_truncation
+            )
+            winner_truncated = candidate.get("cross_encoder_input", {}).get(
+                "truncated"
+            )
             top_k_hit = int(candidate["rank"]) <= cutoff
             counts["relevant_documents_reranked"] += 1
             counts["any_support_overlaps_gold"] += int(any_overlap)
@@ -323,6 +350,16 @@ def analyse(
             counts["top_k_miss_with_any_overlap"] += int(not top_k_hit and any_overlap)
             counts["top_k_hit_without_overlap"] += int(top_k_hit and not any_overlap)
             counts["top_k_miss_without_overlap"] += int(not top_k_hit and not any_overlap)
+            counts["truncation_available"] += int(bool(available_truncation))
+            counts["any_support_truncated"] += int(any_support_truncated)
+            counts["all_supports_truncated"] += int(all_supports_truncated)
+            counts["winning_support_truncated"] += int(winner_truncated is True)
+            counts["top_k_hit_with_truncated_winner"] += int(
+                top_k_hit and winner_truncated is True
+            )
+            counts["top_k_miss_with_truncated_winner"] += int(
+                not top_k_hit and winner_truncated is True
+            )
         evidence_support_diagnostics[label] = dict(sorted(counts.items()))
 
     metrics = read_json(metrics_path)
@@ -362,6 +399,11 @@ def analyse(
             "metrics": sha256_file(metrics_path),
         },
         "run_commit": manifest.get("git", {}).get("commit"),
+        "cross_encoder_tokenization": manifest.get("cross_encoder", {}).get(
+            "tokenization"
+        ),
+        "timing_seconds": manifest.get("timing_seconds"),
+        "timing_context": manifest.get("timing_context"),
         "methods": METHODS,
         "metrics": metric_summary,
         "top_k_transitions": {

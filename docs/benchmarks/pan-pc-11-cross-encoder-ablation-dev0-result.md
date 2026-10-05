@@ -1,8 +1,8 @@
 # PAN-PC-11 DEV0 — A1–A5 retrieval and Cross-Encoder ablation
 
-**Run date:** 2026-09-30
+**Run date:** 2026-10-01
 
-**Analysis date:** 2026-10-01
+**Analysis date:** 2026-10-04
 
 **Result class:** component diagnostic on frozen `DEV0`; not a final model-selection result
 
@@ -62,10 +62,14 @@ Locked models:
   `1427fd652930e4ba29e8149678df786c240d8825`.
 - Cross-Encoder maximum input length: 512 tokens; CPU batch size: 8.
 
-The run used Python 3.12.14 on Apple Silicon with 16 GB RAM. Total wall time
-was 3,300.65 seconds. Stage timings are diagnostic only: A5 reused exact pair
-scores cached during A4, so A4 and A5 latency must not be compared as two
-independent cold runs.
+The run used Python 3.12.14 on Apple Silicon with 16 GB RAM. Non-overlapping
+recorded stages total 3,233.77 seconds: fixed-window construction and BM25,
+Dense retrieval, RRF, the shared Cross-Encoder run, and evaluation. The
+manifest wall interval is 48,726.52 seconds, which is inconsistent with the
+recorded stages and indicates a long host-suspension or uninstrumented gap. It
+is therefore not used as compute latency. A5 also reused 12,431 exact pair
+scores cached during A4; A4 and A5 timing must not be compared as independent
+cold runs.
 
 ## 3. Main result
 
@@ -100,11 +104,11 @@ own candidate baseline:
   are reranked and the candidate tail is preserved. The failure is therefore
   in early reranking, not candidate availability at depth 100.
 
-BM25 has the strongest parent-balanced result, while Dense has the strongest
-query-window Recall@10. The disagreement is expected because several long
-parent annotations produce many correlated query windows. Both reporting
-units are retained; the 320 windows are not treated as 320 independent
-plagiarism cases.
+BM25 has the strongest parent-balanced Recall@1/5/10, MRR@10 and nDCG@10,
+while Dense has the strongest query-window Recall@10. The disagreement is
+expected because several long parent annotations produce many correlated
+query windows. Both reporting units are retained; the 320 windows are not
+treated as 320 independent plagiarism cases.
 
 ## 4. What happened to the two previously identified groups?
 
@@ -112,7 +116,7 @@ plagiarism cases.
 
 | Method | Top-10 hits within the 36 windows | Median relevant-source rank |
 | --- | ---: | ---: |
-| A1 BM25 | 0/36 | 53 |
+| A1 BM25 | 0/36 | >100 for the group median; only 9/36 appear in the Top-100 output |
 | A2 Dense | 36/36 | 1.0 |
 | A3 RRF | 0/36 | 57.5 |
 | A4 Dense + CE | 31/36 | 1.5 |
@@ -122,8 +126,8 @@ A4 retains most of the semantic-only successes. A5 cannot repair this group:
 RRF places the relevant source at a median rank of 57.5, while the
 Cross-Encoder is allowed to inspect only the first 50 sources. This exposes a
 structural problem in using the RRF order as a hard gate for reranking. A
-source strongly supported by Dense can be removed before the stronger
-pairwise model sees it.
+source strongly supported by Dense can be removed before the pairwise model
+sees it.
 
 ### 4.2 The 22 windows rescued by multi-view RRF
 
@@ -142,7 +146,9 @@ Across all 320 windows, A2→A4 produces 22 new Top-10 hits but loses 93 existin
 hits, for a net change of −71. A3→A5 produces 13 new hits and loses 81, for a
 net change of −68.
 
-## 5. Evidence-passage diagnosis
+## 5. Evidence and model-input diagnosis
+
+### 5.1 Evidence-passage selection
 
 The reranker scores passages, but evaluation is performed at source-document
 level. Finding the correct document does not guarantee that the selected
@@ -156,24 +162,46 @@ support passage overlaps the annotated plagiarised span.
 | Winning support overlaps the gold source span | 199 (66.3%) | 217 (81.6%) |
 | Top-10 misses despite an overlapping support | 44 | 77 |
 
-This separates two failure modes:
+This reveals the first failure mode:
 
-1. **Support-selection failure.** In A4, one third of the relevant source
-   documents are represented by a passage that does not overlap the gold
-   evidence. The Cross-Encoder is being asked to score the wrong part of the
-   correct source document.
-2. **Reranker/model-input failure.** Even when an overlapping support exists,
-   the reranker still pushes 44 A4 and 77 A5 cases outside Top-10. The current
-   run uses long 256-word query windows and passages under a 512-subword-token
-   model limit, so truncation is a plausible factor. Exact truncation metadata
-   must be recorded before attributing all of this loss to the model itself.
+**Support-selection failure.** In A4, one third of the relevant source
+documents are represented by a passage that does not overlap the gold
+evidence. The Cross-Encoder is being asked to score the wrong part of the
+correct source document.
+
+### 5.2 Token truncation
+
+The rerun records tokenizer lengths for every unique query–passage pair before
+inference. Scores are raw logits produced with an explicit identity activation.
+
+| Tokenization diagnostic | Result |
+| --- | ---: |
+| Unique pairs scored | 35,569 |
+| Pairs truncated at 512 tokens | 34,669 (97.5%) |
+| Largest pair before truncation | 1,445 tokens |
+| A4 relevant-source winners truncated | 289/300 (96.3%) |
+| A5 relevant-source winners truncated | 259/266 (97.4%) |
+| A5 relevant sources with every scored support truncated | 254/266 (95.5%) |
+
+This is a direct input-construction problem, not merely a suspected model
+weakness. Query windows contain up to 256 whitespace tokens and are paired
+with long passages; almost every pair exceeds the model budget after subword
+tokenization. The runner conservatively stores
+`model_visible_source_spans=null` whenever truncation occurs, because the full
+passage provenance span cannot be claimed as fully visible to the model.
+
+Truncation is strongly confounded with the observed loss, but this run alone
+does not prove it caused the ranking drop. A controlled experiment with locked
+shorter/evidence-centred inputs on a new development split is required.
 
 ## 6. Decision from DEV0
 
-The current off-the-shelf Cross-Encoder configuration is rejected as the
-default reranker. The negative result is retained because it rules out the
-unsupported assumption that adding a generic multilingual reranker after RRF
-automatically improves the pipeline.
+The current combination of RRF gating, support selection, long inputs and the
+off-the-shelf Cross-Encoder is rejected as the default reranking
+configuration. This does not reject the entire Cross-Encoder model family.
+The negative result is retained because it rules out the unsupported
+assumption that adding a generic multilingual reranker after RRF automatically
+improves the pipeline.
 
 The next experiment must be specified on a new development split rather than
 tuned against these 30 parents. It should isolate three changes:
@@ -182,8 +210,8 @@ tuned against these 30 parents. It should isolate three changes:
    strong candidate from one view cannot be removed solely by RRF ordering;
 2. retain multiple evidence passages per source document and measure passage
    overlap before document-level reranking;
-3. record tokenizer lengths and truncation, then compare shorter evidence
-   queries or evidence-centred sub-passages under a locked protocol.
+3. compare shorter evidence queries or evidence-centred sub-passages while
+   continuing to record tokenizer lengths and truncation.
 
 Only after that protocol is frozen should the chosen variant be evaluated on
 an untouched parent/document-disjoint holdout. `DEV0` remains a diagnostic
@@ -205,7 +233,7 @@ HF_HOME=var/models/hf-home HF_HUB_OFFLINE=1 \
   --config \
     research/configs/retrieval/pan-pc-11-cross-encoder-dev0-v1.json \
   --output-dir \
-    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-0b8e326
+    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-27f11cf
 ```
 
 Reproducible result audit:
@@ -214,17 +242,17 @@ Reproducible result audit:
 python3 \
   research/offline_retrieval/analysis/analyze_cross_encoder_ablation.py \
   --predictions \
-    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-0b8e326/predictions.jsonl \
+    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-27f11cf/predictions.jsonl \
   --metrics \
-    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-0b8e326/metrics.json \
+    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-27f11cf/metrics.json \
   --run-manifest \
-    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-0b8e326/run_manifest.json \
+    research/results/rq1-pan-pc-11/cross-encoder-dev0-v1-27f11cf/run_manifest.json \
   --dataset-dir var/datasets/derived/similarity/pan-pc-11-pilot-v1 \
   --cutoff 10 --pretty
 ```
 
 The run manifest binds the result to commit
-`0b8e32608226283b8cc1b4964da336fbf323c2a5`, with no tracked working-tree
+`27f11cf5480f027282cbbcf8456e2dabeb9b0332`, with no tracked working-tree
 changes. The working tree was marked dirty only because unrelated untracked
 local report files existed.
 
@@ -233,7 +261,9 @@ Artifact SHA-256 values:
 - `metrics.json`:
   `a7a3bbcce697cfb28ebd3d5c3f920f4135461b60a4b3e200babfec9fdb4b3b5b`
 - `predictions.jsonl`:
-  `8f757fc21a42b2a77cb74f29a16b1dcc09584953801c00361d6d64bbb63d466a`
+  `69be09286710c1c37520e9ecf7b16775108d62f7fd86fbdb88d32ff2af0d9361`
+- `run_manifest.json`:
+  `875a82c3aa0081e5c81e1077c8b0fa6eb880d2956c87e409b063a9ce60cb51c7`
 
 Raw predictions remain local because research outputs are intentionally
 ignored by Git. The tracked config, audit script, report, immutable model
