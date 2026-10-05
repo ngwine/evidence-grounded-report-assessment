@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import hashlib
+import heapq
 import math
 from pathlib import Path
-import hashlib
 import re
 from typing import Any, Iterable, Protocol, Sequence
+
+from .aggregation import render_ranked_candidates
+
+try:  # NumPy is present in research runs but optional for core-only installs.
+    import numpy as _np
+except ImportError:  # pragma: no cover - exercised by the dependency-light environment.
+    _np = None
+
+
+_QUERY_SCORE_BATCH_SIZE = 32
 
 
 class Encoder(Protocol):
@@ -106,11 +117,11 @@ class SentenceTransformerEncoder:
             normalize_embeddings=True,
             convert_to_numpy=True,
             show_progress_bar=False,
-        ).tolist()
+        )
 
 
 def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
-    if len(left) != len(right) or not left:
+    if len(left) != len(right) or len(left) == 0:
         raise ValueError("Dense vectors must be non-empty and have the same dimension")
     dot = sum(a * b for a, b in zip(left, right))
     left_norm = math.sqrt(sum(value * value for value in left))
@@ -120,12 +131,207 @@ def _cosine(left: Sequence[float], right: Sequence[float]) -> float:
     return dot / (left_norm * right_norm)
 
 
+def _rank_dense_python(
+    items: Sequence[dict[str, Any]],
+    query_items: Sequence[dict[str, Any]],
+    corpus_vectors: Sequence[Sequence[float]],
+    query_vectors: Sequence[Sequence[float]],
+    *,
+    top_k: int,
+    group_by_document: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    """Reference implementation and safe fallback when NumPy is unavailable."""
+
+    results: dict[str, list[dict[str, Any]]] = {}
+    for query, query_vector in zip(query_items, query_vectors):
+        query_id = str(query["query_id"])
+        scored = [
+            (_cosine(query_vector, vector), str(item["chunk_id"]), item)
+            for item, vector in zip(items, corpus_vectors)
+        ]
+        results[query_id] = render_ranked_candidates(
+            scored,
+            top_k=top_k,
+            group_by_document=group_by_document,
+        )
+    return results
+
+
+def _validate_vector_dimensions(
+    corpus_vectors: Sequence[Sequence[float]],
+    query_vectors: Sequence[Sequence[float]],
+) -> None:
+    """Validate the rectangular matrices before handing them to NumPy."""
+
+    dimension = len(corpus_vectors[0])
+    if not dimension:
+        raise ValueError("Dense vectors must be non-empty and have the same dimension")
+    if any(len(vector) != dimension for vector in corpus_vectors) or any(
+        len(vector) != dimension for vector in query_vectors
+    ):
+        raise ValueError("Dense vectors must be non-empty and have the same dimension")
+
+
+def _select_top_chunk_indices(
+    scores: Any,
+    chunk_ids: Sequence[str],
+    *,
+    top_k: int,
+) -> list[int]:
+    """Select top chunks without sorting the full corpus in the common case.
+
+    NumPy's partition chooses an arbitrary member when several rows tie at the
+    cutoff. We explicitly collect the complete cutoff tie and choose the
+    lexicographically smallest chunk IDs, matching ``render_ranked_candidates``.
+    """
+
+    count = len(chunk_ids)
+    limit = min(top_k, count)
+    if limit == count:
+        selected = list(range(count))
+    else:
+        threshold = float(_np.partition(scores, count - limit)[count - limit])
+        selected = _np.flatnonzero(scores > threshold).tolist()
+        remaining = limit - len(selected)
+        tied = _np.flatnonzero(scores == threshold).tolist()
+        if remaining < len(tied):
+            tied = heapq.nsmallest(
+                remaining,
+                tied,
+                key=lambda index: chunk_ids[index],
+            )
+        selected.extend(tied)
+    selected.sort(key=lambda index: (-float(scores[index]), chunk_ids[index]))
+    return selected[:limit]
+
+
+def _document_groups(
+    items: Sequence[dict[str, Any]],
+    chunk_ids: Sequence[str],
+) -> list[tuple[str, Any]]:
+    """Precompute chunk indices per document in chunk-ID tie-break order."""
+
+    indices_by_document: dict[str, list[int]] = {}
+    for index, item in enumerate(items):
+        document_id = item.get("document_id")
+        if not isinstance(document_id, str) or not document_id:
+            raise ValueError("Every retrieval candidate requires document_id")
+        indices_by_document.setdefault(document_id, []).append(index)
+
+    return [
+        (
+            document_id,
+            _np.asarray(
+                sorted(indices, key=lambda index: chunk_ids[index]),
+                dtype=_np.intp,
+            ),
+        )
+        for document_id, indices in indices_by_document.items()
+    ]
+
+
+def _select_top_document_indices(
+    scores: Any,
+    groups: Sequence[tuple[str, Any]],
+    chunk_ids: Sequence[str],
+    *,
+    top_k: int,
+) -> list[int]:
+    """Select the best chunk per document before applying top-k."""
+
+    best: list[tuple[int, str]] = []
+    for document_id, indices in groups:
+        # The group is ordered by chunk ID. np.argmax keeps its first maximum,
+        # so exact score ties select the same chunk as the Python renderer.
+        best_index = int(indices[int(_np.argmax(scores[indices]))])
+        best.append((best_index, document_id))
+    best.sort(
+        key=lambda value: (
+            -float(scores[value[0]]),
+            value[1],
+            chunk_ids[value[0]],
+        )
+    )
+    return [index for index, _document_id in best[:top_k]]
+
+
+def _rank_dense_numpy(
+    items: Sequence[dict[str, Any]],
+    query_items: Sequence[dict[str, Any]],
+    corpus_vectors: Sequence[Sequence[float]],
+    query_vectors: Sequence[Sequence[float]],
+    *,
+    top_k: int,
+    group_by_document: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    """Vectorized cosine scoring with bounded query-score memory."""
+
+    _validate_vector_dimensions(corpus_vectors, query_vectors)
+    corpus_matrix = _np.asarray(corpus_vectors, dtype=_np.float64)
+    query_matrix = _np.asarray(query_vectors, dtype=_np.float64)
+    if corpus_matrix.ndim != 2 or query_matrix.ndim != 2:
+        raise ValueError("Dense vectors must be non-empty and have the same dimension")
+
+    # Preserve the reference implementation's behavior for unusual non-finite
+    # inputs rather than relying on platform-specific BLAS/partition handling.
+    if not _np.isfinite(corpus_matrix).all() or not _np.isfinite(query_matrix).all():
+        return _rank_dense_python(
+            items,
+            query_items,
+            corpus_vectors,
+            query_vectors,
+            top_k=top_k,
+            group_by_document=group_by_document,
+        )
+
+    corpus_norms = _np.linalg.norm(corpus_matrix, axis=1)
+    query_norms = _np.linalg.norm(query_matrix, axis=1)
+    chunk_ids = [str(item["chunk_id"]) for item in items]
+    groups = _document_groups(items, chunk_ids) if group_by_document else []
+    results: dict[str, list[dict[str, Any]]] = {}
+
+    for start in range(0, len(query_items), _QUERY_SCORE_BATCH_SIZE):
+        stop = min(start + _QUERY_SCORE_BATCH_SIZE, len(query_items))
+        dots = query_matrix[start:stop] @ corpus_matrix.T
+        denominators = query_norms[start:stop, None] * corpus_norms[None, :]
+        score_batch = _np.zeros_like(dots)
+        _np.divide(dots, denominators, out=score_batch, where=denominators != 0)
+
+        for offset, scores in enumerate(score_batch):
+            query = query_items[start + offset]
+            query_id = str(query["query_id"])
+            if group_by_document:
+                selected = _select_top_document_indices(
+                    scores,
+                    groups,
+                    chunk_ids,
+                    top_k=top_k,
+                )
+            else:
+                selected = _select_top_chunk_indices(
+                    scores,
+                    chunk_ids,
+                    top_k=top_k,
+                )
+            scored = [
+                (float(scores[index]), chunk_ids[index], items[index])
+                for index in selected
+            ]
+            results[query_id] = render_ranked_candidates(
+                scored,
+                top_k=top_k,
+                group_by_document=group_by_document,
+            )
+    return results
+
+
 def rank_dense(
     corpus: Iterable[dict[str, Any]],
     queries: Iterable[dict[str, Any]],
     *,
     encoder: Encoder,
     top_k: int,
+    group_by_document: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -141,23 +347,24 @@ def rank_dense(
     query_vectors = list(encoder.encode([str(query["text"]) for query in query_items]))
     if len(query_vectors) != len(query_items):
         raise ValueError("Dense encoder returned the wrong number of query vectors")
-
-    results: dict[str, list[dict[str, Any]]] = {}
-    for query, query_vector in zip(query_items, query_vectors):
-        query_id = str(query["query_id"])
-        scored = [
-            (_cosine(query_vector, vector), str(item["chunk_id"]), item)
-            for item, vector in zip(items, corpus_vectors)
-        ]
-        scored.sort(key=lambda row: (-row[0], row[1]))
-        results[query_id] = [
-            {
-                "chunk_id": chunk_id,
-                "document_id": item["document_id"],
-                "score": score,
-                "rank": rank,
-                "source_spans": item.get("source_spans", []),
-            }
-            for rank, (score, chunk_id, item) in enumerate(scored[:top_k], 1)
-        ]
-    return results
+    if not query_items:
+        return {}
+    if not items:
+        return {str(query["query_id"]): [] for query in query_items}
+    if _np is None:
+        return _rank_dense_python(
+            items,
+            query_items,
+            corpus_vectors,
+            query_vectors,
+            top_k=top_k,
+            group_by_document=group_by_document,
+        )
+    return _rank_dense_numpy(
+        items,
+        query_items,
+        corpus_vectors,
+        query_vectors,
+        top_k=top_k,
+        group_by_document=group_by_document,
+    )

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "dataset_id": "pan-pc-11-source-retrieval-pilot",
+  "dataset_version": "zenodo-3250095-v1+converter-v1+pilot-v1",
+  "description": "Annotated suspicious-span to source-document retrieval diagnostic.",
+  "result_classification": "COMPONENT_DIAGNOSTIC",
+  "sampling": {
+    "strategy": "SEE_GENERATED_MANIFEST",
+    "seed": 20260923,
+    "max_annotations": 30,
+    "max_candidate_documents": 200,
+    "full_corpus_result": false
+  },
+  "source": {
+    "provider": "Webis/PAN",
+    "landing_page": "https://webis.de/data/pan-pc-11.html",
+    "doi": "10.5281/zenodo.3250095",
+    "license": null,
+    "terms": "Free of charge for research purposes",
+    "archives": [
+      {
+        "name": "pan-plagiarism-corpus-2011.part1.rar",
+        "size_bytes": 1024000000,
+        "provider_md5": "b2930f859497dd48ba5bb606d3f4a4f3",
+        "local_sha256": null,
+        "provider_checksum_verified": null
+      },
+      {
+        "name": "pan-plagiarism-corpus-2011.part2.rar",
+        "size_bytes": 703852907,
+        "provider_md5": "b23d86c17a47d2bfbdc4c314ea5810df",
+        "local_sha256": null,
+        "provider_checksum_verified": null
+      }
+    ]
+  },
+  "transformation": {
+    "converter": "research.pan_pilot",
+    "converter_version": "2.0.0",
+    "query_unit": "annotated_suspicious_span_window",
+    "target_scope": "document",
+    "chunker": "paragraph-aware-v1",
+    "offset_convention": "zero-based-half-open-unicode-code-point"
+  },
+  "governance": {
+    "status": "PENDING",
+    "rights_basis": "RESEARCH_USE_STATEMENT: Zenodo record 3250095 states that the corpus may be used free of charge for research purposes; redistribution is not approved",
+    "allowed_purposes": ["RETRIEVAL_EXPERIMENT"],
+    "classification": "RESEARCH_DATA",
+    "contains_pii": "UNKNOWN",
+    "retention": null,
+    "approver": null,
+    "approved_at": null
+  },
+  "split": {
+    "name": "derived-pilot",
+    "unit": "source_document",
+    "document_ids": [],
+    "query_ids": [],
+    "seed": 20260923
+  },
+  "files": {
+    "documents": {"path": "documents.jsonl", "sha256": null},
+    "chunks": {"path": "chunks.jsonl", "sha256": null},
+    "queries": {"path": "queries.jsonl", "sha256": null},
+    "qrels": {"path": "qrels.jsonl", "sha256": null}
+  }
+}

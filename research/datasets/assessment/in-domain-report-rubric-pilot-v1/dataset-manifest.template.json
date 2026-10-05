@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "dataset_id": "in-domain-report-rubric-pilot",
+  "dataset_version": "SET_AFTER_APPROVAL_AND_FREEZE",
+  "description": "Anonymized report-rubric-checklist-evidence pilot for end-to-end assessment.",
+  "result_classification": "IN_DOMAIN_PILOT",
+  "governance": {
+    "status": "PENDING",
+    "rights_basis": null,
+    "allowed_purposes": ["ASSESSMENT_EXPERIMENT"],
+    "classification": "RESTRICTED_EDUCATION_DATA",
+    "contains_pii": "UNKNOWN_UNTIL_REVIEW",
+    "anonymization": null,
+    "retention": null,
+    "approver": null,
+    "approved_at": null
+  },
+  "annotation": {
+    "label_set": ["MET", "UNMET", "CANNOT_ASSESS"],
+    "evidence_relations": ["SUPPORTED", "CONTRADICTED", "INSUFFICIENT"],
+    "routing": ["LOCAL", "GRAPH"],
+    "guideline_version": null,
+    "annotators": [],
+    "adjudicator": null
+  },
+  "split": {
+    "name": "grouped-by-report-and-source",
+    "unit": "report_source_group",
+    "seed": 20260923,
+    "train_ids": [],
+    "validation_ids": [],
+    "test_ids": []
+  },
+  "files": {
+    "reports": {"path": "reports.jsonl", "sha256": null},
+    "rubrics": {"path": "rubrics.jsonl", "sha256": null},
+    "checklists": {"path": "checklists.jsonl", "sha256": null},
+    "annotations": {"path": "annotations.jsonl", "sha256": null}
+  }
+}

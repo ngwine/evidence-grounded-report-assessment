@@ -32,7 +32,15 @@ vựng và tương đồng ngữ nghĩa.
 
 ## Dataset
 
-Dataset trong miền gồm các cặp đoạn văn được gán nhãn:
-`verbatim`, `paraphrase`, `summary`, `none`.
+Pilot công khai tách đúng nhiệm vụ:
+
+- PAN-PC-11: core source-retrieval diagnostic, query là suspicious span đã gán
+  nhãn và kết quả được gom theo source document;
+- PAN13 Text Alignment: span-retrieval component diagnostic; không dùng số liệu
+  Recall/MRR/nDCG này thay cho official Precision/Recall/Granularity/PlagDet.
+
+Dataset trong miền vẫn bắt buộc cho đánh giá end-to-end, gồm các cặp đoạn được
+gán `verbatim`, `paraphrase`, `summary`, `none` và hard negatives. Public PAN
+corpora không thay thế ground truth báo cáo sinh viên trong miền.
 
 Xem `research/datasets/similarity/`.

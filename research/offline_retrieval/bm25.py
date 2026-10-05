@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 import math
 from typing import Any, Iterable
 
+from .aggregation import render_ranked_candidates
 from .common import tokenize
 
 
@@ -16,6 +17,7 @@ def rank_bm25(
     top_k: int,
     k1: float = 1.2,
     b: float = 0.75,
+    group_by_document: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     if top_k <= 0:
         raise ValueError("top_k must be positive")
@@ -26,9 +28,8 @@ def rank_bm25(
     if not items:
         return {str(query["query_id"]): [] for query in queries}
 
-    tokenized: list[list[str]] = []
-    term_frequencies: list[Counter[str]] = []
-    document_frequency: dict[str, int] = defaultdict(int)
+    document_lengths: list[int] = []
+    postings: dict[str, list[tuple[int, int]]] = defaultdict(list)
     seen_ids: set[str] = set()
     for item in items:
         chunk_id = item.get("chunk_id")
@@ -42,18 +43,13 @@ def rank_bm25(
             raise ValueError(f"Corpus item {chunk_id} requires string text")
         tokens = tokenize(text)
         counts = Counter(tokens)
-        tokenized.append(tokens)
-        term_frequencies.append(counts)
-        for term in counts:
-            document_frequency[term] += 1
+        document_lengths.append(len(tokens))
+        for term, frequency in counts.items():
+            postings[term].append((len(document_lengths) - 1, frequency))
 
-    average_length = sum(len(tokens) for tokens in tokenized) / len(items)
+    average_length = sum(document_lengths) / len(items)
     average_length = average_length or 1.0
     corpus_size = len(items)
-    idf = {
-        term: math.log(1 + (corpus_size - frequency + 0.5) / (frequency + 0.5))
-        for term, frequency in document_frequency.items()
-    }
 
     results: dict[str, list[dict[str, Any]]] = {}
     seen_query_ids: set[str] = set()
@@ -69,31 +65,37 @@ def rank_bm25(
             raise ValueError(f"Query {query_id} requires string text")
 
         query_terms = Counter(tokenize(query_text))
-        scored: list[tuple[float, str, dict[str, Any]]] = []
-        for item, tokens, frequencies in zip(items, tokenized, term_frequencies):
-            document_length = len(tokens)
-            score = 0.0
-            for term, query_frequency in query_terms.items():
-                frequency = frequencies.get(term, 0)
-                if not frequency:
-                    continue
+        scores: dict[int, float] = defaultdict(float)
+        for term, query_frequency in query_terms.items():
+            term_postings = postings.get(term)
+            if not term_postings:
+                continue
+            document_frequency = len(term_postings)
+            inverse_document_frequency = math.log(
+                1
+                + (corpus_size - document_frequency + 0.5)
+                / (document_frequency + 0.5)
+            )
+            for item_index, frequency in term_postings:
+                document_length = document_lengths[item_index]
                 denominator = frequency + k1 * (
                     1 - b + b * document_length / average_length
                 )
-                score += query_frequency * idf.get(term, 0.0) * (
+                scores[item_index] += query_frequency * inverse_document_frequency * (
                     frequency * (k1 + 1) / denominator
                 )
-            scored.append((score, item["chunk_id"], item))
 
-        scored.sort(key=lambda row: (-row[0], row[1]))
-        results[query_id] = [
-            {
-                "chunk_id": chunk_id,
-                "document_id": item["document_id"],
-                "score": score,
-                "rank": rank,
-                "source_spans": item.get("source_spans", []),
-            }
-            for rank, (score, chunk_id, item) in enumerate(scored[:top_k], 1)
+        # A non-match has no retrieval evidence. Omitting zero-score chunks also
+        # avoids arbitrary chunk-id tie breaks filling a requested top-k.
+        scored = [
+            (score, items[item_index]["chunk_id"], items[item_index])
+            for item_index, score in scores.items()
+            if score > 0.0
         ]
+
+        results[query_id] = render_ranked_candidates(
+            scored,
+            top_k=top_k,
+            group_by_document=group_by_document,
+        )
     return results
