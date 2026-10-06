@@ -1,6 +1,7 @@
 # PAN-PC-11 multi-view Top-10 transition analysis
 
-Date: 2026-09-30  
+Date: 2026-09-30
+
 Status: DEV0 diagnostic; no parameter selection or final method claim
 
 ## Question and evidence
