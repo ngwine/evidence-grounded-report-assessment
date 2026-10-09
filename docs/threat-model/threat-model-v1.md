@@ -117,6 +117,7 @@ Nguồn định nghĩa đầy đủ là
 | `C-W21-11` | Tombstone/delete cascade, retrieval deny, cleanup verification và backup policy | API + worker + stores | `PLANNED` |
 | `C-W21-12` | Network/secret/dependency/resource hardening: loopback/default-deny egress, secret management, lock/scan/SBOM, quota/monitoring | Deployment + CI + runtime | `PLANNED` |
 | `C-W21-13` | Persistent-store hardening: private endpoint, per-service identity/least privilege, schema/operator allowlist, typed repository, checksum/CAS/atomic write và backup protection | API/worker + Mongo/storage/index | `PLANNED` |
+| `C-W21-14` | Pagination integrity: random server-side handle hoặc AEAD cursor bind/hash endpoint, actor, workspace, scope, filter, immutable sort tuple, high-watermark/as-of boundary, expiry và schema version; re-authorize mỗi page; deterministic order có unique tie-break | API/query adapter | `PLANNED` |
 
 ## 7. Threat register và traceability
 
@@ -139,6 +140,7 @@ Nguồn định nghĩa đầy đủ là
 | `T-W21-15` Vulnerable/tampered dependency or model | `A-02`, `A-05`, `A-08`, `A-10` | Package/parser/model artifact độc hại hoặc version không khóa gây code execution/kết quả không tái lập | M / H → `HIGH` | `C-W21-05`, `C-W21-10`, `C-W21-12` | `AT-W21-16` | Q + Y / `OPEN-DESIGN` |
 | `T-W21-16` SSRF/Internet disclosure khi mở extension | `A-01–A-05`; `TB-04` | URL/provider feature được mở lại và bị dùng để dò mạng nội bộ hoặc gửi report/query ra ngoài | L / H → `MEDIUM` dormant; đánh giá lại trước khi mở | `C-W21-07`, `C-W21-12`; change request bắt buộc | `AT-W21-17` nếu feature được mở | Q / `DORMANT-DISABLED` |
 | `T-W21-17` Store tampering/NoSQL injection/over-privileged service | `A-02–A-09`; `TB-10` | Operator/query injection, credential dùng chung hoặc service quá quyền cho phép đọc/sửa/xóa chéo scope, tráo provenance/result hay phá index/backup | M / H → `HIGH` | `C-W21-01`, `C-W21-05`, `C-W21-06`, `C-W21-13` | `AT-W21-18` | Q / `OPEN-DESIGN` |
+| `T-W21-18` Cursor tampering/replay và scope confusion | `A-02`, `A-04`, `A-06`; `TB-01`, `TB-05` | Sửa hoặc replay cursor giữa actor/workspace/endpoint/filter để đọc dữ liệu ngoài scope; concurrent insert làm lặp/bỏ sót item và tạo kết quả không nhất quán | M / H → `HIGH` | `C-W21-01`, `C-W21-06`, `C-W21-14` | `AT-W21-19`, `AT-W23-12` | Q / `OPEN-DESIGN` |
 
 ## 8. Adversarial test plan
 
@@ -166,6 +168,7 @@ không commit báo cáo thật hay secret.
 | `AT-W21-16` | Dependency/model lock/checksum bị đổi; scan có High/Critical | Install/build fail hoặc gate chặn; provenance ghi version/hash; waiver có owner/expiry | CI/supply-chain, W03/W16/W21 | Q + Y | `PLANNED` |
 | `AT-W21-17` | URL loopback/private/link-local/redirect/DNS rebinding và payload có PII | Feature vẫn disabled; nếu được mở thì deny private network/redirect bypass và không gửi PII ngoài policy | Conditional provider test | Q | `NOT APPLICABLE WHILE DISABLED` |
 | `AT-W21-18` | NoSQL/operator injection; service API/worker dùng credential của nhau; direct DB/index access; concurrent stale write | Operator không được inject; endpoint private; credential sai quyền bị chặn; CAS/schema/checksum giữ toàn vẹn; audit không lộ content | Store authorization/integration, W02–W03/W16 | Q, Y review | `PLANNED` |
+| `AT-W21-19` | Sửa token/handle/expiry hoặc replay cursor sang actor, workspace, endpoint, filter hay sort khác; insert item giữa hai page | Cursor sai trả `400 INVALID_CURSOR` và không lộ data/query; cursor hợp lệ không lặp/bỏ sót item theo snapshot/order contract | API/query integration, W03/W16 | Q, Y review | `PLANNED` |
 
 ## 9. Residual risk và quyết định còn mở
 

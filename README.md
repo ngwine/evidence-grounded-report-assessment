@@ -30,7 +30,7 @@ Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
 | SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
-| Product Backlog/WBS                         | Baseline v1.2 cập nhật actual/evidence ngày 03/09/2026; chờ Q/Y review/ký                                      |
+| Product Backlog/WBS                         | Baseline v1.5 cập nhật actual/evidence đến 16/09/2026; chờ Q/Y review/ký                                      |
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |

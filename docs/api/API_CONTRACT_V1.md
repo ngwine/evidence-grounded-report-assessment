@@ -55,13 +55,21 @@ không tin `user_id`, `role`, `workspace_id` hoặc owner do body tự khai báo
 | Capability | Student | Lecturer | Admin |
 |---|---:|---:|---:|
 | Xem workspace được gán | Có | Có | Có |
-| Upload/xem report của mình | Có | Có trong scope | Có theo policy |
-| Upload/quản lý corpus source | Không | Có trong scope | Có theo policy |
-| Xem chunk/evidence report khác | Không | Có khi được gán | Chỉ khi policy cho phép |
-| Tạo/publish rubric | Không | Có | Không mặc định |
-| Chạy similarity/assessment | Không mặc định | Có | Không mặc định |
+| Upload/xem report của mình | Có | Có trong scope | Không |
+| Upload/quản lý corpus source | Không | Có trong scope | Không |
+| Xem chunk/evidence report khác | Không | Có khi được gán | Không |
+| Tạo/publish rubric | Không | Có | Không |
+| Chạy similarity/assessment | Không | Có | Không |
 | Review/publish proposal | Không | Có trong scope | Không |
-| Yêu cầu xóa | Resource của mình theo policy | Trong scope theo authority | Theo authority record |
+| Yêu cầu xóa | Có điều kiện (resource của mình) | Có điều kiện (scope/ủy quyền) | Có điều kiện (authority record) |
+
+Trong bảng trên, `Có` vẫn bị giới hạn bởi workspace/resource scope; `Không`
+nghĩa là role đó không có capability trong contract v1. `Có điều kiện` là
+**deny mặc định**: role đơn thuần không cấp capability; server chỉ cho phép
+theo policy/authority record có version, được lưu ở
+authoritative store và khớp actor, workspace, resource, purpose, thời hạn.
+Client không được tự khai policy. Một người có nhiều membership được xét từng
+membership; Admin không tự động kế thừa quyền học thuật của Lecturer.
 
 Quy tắc bắt buộc:
 
@@ -197,7 +205,10 @@ job mới bị deny ngay; cleanup file/chunk/index/evidence chạy bất đồng
 | Validation field sai | `422` | `VALIDATION_FAILED` + safe field issues |
 | Chưa đăng nhập | `401` | `AUTHENTICATION_REQUIRED` |
 | Có session nhưng thiếu capability | `403` | `FORBIDDEN` |
+| Cursor sai, hết hạn hoặc không khớp scope/filter/sort | `400` | `INVALID_CURSOR` |
 | Resource không tồn tại/ngoài scope | `404` | `RESOURCE_NOT_FOUND` |
+| Governance chưa được phê duyệt | `409` | `GOVERNANCE_NOT_APPROVED` |
+| Purpose yêu cầu không nằm trong governance record hiện hành | `409` | `PURPOSE_NOT_ALLOWED` |
 | Revision/idempotency/state conflict | `409` | Code cụ thể |
 | File/media type/size sai | `415`/`413` | `UNSUPPORTED_MEDIA_TYPE`/`PAYLOAD_TOO_LARGE` |
 | Rate/quota | `429` | `RATE_LIMITED`, có `Retry-After` |
@@ -229,7 +240,7 @@ Code v1 tối thiểu:
 `AUTHENTICATION_REQUIRED`, `INVALID_CREDENTIALS`, `CSRF_INVALID`, `FORBIDDEN`,
 `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `REVISION_CONFLICT`,
 `INVALID_STATE_TRANSITION`, `IDEMPOTENCY_KEY_REUSED`, `GOVERNANCE_NOT_APPROVED`,
-`PURPOSE_NOT_ALLOWED`, `RESOURCE_TOMBSTONED`, `REPORT_NOT_READY`,
+`PURPOSE_NOT_ALLOWED`, `INVALID_CURSOR`, `RESOURCE_TOMBSTONED`, `REPORT_NOT_READY`,
 `INDEX_GENERATION_STALE`, `EVIDENCE_INVALID`, `PAYLOAD_TOO_LARGE`,
 `UNSUPPORTED_MEDIA_TYPE`, `RATE_LIMITED`, `DEPENDENCY_UNAVAILABLE`,
 `INTERNAL_ERROR`.
@@ -237,6 +248,12 @@ Code v1 tối thiểu:
 Message không phải stable API contract; client branch theo `code`, không parse
 message. `details` chỉ chứa allowlisted field/reason, không chứa file text,
 evidence quote, DB query hoặc exception.
+
+`PURPOSE_NOT_ALLOWED` dùng khi governance record đang `APPROVED`, nhưng thao tác
+đang yêu cầu (ví dụ index cho chấm báo cáo hoặc chạy experiment) không có trong
+`allowed_purposes` của record hiện hành. Lỗi này được kiểm tra trước index,
+retrieval và enqueue run; nó khác `403 FORBIDDEN` (actor thiếu capability) và
+`409 GOVERNANCE_NOT_APPROVED` (record chưa ở trạng thái được duyệt).
 
 ## 8. Cursor pagination
 
@@ -259,9 +276,18 @@ Response:
 }
 ```
 
-Cursor được server ký/validate và bind với endpoint, actor scope, filter và sort.
-Cursor sai/hết hạn trả `400 INVALID_CURSOR`; không đưa raw Mongo query/ObjectId
-list vào cursor.
+Cursor là random server-side handle hoặc token được authenticated-encrypt
+(AEAD), không chỉ ký payload đọc được. Server bind/hash endpoint, actor,
+workspace, scope, filter và sort; đồng thời authorize lại membership/policy ở
+mỗi page vì cursor không thay thế authorization. Cursor sai/hết hạn trả
+`400 INVALID_CURSOR`; không đưa raw query, content hay danh sách Mongo ObjectId
+vào cursor.
+
+V1 dùng keyset pagination theo sort tuple bất biến do server định nghĩa và một
+unique tie-break. Page đầu khóa high-watermark/as-of boundary vào cursor đã ký;
+các page sau giữ cùng boundary, nên item được insert sau page đầu chỉ xuất hiện
+trong pagination session mới. Nếu schema/sort/scope thay đổi, cursor cũ bị từ
+chối thay vì âm thầm trả một lát cắt khác.
 
 ## 9. Evidence và contradiction contract
 
@@ -280,20 +306,26 @@ không tự suy luận lại từ quote text.
 
 ## 10. Contract tests bắt buộc khi implementation
 
-| ID | Test |
-|---|---|
-| `AT-W23-01` | Unauthenticated và CSRF-invalid unsafe request bị chặn |
-| `AT-W23-02` | Cross-workspace/report ID không làm lộ existence/content |
-| `AT-W23-03` | Cùng idempotency key/body trả cùng operation; body khác trả conflict |
-| `AT-W23-04` | Stale `If-Match` không overwrite review/rubric/state |
-| `AT-W23-05` | Upload sai MIME/size/path không tạo committed version/job |
-| `AT-W23-06` | API trả `202`, HTTP worker không block request |
-| `AT-W23-07` | Dataset/source chưa duyệt không tạo index/experiment run |
-| `AT-W23-08` | Evidence cross-run/fake ID/invalid locator bị reject |
-| `AT-W23-09` | Worker/admin không publish; student không đọc draft/review |
-| `AT-W23-10` | Tombstone chặn read/run trước khi physical cascade hoàn tất |
-| `AT-W23-11` | Error/log không chứa content, secret, stack hoặc storage path |
-| `AT-W23-12` | Cursor bind scope/filter và stable khi có insert đồng thời |
+`AT-W23-*` kiểm tra HTTP contract; `AT-W21-*` kiểm tra kịch bản đối kháng ở
+nhiều tầng. Hai bộ test bổ sung cho nhau, không map 1-1. Đặc biệt,
+`AT-W23-03` kiểm idempotency của mọi endpoint có side effect, còn
+`AT-W21-05`, `AT-W21-10`, `AT-W21-13` lần lượt kiểm replay job, publish và
+lifecycle ở tầng tích hợp.
+
+| ID | Test | Threat/control/test liên quan |
+|---|---|---|
+| `AT-W23-01` | Unauthenticated và CSRF-invalid unsafe request bị chặn | `T-W21-01`; `AT-W21-01` |
+| `AT-W23-02` | Cross-workspace/report ID không làm lộ existence/content | `T-W21-02`; `AT-W21-02` |
+| `AT-W23-03` | Cùng idempotency key/body trả cùng operation; body khác trả conflict | `C-W21-04`, `C-W21-08`, `C-W21-11`; `AT-W21-05`, `AT-W21-10`, `AT-W21-13` |
+| `AT-W23-04` | Stale `If-Match` không overwrite review/rubric/state | `T-W21-10`; `AT-W21-10` |
+| `AT-W23-05` | Upload sai MIME/size/path không tạo committed version/job | `T-W21-03`; `AT-W21-03` |
+| `AT-W23-06` | API trả `202`, HTTP worker không block request | `T-W21-04`, `T-W21-05`; `AT-W21-05`, `AT-W21-12` |
+| `AT-W23-07` | Dataset/source chưa duyệt không tạo index/experiment run | `T-W21-12`; `AT-W21-14` |
+| `AT-W23-08` | Evidence cross-run/fake ID/invalid locator bị reject | `T-W21-08`; `AT-W21-08` |
+| `AT-W23-09` | Worker/admin không publish; student không đọc draft/review | `T-W21-10`; `AT-W21-10` |
+| `AT-W23-10` | Tombstone chặn read/run trước khi physical cascade hoàn tất | `T-W21-13`; `AT-W21-13` |
+| `AT-W23-11` | Error/log không chứa content, secret, stack hoặc storage path | `T-W21-11`; `AT-W21-11` |
+| `AT-W23-12` | Cursor bind endpoint/actor/scope/filter/sort và stable khi có insert đồng thời | `T-W21-18`, `C-W21-14`; `AT-W21-19` |
 
 ## 11. Điểm còn chờ review
 

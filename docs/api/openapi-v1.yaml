@@ -60,6 +60,9 @@ paths:
       responses:
         '200':
           description: Current actor
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
@@ -77,6 +80,9 @@ paths:
       responses:
         '204':
           description: Session revoked
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -93,10 +99,15 @@ paths:
       responses:
         '200':
           description: Workspace page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkspacePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /workspaces/{workspace_id}/reports:
@@ -113,10 +124,15 @@ paths:
       responses:
         '200':
           description: Report page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReportPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -138,6 +154,9 @@ paths:
       responses:
         '202':
           description: Report accepted for validation and parsing
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
@@ -168,6 +187,8 @@ paths:
         '200':
           description: Report
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
@@ -200,10 +221,17 @@ paths:
       responses:
         '202':
           description: Version accepted for validation and parsing
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncDocumentOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -228,10 +256,15 @@ paths:
       responses:
         '200':
           description: Source page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SourcePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -253,6 +286,9 @@ paths:
       responses:
         '202':
           description: Source accepted into quarantine
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
@@ -283,6 +319,8 @@ paths:
         '200':
           description: Source
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
@@ -315,10 +353,17 @@ paths:
       responses:
         '202':
           description: Source version accepted into quarantine
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncDocumentOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -342,6 +387,9 @@ paths:
       responses:
         '200':
           description: Document version
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
@@ -365,10 +413,15 @@ paths:
       responses:
         '200':
           description: Chunk page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChunkPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -387,6 +440,8 @@ paths:
         '200':
           description: Job
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
@@ -413,10 +468,17 @@ paths:
       responses:
         '202':
           description: Cancellation requested
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJobOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -437,10 +499,17 @@ paths:
       responses:
         '202':
           description: Retry accepted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncJobOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -459,10 +528,15 @@ paths:
       responses:
         '200':
           description: Rubric page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RubricPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -485,12 +559,16 @@ paths:
         '201':
           description: Rubric created
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Rubric'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
@@ -511,12 +589,16 @@ paths:
         '200':
           description: Rubric
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Rubric'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /workspaces/{workspace_id}/rubrics/{rubric_id}/versions:
@@ -542,12 +624,18 @@ paths:
         '201':
           description: Draft version created
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RubricVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -576,12 +664,18 @@ paths:
         '200':
           description: Draft updated
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RubricVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -604,10 +698,17 @@ paths:
       responses:
         '200':
           description: Rubric version published
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RubricVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -635,10 +736,15 @@ paths:
       responses:
         '202':
           description: Run accepted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncAnalysisOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -661,12 +767,16 @@ paths:
         '200':
           description: Analysis run
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalysisRun'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /workspaces/{workspace_id}/analysis-runs/{run_id}/evidence:
@@ -684,10 +794,17 @@ paths:
       responses:
         '200':
           description: Evidence page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvidencePage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /workspaces/{workspace_id}/analysis-runs/{run_id}/proposal:
@@ -704,12 +821,16 @@ paths:
         '200':
           description: Assessment proposal
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AssessmentProposal'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -729,10 +850,17 @@ paths:
       responses:
         '200':
           description: Review page
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReviewPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     post:
@@ -753,10 +881,15 @@ paths:
       responses:
         '201':
           description: Review revision created
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Review'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -786,10 +919,15 @@ paths:
       responses:
         '201':
           description: Publication created
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Publication'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -811,10 +949,15 @@ paths:
       responses:
         '200':
           description: Active publication
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Publication'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
   /workspaces/{workspace_id}/deletion-requests:
@@ -837,10 +980,15 @@ paths:
       responses:
         '202':
           description: Deletion workflow accepted
+          headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AsyncDeletionOperation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -863,12 +1011,16 @@ paths:
         '200':
           description: Deletion request
           headers:
+            X-Request-ID:
+              $ref: '#/components/headers/RequestId'
             ETag:
               $ref: '#/components/headers/ETag'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeletionRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
 components:
@@ -998,44 +1150,80 @@ components:
         type: integer
         minimum: 1
   responses:
+    BadRequest:
+      description: Cursor is malformed, expired, or does not match the endpoint, actor scope, filter, or sort
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: INVALID_CURSOR
+              message: Cursor is invalid or expired.
+              request_id: 01J00000000000000000000000
+              details: []
     Unauthorized:
       description: Authentication required or credentials invalid
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Forbidden:
       description: Authenticated actor lacks the required capability
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     NotFound:
       description: Resource is absent or outside the caller's visible scope
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Conflict:
-      description: State, revision, idempotency, governance, or evidence conflict
+      description: State, revision, idempotency, governance, purpose, or evidence conflict
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     ValidationFailed:
       description: Request fields violate the contract
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     PayloadTooLarge:
       description: Upload exceeds the configured size limit
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     UnsupportedMediaType:
       description: File extension, declared type, and sniffed magic are not allowed
+      headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
       content:
         application/json:
           schema:
@@ -1043,6 +1231,8 @@ components:
     RateLimited:
       description: Rate or quota exceeded
       headers:
+        X-Request-ID:
+          $ref: '#/components/headers/RequestId'
         Retry-After:
           $ref: '#/components/headers/RetryAfter'
       content:
@@ -1958,6 +2148,7 @@ components:
             - FORBIDDEN
             - RESOURCE_NOT_FOUND
             - VALIDATION_FAILED
+            - INVALID_CURSOR
             - REVISION_CONFLICT
             - INVALID_STATE_TRANSITION
             - IDEMPOTENCY_KEY_REUSED

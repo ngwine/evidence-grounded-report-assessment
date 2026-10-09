@@ -20,7 +20,7 @@
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.4; không đổi target backlog để che độ trễ.
+phiên bản 1.5; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
