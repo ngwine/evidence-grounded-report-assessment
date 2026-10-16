@@ -21,6 +21,15 @@ from .similarity import _rerank_chunks, _resolve_normalized_range
 
 _RELATIONS = {"SUPPORTED", "CONTRADICTED", "INSUFFICIENT"}
 _OUTCOMES = {"MET", "UNMET", "CANNOT_ASSESS"}
+_NEGATION_CUE = re.compile(
+    r"\b(?:not|never|without|no|cannot|không|chưa|chẳng|chả)\b"
+    r"|\b\w+n['’]t\b",
+    flags=re.IGNORECASE,
+)
+_CLAUSE_BREAK = re.compile(
+    r"[.!?;:,\n]|\b(?:but|however|nhưng|tuy nhiên)\b",
+    flags=re.IGNORECASE,
+)
 
 
 def _positive_int(value: Any, field: str) -> int:
@@ -137,13 +146,49 @@ def _rank_local(
     }
 
 
-def _phrase_match(text: str, phrase: str) -> tuple[int, int] | None:
+def _phrase_matches(text: str, phrase: str) -> list[tuple[int, int]]:
     canonical_phrase = unicodedata.normalize("NFKC", phrase).strip()
     if not canonical_phrase:
-        return None
+        return []
     pattern = re.escape(canonical_phrase).replace(r"\ ", r"\s+")
-    match = re.search(pattern, text, flags=re.IGNORECASE)
-    return match.span() if match is not None else None
+    if canonical_phrase[0].isalnum():
+        pattern = r"(?<!\w)" + pattern
+    if canonical_phrase[-1].isalnum():
+        pattern += r"(?!\w)"
+    return [
+        match.span()
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE)
+    ]
+
+
+def _phrase_match(text: str, phrase: str) -> tuple[int, int] | None:
+    locations = _phrase_matches(text, phrase)
+    return locations[0] if locations else None
+
+
+def _negated_clause(
+    text: str, start: int, end: int
+) -> tuple[int, int] | None:
+    """Find a nearby negation cue in this clause, without claiming NLI."""
+
+    left = 0
+    right = len(text)
+    for boundary in _CLAUSE_BREAK.finditer(text):
+        if boundary.end() <= start:
+            left = boundary.end()
+        elif boundary.start() >= end:
+            right = boundary.start()
+            break
+    clause = text[left:right]
+    for cue in _NEGATION_CUE.finditer(clause):
+        cue_start = left + cue.start()
+        cue_end = left + cue.end()
+        if cue_start < end and cue_end > start:
+            continue  # An authored phrase may itself express a negative claim.
+        between = text[cue_end:start] if cue_end <= start else text[end:cue_start]
+        if len(re.findall(r"\b\w+\b", between)) <= 4:
+            return left, right
+    return None
 
 
 def _evidence_record(
@@ -178,32 +223,38 @@ def _verify(
     ]
     requirement_results: list[dict[str, Any]] = []
     matched_spans: list[dict[str, Any]] = []
+    negated_spans: list[dict[str, Any]] = []
     for requirement in checklist["requirements"]:
         hits: list[dict[str, Any]] = []
+        negated_hits: list[dict[str, Any]] = []
         for candidate in candidates:
             chunk = report_chunks[str(candidate["chunk_id"])]
             text = str(chunk.get("normalized_text", chunk.get("text", "")))
             for alternative in requirement["any_of"]:
-                location = _phrase_match(text, str(alternative))
-                if location is None:
-                    continue
-                start, end = location
-                resolved = _resolve_normalized_range(chunk, start, end)
-                hit = {
-                    "requirement_id": requirement["requirement_id"],
-                    "matched_alternative": alternative,
-                    "evidence_id": f"evidence-{chunk['chunk_id']}",
-                    "span": resolved,
-                }
-                hits.append(hit)
-                matched_spans.append(hit)
-                break
+                for start, end in _phrase_matches(text, str(alternative)):
+                    negated_clause = _negated_clause(text, start, end)
+                    span_start, span_end = (
+                        negated_clause if negated_clause is not None else (start, end)
+                    )
+                    hit = {
+                        "requirement_id": requirement["requirement_id"],
+                        "matched_alternative": alternative,
+                        "evidence_id": f"evidence-{chunk['chunk_id']}",
+                        "span": _resolve_normalized_range(chunk, span_start, span_end),
+                    }
+                    if negated_clause is not None:
+                        negated_hits.append(hit)
+                        negated_spans.append(hit)
+                    else:
+                        hits.append(hit)
+                        matched_spans.append(hit)
         requirement_results.append(
             {
                 "requirement_id": requirement["requirement_id"],
                 "description": requirement["description"],
                 "satisfied": bool(hits),
                 "hits": hits,
+                "negated_hits": negated_hits,
             }
         )
 
@@ -226,7 +277,7 @@ def _verify(
 
     satisfied_count = sum(item["satisfied"] for item in requirement_results)
     all_satisfied = satisfied_count == len(requirement_results)
-    if contradiction_hits and all_satisfied:
+    if (contradiction_hits or negated_spans) and all_satisfied:
         relation = "INSUFFICIENT"
         outcome = "CANNOT_ASSESS"
         reason_code = "CONFLICTING_REPORT_EVIDENCE"
@@ -238,6 +289,10 @@ def _verify(
         relation = "SUPPORTED"
         outcome = "MET"
         reason_code = "ALL_EXPLICIT_REQUIREMENTS_EVIDENCED"
+    elif negated_spans:
+        relation = "INSUFFICIENT"
+        outcome = "CANNOT_ASSESS"
+        reason_code = "NEGATED_REQUIRED_EVIDENCE"
     else:
         relation = "INSUFFICIENT"
         outcome = "CANNOT_ASSESS"
@@ -253,11 +308,13 @@ def _verify(
         "requirement_results": requirement_results,
         "contradiction_hits": contradiction_hits,
         "matched_evidence_spans": matched_spans,
+        "negated_evidence_spans": negated_spans,
         "evidence_pack": evidence,
         "rationale": (
             f"{relation}: {satisfied_count}/{len(requirement_results)} explicit "
             f"evidence requirements matched; {len(contradiction_hits)} authored "
-            f"contradiction pattern(s) matched. Decision={outcome} "
+            f"contradiction pattern(s) matched; {len(negated_spans)} negated "
+            f"mention(s) withheld from support. Decision={outcome} "
             f"({reason_code})."
         ),
     }
@@ -290,11 +347,26 @@ def _score_criteria(
             if checklist["importance"] in {"CORE", "REQUIRED"}
             and result_map[checklist["checklist_id"]]["checklist_outcome"] == "UNMET"
         ]
+        required_unknown = [
+            checklist["checklist_id"]
+            for checklist in criterion["checklists"]
+            if checklist["importance"] in {"CORE", "REQUIRED"}
+            and result_map[checklist["checklist_id"]]["checklist_outcome"]
+            == "CANNOT_ASSESS"
+        ]
         score: float | None
         reason: str
-        if needs_review:
+        if required_unknown:
             score = None
-            reason = "TOO_MUCH_INSUFFICIENT_EVIDENCE"
+            reason = "REQUIRED_CHECKLIST_CANNOT_ASSESS"
+            all_scorable = False
+        elif unable:
+            score = None
+            reason = (
+                "TOO_MUCH_INSUFFICIENT_EVIDENCE"
+                if needs_review
+                else "UNRESOLVED_CHECKLIST_EVIDENCE"
+            )
             all_scorable = False
         elif required_unmet:
             score = min(
@@ -303,14 +375,14 @@ def _score_criteria(
             )
             reason = "REQUIRED_CHECKLIST_UNMET"
         else:
-            denominator = counts["MET"] + counts["UNMET"]
-            if denominator == 0:
+            assessable_count = counts["MET"] + counts["UNMET"]
+            if assessable_count == 0:
                 score = None
                 reason = "NO_ASSESSABLE_CHECKLIST"
                 all_scorable = False
             else:
                 score = round(
-                    float(criterion["weight"]) * counts["MET"] / denominator,
+                    float(criterion["weight"]) * counts["MET"] / assessable_count,
                     1,
                 )
                 reason = "PROPORTIONAL_MET_RATIO"
@@ -324,9 +396,10 @@ def _score_criteria(
                 "outcome_counts": dict(sorted(counts.items())),
                 "cannot_assess_ratio": round(unable_ratio, 6),
                 "required_unmet_checklist_ids": required_unmet,
+                "required_cannot_assess_checklist_ids": required_unknown,
                 "proposed_score": score,
                 "score_reason": reason,
-                "requires_lecturer_review": score is None,
+                "requires_lecturer_review": score is None or unable > 0,
             }
         )
     proposed_total = round(assessable_subtotal, 1) if all_scorable else None
@@ -412,9 +485,13 @@ def run_assessment_pipeline(
         "proposed_total_score": total,
         "assessable_subtotal": assessable_subtotal,
         "max_score": compiled["max_score"],
-        "requires_lecturer_review": total is None,
+        "requires_lecturer_review": total is None or any(
+            item["requires_lecturer_review"] for item in criterion_results
+        ),
         "limitations": [
             "Verification v0 uses explicit authored phrase requirements and does not infer semantic entailment.",
+            "Negation handling uses nearby lexical cues; scope and context still require human review.",
+            "Any CANNOT_ASSESS checklist withholds its criterion and total score; assessable_subtotal is diagnostic only.",
             "GRAPH v0 is a structure-and-term PPR baseline, not the complete HippoRAG architecture.",
             "Automatic decomposition of free-form rubric criteria is outside this feasibility baseline.",
             "Every proposed score remains subject to lecturer review and gold-set validation.",
