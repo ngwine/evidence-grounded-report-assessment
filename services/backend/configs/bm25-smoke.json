@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "experiment_id": "local-app-bm25-integration-smoke-v1",
+  "seed": 20261013,
+  "documents": {"max_tokens": 220, "min_tokens": 30},
+  "pipeline1": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 3,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": false,
+    "reranker_enabled": false
+  },
+  "pipeline2": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 5,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": false,
+    "reranker_enabled": false,
+    "graph": {
+      "seed_depth": 8,
+      "iterations": 20,
+      "damping": 0.85,
+      "minimum_shared_terms": 2,
+      "maximum_term_degree": 30
+    }
+  }
+}
