@@ -7,10 +7,10 @@
 | Thuộc tính | Giá trị |
 |---|---|
 | Mã tài liệu | `UCM-KLTN-01` |
-| Phiên bản | `2.0-review-candidate` |
+| Phiên bản | `2.0` |
 | Ngày lập | 13/08/2026 |
 | Ngày đồng bộ phạm vi | 17/09/2026 |
-| Trạng thái | **Đã đồng bộ baseline nội bộ; chờ review chéo và GVHD xác nhận** |
+| Trạng thái | **Baseline đã được reviewer Y duyệt và merge qua PR #8; thay đổi mới phải có change log** |
 | Owner | Nguyễn Trần Ngọc Quý (Q) |
 | Reviewer | Võ Thị Kim Yến (Y) |
 | WBS | `W1.1` |
