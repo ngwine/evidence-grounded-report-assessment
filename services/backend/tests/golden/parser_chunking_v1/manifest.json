@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "parser-chunker-golden-v1",
+  "chunk_config": {
+    "max_tokens": 400,
+    "min_tokens": 40
+  },
+  "fixtures": [
+    {
+      "id": "synthetic-pdf-thesis",
+      "path": "fixtures/sample_thesis.pdf",
+      "format": "pdf",
+      "sha256": "8489b80e453e7a1ee181619ea8412c2ea5ade9ae0c956d5981d9fcbb9046f1b8",
+      "expected": {
+        "element_count": 8,
+        "element_type_counts": {
+          "heading": 4,
+          "paragraph": 4
+        },
+        "chunk_count": 3,
+        "chunk_type_counts": {
+          "text": 3
+        },
+        "heading_texts": [
+          "CHUONG 1: TONG QUAN DE TAI",
+          "1.1 Ly do chon de tai",
+          "1.2 Muc tieu thuc hien",
+          "CHUONG 2: CO SO LY THUYET"
+        ],
+        "page_indices": [0, 1],
+        "max_chunk_tokens": 66,
+        "output_sha256": "9aa94c314b9bbf3027291dfcfeaa2941ae3f2f1f702dc9ae560da56d46a559a2",
+        "coverage": {
+          "content_element_count": 4,
+          "expected_normalized_characters": 443,
+          "covered_normalized_characters": 443,
+          "coverage_ratio": 1.0,
+          "error_count": 0,
+          "errors": []
+        }
+      }
+    },
+    {
+      "id": "synthetic-docx-thesis",
+      "path": "fixtures/sample_thesis.docx",
+      "format": "docx",
+      "sha256": "59cd8b266fb60ac857a6bfc138ff9985c1285c007da8ca7c0333c8da3a80b81e",
+      "expected": {
+        "element_count": 11,
+        "element_type_counts": {
+          "heading": 4,
+          "paragraph": 6,
+          "table": 1
+        },
+        "chunk_count": 5,
+        "chunk_type_counts": {
+          "table": 1,
+          "text": 4
+        },
+        "heading_texts": [
+          "CHƯƠNG 1: TỔNG QUAN ĐỀ TÀI",
+          "1.1 Lý do chọn đề tài",
+          "1.1.1 Bối cảnh cụ thể",
+          "CHƯƠNG 2: CƠ SỞ LÝ THUYẾT"
+        ],
+        "page_indices": [],
+        "max_chunk_tokens": 68,
+        "output_sha256": "174b250be750abc8e358eba63e6ee3962d797066bc9c5d1142cf630352a5b807",
+        "coverage": {
+          "content_element_count": 7,
+          "expected_normalized_characters": 512,
+          "covered_normalized_characters": 512,
+          "coverage_ratio": 1.0,
+          "error_count": 0,
+          "errors": []
+        }
+      }
+    }
+  ]
+}
