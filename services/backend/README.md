@@ -14,4 +14,8 @@ lặp model, policy và repository.
 API không chạy parse/AI dài trong request. Worker không có quyền tự công bố
 điểm hoặc bỏ qua RBAC/evidence policy.
 
+HTTP boundary dự kiến được mô tả tại
+[`API_CONTRACT_V1.md`](../../docs/api/API_CONTRACT_V1.md) và
+[`openapi-v1.yaml`](../../docs/api/openapi-v1.yaml). Đây là review candidate
+`W2.3`, chưa phải bằng chứng endpoint đã được hiện thực.
 
