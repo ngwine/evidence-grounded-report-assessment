@@ -40,8 +40,10 @@ vượt biên hoặc output thay đổi giữa các lần chạy thì benchmark 
 
 ## Regression đi kèm
 
-Toàn bộ test backend hiện đạt `17 passed, 1 skipped`. Các case ngoài hai binary
-fixture gồm:
+Tại thời điểm tạo benchmark, test backend đạt `17 passed, 1 skipped`. Sau khi
+tích hợp thêm app/upload contract tests ngày 19/10/2026, toàn bộ backend suite
+đạt `26 passed, 1 skipped`; benchmark golden vẫn pass. Các case ngoài hai
+binary fixture gồm:
 
 - NFKC ligature, zero-width character và whitespace mapping;
 - duplicate text ở locator khác nhau;
