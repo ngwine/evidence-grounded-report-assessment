@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1600" viewBox="0 -350 1600 1600">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .title { font: 700 38px Arial, sans-serif; fill: #0f172a; }
+      .head { font: 700 25px Arial, sans-serif; fill: #0f172a; }
+      .body { font: 22px Arial, sans-serif; fill: #334155; }
+      .small { font: 19px Arial, sans-serif; fill: #475569; }
+      .box { stroke-width: 3; rx: 18; }
+      .arrow { stroke: #334155; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect x="0" y="-350" width="1600" height="1600" fill="#ffffff"/>
+  <text x="800" y="58" text-anchor="middle" class="title">Evidence-grounded student-report assessment framework</text>
+
+  <rect x="50" y="275" width="235" height="210" class="box" fill="#f1f5f9" stroke="#475569"/>
+  <text x="168" y="330" text-anchor="middle" class="head">Input</text>
+  <text x="168" y="375" text-anchor="middle" class="body">PDF / DOCX</text>
+  <text x="168" y="412" text-anchor="middle" class="body">Rubric</text>
+  <text x="168" y="449" text-anchor="middle" class="body">Approved sources</text>
+
+  <rect x="350" y="230" width="325" height="300" class="box" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="512" y="285" text-anchor="middle" class="head">Parsing and provenance</text>
+  <text x="512" y="335" text-anchor="middle" class="body">Immutable document version</text>
+  <text x="512" y="375" text-anchor="middle" class="body">Typed elements and locators</text>
+  <text x="512" y="415" text-anchor="middle" class="body">Stable chunks and raw spans</text>
+  <text x="512" y="455" text-anchor="middle" class="body">Versioned analysis run</text>
+  <text x="512" y="495" text-anchor="middle" class="small">Authoritative metadata; rebuildable indexes</text>
+
+  <rect x="770" y="105" width="500" height="275" class="box" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="1020" y="158" text-anchor="middle" class="head">Pipeline 1 — Similarity analysis</text>
+  <text x="1020" y="207" text-anchor="middle" class="body">BM25 + multilingual E5</text>
+  <text x="1020" y="247" text-anchor="middle" class="body">RRF candidate fusion</text>
+  <text x="1020" y="287" text-anchor="middle" class="body">Cross-Encoder hypothesis test</text>
+  <text x="1020" y="327" text-anchor="middle" class="small">Output: ranked sources + evidence spans</text>
+
+  <rect x="770" y="475" width="500" height="275" class="box" fill="#fef3c7" stroke="#d97706"/>
+  <text x="1020" y="528" text-anchor="middle" class="head">Pipeline 2 — Rubric assessment</text>
+  <text x="1020" y="577" text-anchor="middle" class="body">Atomic checklist compiler</text>
+  <text x="1020" y="617" text-anchor="middle" class="body">LOCAL / GRAPH evidence routing</text>
+  <text x="1020" y="657" text-anchor="middle" class="body">Claim verification + explicit rules</text>
+  <text x="1020" y="697" text-anchor="middle" class="small">Design specified; empirical evaluation pending</text>
+
+  <rect x="1340" y="275" width="215" height="210" class="box" fill="#fce7f3" stroke="#be185d"/>
+  <text x="1448" y="330" text-anchor="middle" class="head">Instructor</text>
+  <text x="1448" y="375" text-anchor="middle" class="body">Inspect evidence</text>
+  <text x="1448" y="412" text-anchor="middle" class="body">Accept / edit</text>
+  <text x="1448" y="449" text-anchor="middle" class="body">Final decision</text>
+
+  <path d="M285 380 L350 380" class="arrow"/>
+  <path d="M675 330 C715 330 725 245 770 245" class="arrow"/>
+  <path d="M675 430 C715 430 725 615 770 615" class="arrow"/>
+  <path d="M1270 245 C1310 245 1300 335 1340 335" class="arrow"/>
+  <path d="M1270 615 C1310 615 1300 425 1340 425" class="arrow"/>
+
+  <rect x="365" y="785" width="870" height="70" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+  <text x="800" y="828" text-anchor="middle" class="body">Fail closed: insufficient or incomparable evidence → CANNOT_ASSESS → human review</text>
+</svg>
