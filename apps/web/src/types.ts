@@ -36,11 +36,23 @@ export interface SimilarityMatch {
   classification_status: string;
   selected_for_document_coverage: boolean;
   selected_for_manual_review: boolean;
+  review_group_id?: string;
   alignment?: {
     kind?: string;
     report?: EvidenceRange;
     source?: EvidenceRange;
   };
+}
+
+export interface SimilarityReviewSourceGroup {
+  group_id: string;
+  source_document_id: string;
+  source_chunk_id: string;
+  source_name?: string | null;
+  report_chunk_ids: string[];
+  report_chunk_count: number;
+  classification_status: 'PROVISIONAL_REVIEW_REQUIRED';
+  warning: 'REPEATED_SOURCE_CHUNK_NOT_INDEPENDENT_EVIDENCE' | null;
 }
 
 export interface SimilarityReport {
@@ -57,6 +69,7 @@ export interface SimilarityReport {
     selected_report_passages: number;
   }>;
   matches?: SimilarityMatch[];
+  review_source_groups?: SimilarityReviewSourceGroup[];
   disclaimer?: string;
 }
 

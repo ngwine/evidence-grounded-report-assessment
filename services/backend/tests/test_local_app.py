@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from services.backend.src.kltn_ai.api.local_app import API_PREFIX, create_app
@@ -143,3 +144,122 @@ def test_completed_results_are_withheld_after_source_approval_revocation(tmp_pat
             headers=POST_HEADERS,
         )
         assert review.status_code == 409
+
+
+def test_upload_contract_rejects_duplicate_self_comparison_and_bad_payloads(tmp_path):
+    app_root = tmp_path / "private-app"
+    store = LocalStore(app_root)
+    _approve_fixture_sources(store)
+    app = create_app(root=app_root, allow_test_client=True)
+    with TestClient(app) as client:
+        duplicate = _upload_files()
+        duplicate[2] = duplicate[1]
+        response = client.post(
+            f"{API_PREFIX}/runs", files=duplicate, headers=POST_HEADERS
+        )
+        assert response.status_code == 422
+        assert "Duplicate source" in response.json()["detail"]
+
+        self_comparison = _upload_files()
+        report_bytes = (FIXTURES / "report.txt").read_bytes()
+        self_comparison[1] = (
+            "sources",
+            ("same-as-report.txt", report_bytes, "text/plain"),
+        )
+        response = client.post(
+            f"{API_PREFIX}/runs", files=self_comparison, headers=POST_HEADERS
+        )
+        assert response.status_code == 422
+        assert "Report cannot" in response.json()["detail"]
+
+        invalid_docx = _upload_files()
+        invalid_docx[0] = (
+            "report",
+            (
+                "report.docx",
+                b"PK-not-a-docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ),
+        )
+        assert client.post(
+            f"{API_PREFIX}/runs", files=invalid_docx, headers=POST_HEADERS
+        ).status_code == 422
+
+        nul_text = _upload_files()
+        nul_text[0] = ("report", ("report.txt", b"safe\x00unsafe", "text/plain"))
+        assert client.post(
+            f"{API_PREFIX}/runs", files=nul_text, headers=POST_HEADERS
+        ).status_code == 422
+
+        invalid_rubric = _upload_files()
+        invalid_rubric[-1] = (
+            "rubric",
+            ("rubric.json", b'{"schema_version": 1}', "application/json"),
+        )
+        assert client.post(
+            f"{API_PREFIX}/runs", files=invalid_rubric, headers=POST_HEADERS
+        ).status_code == 422
+
+        assert client.post(
+            f"{API_PREFIX}/runs",
+            data={"config_id": "unknown"},
+            files=_upload_files(),
+            headers=POST_HEADERS,
+        ).status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("report_name", "source_name"),
+    [
+        ("sample_thesis.pdf", "sample_thesis.docx"),
+        ("sample_thesis.docx", "sample_thesis.pdf"),
+    ],
+)
+def test_upload_contract_accepts_committed_synthetic_pdf_and_docx(
+    tmp_path, report_name, source_name
+):
+    fixture_dir = Path(__file__).parent / "fixtures"
+    app_root = tmp_path / "private-app"
+    store = LocalStore(app_root)
+    store.approve_source(
+        fixture_dir / source_name,
+        approver="fixture-test",
+        rationale="Synthetic committed parser fixture",
+    )
+    files = [
+        (
+            "report",
+            (
+                report_name,
+                (fixture_dir / report_name).read_bytes(),
+                "application/octet-stream",
+            ),
+        ),
+        (
+            "sources",
+            (
+                source_name,
+                (fixture_dir / source_name).read_bytes(),
+                "application/octet-stream",
+            ),
+        ),
+        (
+            "rubric",
+            (
+                "rubric.json",
+                (FIXTURES / "rubric.json").read_bytes(),
+                "application/json",
+            ),
+        ),
+    ]
+    with TestClient(create_app(root=app_root, allow_test_client=True)) as client:
+        created = client.post(
+            f"{API_PREFIX}/runs", files=files, headers=POST_HEADERS
+        )
+        assert created.status_code == 202, created.text
+        job = store.get_job(created.json()["run_id"])
+        assert job["status"] == "QUEUED"
+        assert job["input_display_names"] == {
+            "report": report_name,
+            "sources": [source_name],
+        }

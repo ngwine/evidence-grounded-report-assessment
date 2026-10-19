@@ -21,6 +21,7 @@ from research.offline_retrieval.cross_encoder import (
 from research.offline_retrieval.dense import Encoder, SentenceTransformerEncoder
 
 from .assessment import run_assessment_pipeline
+from .contracts import validate_assessment_report, validate_similarity_report
 from .documents import ParsedDocument, parse_document, parse_documents
 from .similarity import run_similarity_pipeline
 
@@ -271,6 +272,7 @@ def run_core_mvp(
             encoder=encoder,
             reranker=reranker,
         )
+        validate_similarity_report(similarity_report)
         similarity_path = output / "similarity-report.json"
         write_json(similarity_path, similarity_report)
         output_paths["similarity_report"] = similarity_path
@@ -285,6 +287,7 @@ def run_core_mvp(
             encoder=encoder,
             reranker=reranker,
         )
+        validate_assessment_report(assessment_report)
         assessment_path = output / "assessment-report.json"
         write_json(assessment_path, assessment_report)
         output_paths["assessment_report"] = assessment_path
@@ -326,6 +329,13 @@ def run_core_mvp(
                 "selected_label_counts": similarity_report[
                     "label_counts_for_selected_matches"
                 ],
+                "classification_policy": similarity_report["classification_policy"],
+                "semantic_classifier_available": similarity_report["semantic_classifier_available"],
+                "review_source_groups": len(similarity_report["review_source_groups"]),
+                "repeated_source_review_groups": sum(
+                    group["report_chunk_count"] > 1
+                    for group in similarity_report["review_source_groups"]
+                ),
             }
             if similarity_report is not None
             else None
