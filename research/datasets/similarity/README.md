@@ -13,3 +13,8 @@ Two PAN packs are intentionally separate:
 Both templates remain `PENDING` until rights/access, local archive checksum,
 retention and an actual approver/date are recorded. The offline runner must
 reject them while that gate is open.
+
+PAN-PC-11 DEV1/TEST0 derivation and leakage checks are documented in
+[`../../protocols/rq1-similarity/pan-pc-11-split-readiness.md`](../../protocols/rq1-similarity/pan-pc-11-split-readiness.md).
+The generated packs remain local; TEST0 is sealed until model/configuration
+choices are frozen on DEV1.

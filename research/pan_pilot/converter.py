@@ -116,6 +116,16 @@ class _AnnotationScan:
     xml_inventory: tuple[dict[str, Any], ...]
 
 
+@dataclass(frozen=True)
+class _SplitExclusions:
+    """Leakage groups loaded from one or more prior derived manifests."""
+
+    parent_annotation_ids: frozenset[str]
+    suspicious_references: frozenset[str]
+    candidate_source_references: frozenset[str]
+    manifest_records: tuple[dict[str, Any], ...]
+
+
 def _canonical_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -156,6 +166,229 @@ def _render_jsonl(records: Iterable[dict[str, Any]]) -> bytes:
 def _render_json(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
         "utf-8"
+    )
+
+
+def _read_json_object(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"Invalid {label} JSON: {path}") from exc
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must contain a JSON object: {path}")
+    return value
+
+
+def _manifest_companion_path(
+    manifest_path: Path, manifest: dict[str, Any], file_key: str
+) -> tuple[Path, dict[str, Any]]:
+    files = manifest.get("files")
+    record = files.get(file_key) if isinstance(files, dict) else None
+    if not isinstance(record, dict):
+        raise ValueError(f"Exclusion manifest has no files.{file_key} record")
+    raw_relative = record.get("path")
+    if not isinstance(raw_relative, str) or not raw_relative.strip():
+        raise ValueError(f"Exclusion manifest files.{file_key}.path is invalid")
+    relative = PurePosixPath(raw_relative)
+    if (
+        relative.is_absolute()
+        or _WINDOWS_ABSOLUTE_RE.match(raw_relative)
+        or any(part == ".." for part in relative.parts)
+    ):
+        raise ValueError(
+            f"Unsafe exclusion manifest files.{file_key}.path: {raw_relative!r}"
+        )
+    parent = manifest_path.parent.resolve(strict=True)
+    companion = (parent / Path(*relative.parts)).resolve(strict=True)
+    try:
+        companion.relative_to(parent)
+    except ValueError as exc:
+        raise ValueError(
+            f"Exclusion manifest companion escapes its directory: {raw_relative!r}"
+        ) from exc
+    if not companion.is_file():
+        raise ValueError(f"Exclusion manifest companion is not a file: {companion}")
+    expected_sha256 = record.get("sha256")
+    if not isinstance(expected_sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", expected_sha256
+    ):
+        raise ValueError(
+            f"Exclusion manifest files.{file_key}.sha256 must be lowercase SHA-256"
+        )
+    actual_sha256 = _sha256_file(companion)
+    if actual_sha256 != expected_sha256:
+        raise ValueError(
+            f"Exclusion {file_key} checksum mismatch: "
+            f"expected {expected_sha256}, got {actual_sha256}"
+        )
+    return companion, record
+
+
+def _read_jsonl_objects(path: Path, *, label: str) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    try:
+        with path.open("r", encoding="utf-8", newline="") as stream:
+            for line_number, line in enumerate(stream, 1):
+                if not line.strip():
+                    raise ValueError(f"Blank line in {label} at line {line_number}")
+                try:
+                    value = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(
+                        f"Invalid {label} JSON at line {line_number}"
+                    ) from exc
+                if not isinstance(value, dict):
+                    raise ValueError(
+                        f"{label} line {line_number} must be a JSON object"
+                    )
+                records.append(value)
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"{label} must be UTF-8: {path}") from exc
+    return records
+
+
+def _load_split_exclusions(
+    manifest_paths: Iterable[str | Path],
+    *,
+    expected_dataset_id: str,
+    expected_input_fingerprint: str,
+) -> _SplitExclusions:
+    """Load and verify leakage groups from prior derived split artifacts."""
+
+    resolved_paths: list[Path] = []
+    seen_paths: set[Path] = set()
+    for raw_path in manifest_paths:
+        resolved = Path(raw_path).resolve(strict=True)
+        if not resolved.is_file():
+            raise ValueError(f"Exclusion manifest is not a file: {resolved}")
+        if resolved in seen_paths:
+            raise ValueError(f"Duplicate exclusion manifest: {resolved}")
+        seen_paths.add(resolved)
+        resolved_paths.append(resolved)
+
+    parent_ids: set[str] = set()
+    suspicious_references: set[str] = set()
+    source_references: set[str] = set()
+    manifest_records: list[dict[str, Any]] = []
+    for manifest_path in resolved_paths:
+        manifest = _read_json_object(manifest_path, label="exclusion manifest")
+        if manifest.get("dataset_id") != expected_dataset_id:
+            raise ValueError(
+                "Exclusion manifest dataset_id does not match current corpus: "
+                f"{manifest.get('dataset_id')!r} != {expected_dataset_id!r}"
+            )
+        source_extract = manifest.get("source_extract")
+        prior_fingerprint = (
+            source_extract.get("input_fingerprint_sha256")
+            if isinstance(source_extract, dict)
+            else None
+        )
+        if prior_fingerprint != expected_input_fingerprint:
+            raise ValueError(
+                "Exclusion manifest input fingerprint does not match current corpus"
+            )
+
+        documents_path, documents_record = _manifest_companion_path(
+            manifest_path, manifest, "documents"
+        )
+        queries_path, queries_record = _manifest_companion_path(
+            manifest_path, manifest, "queries"
+        )
+        documents = _read_jsonl_objects(
+            documents_path, label="exclusion documents"
+        )
+        queries = _read_jsonl_objects(queries_path, label="exclusion queries")
+        for records, record, label in (
+            (documents, documents_record, "documents"),
+            (queries, queries_record, "queries"),
+        ):
+            expected_records = record.get("records")
+            if (
+                isinstance(expected_records, bool)
+                or not isinstance(expected_records, int)
+                or expected_records != len(records)
+            ):
+                raise ValueError(
+                    f"Exclusion {label} record count does not match its manifest"
+                )
+
+        split = manifest.get("split")
+        manifest_parent_ids = (
+            split.get("parent_annotation_ids") if isinstance(split, dict) else None
+        )
+        if not isinstance(manifest_parent_ids, list) or not all(
+            isinstance(value, str) and value for value in manifest_parent_ids
+        ):
+            raise ValueError(
+                "Exclusion manifest split.parent_annotation_ids must be a string list"
+            )
+        if len(manifest_parent_ids) != len(set(manifest_parent_ids)):
+            raise ValueError(
+                "Exclusion manifest split.parent_annotation_ids contains duplicates"
+            )
+
+        query_parent_ids: set[str] = set()
+        current_suspicious: set[str] = set()
+        for query in queries:
+            parent_id = query.get("parent_annotation_id")
+            provenance = query.get("annotation_provenance")
+            suspicious = (
+                provenance.get("suspicious_document")
+                if isinstance(provenance, dict)
+                else None
+            )
+            if not isinstance(parent_id, str) or not parent_id:
+                raise ValueError(
+                    "Every exclusion query requires parent_annotation_id"
+                )
+            if not isinstance(suspicious, str) or not suspicious:
+                raise ValueError(
+                    "Every exclusion query requires annotation_provenance."
+                    "suspicious_document"
+                )
+            query_parent_ids.add(parent_id)
+            current_suspicious.add(suspicious)
+        if query_parent_ids != set(manifest_parent_ids):
+            raise ValueError(
+                "Exclusion query parent IDs do not match split.parent_annotation_ids"
+            )
+
+        current_sources: set[str] = set()
+        for document in documents:
+            source_reference = document.get("source_reference")
+            if not isinstance(source_reference, str) or not source_reference:
+                raise ValueError(
+                    "Every exclusion document requires source_reference"
+                )
+            current_sources.add(source_reference)
+        if len(current_sources) != len(documents):
+            raise ValueError(
+                "Exclusion documents contain duplicate source_reference values"
+            )
+
+        parent_ids.update(manifest_parent_ids)
+        suspicious_references.update(current_suspicious)
+        source_references.update(current_sources)
+        split_name = split.get("name") if isinstance(split, dict) else None
+        manifest_records.append(
+            {
+                "manifest_sha256": _sha256_file(manifest_path),
+                "dataset_version": manifest.get("dataset_version"),
+                "split_name": split_name,
+                "parent_annotation_ids": len(manifest_parent_ids),
+                "suspicious_documents": len(current_suspicious),
+                "candidate_source_documents": len(current_sources),
+                "query_records": len(queries),
+                "documents_sha256": documents_record["sha256"],
+                "queries_sha256": queries_record["sha256"],
+            }
+        )
+
+    return _SplitExclusions(
+        parent_annotation_ids=frozenset(parent_ids),
+        suspicious_references=frozenset(suspicious_references),
+        candidate_source_references=frozenset(source_references),
+        manifest_records=tuple(manifest_records),
     )
 
 
@@ -409,6 +642,51 @@ def _hash_order(seed: int, namespace: str, value: str) -> tuple[str, str]:
     return (_sha256_text(f"{seed}\x1f{namespace}\x1f{value}"), value)
 
 
+def _exclude_prior_split_annotations(
+    annotations: Iterable[_Annotation],
+    *,
+    dataset_id: str,
+    input_root: Path,
+    exclusions: _SplitExclusions,
+) -> tuple[list[_Annotation], dict[str, int]]:
+    """Remove positives sharing any leakage group with an earlier split."""
+
+    eligible: list[_Annotation] = []
+    counts = {
+        "annotations_before_exclusion": 0,
+        "annotations_excluded": 0,
+        "annotations_excluded_by_parent_id": 0,
+        "annotations_excluded_by_suspicious_document": 0,
+        "annotations_excluded_by_source_document": 0,
+        "annotations_eligible_after_exclusion": 0,
+    }
+    for annotation in annotations:
+        counts["annotations_before_exclusion"] += 1
+        parent_match = (
+            _annotation_id(dataset_id, annotation)
+            in exclusions.parent_annotation_ids
+        )
+        suspicious_match = (
+            _relative_to_root(annotation.suspicious_path, input_root)
+            in exclusions.suspicious_references
+        )
+        source_match = (
+            _relative_to_root(annotation.source_path, input_root)
+            in exclusions.candidate_source_references
+        )
+        counts["annotations_excluded_by_parent_id"] += int(parent_match)
+        counts["annotations_excluded_by_suspicious_document"] += int(
+            suspicious_match
+        )
+        counts["annotations_excluded_by_source_document"] += int(source_match)
+        if parent_match or suspicious_match or source_match:
+            counts["annotations_excluded"] += 1
+            continue
+        eligible.append(annotation)
+    counts["annotations_eligible_after_exclusion"] = len(eligible)
+    return eligible, counts
+
+
 def _select_annotations(
     annotations: Iterable[_Annotation],
     *,
@@ -468,12 +746,29 @@ def _select_source_paths(
     *,
     max_candidate_documents: int,
     seed: int,
+    excluded_source_references: frozenset[str] = frozenset(),
 ) -> tuple[list[Path], dict[str, int]]:
     """Keep every selected positive source, then hash-sample negative sources."""
 
     all_annotation_sources = {item.source_path for item in all_annotations}
-    full_candidates = index.source_candidates() | all_annotation_sources
+    full_candidates_before_exclusion = (
+        index.source_candidates() | all_annotation_sources
+    )
+    full_candidates = {
+        path
+        for path in full_candidates_before_exclusion
+        if _relative_to_root(path, index.root) not in excluded_source_references
+    }
     relevant = {item.source_path for item in selected_annotations}
+    excluded_relevant = {
+        path
+        for path in relevant
+        if _relative_to_root(path, index.root) in excluded_source_references
+    }
+    if excluded_relevant:
+        raise ValueError(
+            "Selected positive source overlaps an excluded candidate source"
+        )
     if len(relevant) > max_candidate_documents:
         raise ValueError(
             "max_candidate_documents is smaller than the number of relevant "
@@ -494,8 +789,14 @@ def _select_source_paths(
         key=lambda path: _relative_to_root(path, index.root),
     )
     return selected, {
+        "source_documents_before_exclusion": len(full_candidates_before_exclusion),
+        "source_documents_excluded": len(
+            full_candidates_before_exclusion - full_candidates
+        ),
         "source_documents_available": len(full_candidates),
-        "relevant_source_documents_available": len(all_annotation_sources),
+        "relevant_source_documents_available": len(
+            all_annotation_sources & full_candidates
+        ),
         "relevant_source_documents_selected": len(relevant),
         "distractor_documents_available": len(full_candidates - relevant),
         "distractor_documents_selected": len(selected_distractors),
@@ -761,6 +1062,7 @@ def convert_pan_pilot(
     max_query_word_tokens: int = 256,
     query_stride_word_tokens: int = 128,
     source_archives: Iterable[str | Path] = (),
+    exclude_manifests: Iterable[str | Path] = (),
     overwrite: bool = False,
 ) -> ConversionResult:
     """Convert PAN XML/TXT into deterministic runner inputs.
@@ -807,8 +1109,22 @@ def convert_pan_pilot(
     profile = DATASET_PROFILES[dataset_key]
     index = _CorpusIndex(Path(input_root))
     scan = _scan_annotations(index)
+    fingerprint, input_file_count = _input_inventory_fingerprint(index, scan)
+    exclusions = _load_split_exclusions(
+        exclude_manifests,
+        expected_dataset_id=profile["dataset_id"],
+        expected_input_fingerprint=fingerprint,
+    )
+    eligible_annotations, annotation_exclusion_counts = (
+        _exclude_prior_split_annotations(
+            scan.annotations,
+            dataset_id=profile["dataset_id"],
+            input_root=index.root,
+            exclusions=exclusions,
+        )
+    )
     annotations = _select_annotations(
-        scan.annotations,
+        eligible_annotations,
         dataset_id=profile["dataset_id"],
         max_positive_annotations=max_positive_annotations,
         seed=seed,
@@ -819,6 +1135,7 @@ def convert_pan_pilot(
         annotations,
         max_candidate_documents=max_candidate_documents,
         seed=seed,
+        excluded_source_references=exclusions.candidate_source_references,
     )
     archive_records = _archive_provenance(dataset_key, source_archives)
     text_cache: dict[Path, str] = {}
@@ -998,7 +1315,6 @@ def convert_pan_pilot(
         "queries": _render_jsonl(queries),
         "qrels": _render_jsonl(qrels),
     }
-    fingerprint, input_file_count = _input_inventory_fingerprint(index, scan)
     selected_annotation_ids = sorted(
         _annotation_id(profile["dataset_id"], annotation) for annotation in annotations
     )
@@ -1011,7 +1327,7 @@ def convert_pan_pilot(
         and len(source_paths) == source_sampling_counts["source_documents_available"]
     )
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "dataset_id": profile["dataset_id"],
         "dataset_version": dataset_version.strip(),
         "description": profile["description"],
@@ -1042,7 +1358,7 @@ def convert_pan_pilot(
             "plagiarism_annotation_count": len(annotations),
         },
         "sampling": {
-            "strategy": "xml-parent-stratified-sha256-round-robin-v1",
+            "strategy": "xml-parent-stratified-sha256-round-robin-v2",
             "positive_unit": "plagiarism_feature",
             "stratum": "annotation_xml_parent_directory",
             "ordering": "sha256(seed, namespace, stable_id)",
@@ -1050,8 +1366,9 @@ def convert_pan_pilot(
             "max_positive_annotations": max_positive_annotations,
             "max_annotations": max_positive_annotations,
             "max_candidate_documents": max_candidate_documents,
-            "positive_annotations_available": len(scan.annotations),
+            "positive_annotations_available": len(eligible_annotations),
             "positive_annotations_selected": len(annotations),
+            **annotation_exclusion_counts,
             **source_sampling_counts,
             "selected_annotation_ids": selected_annotation_ids,
             "selected_annotation_ids_sha256": _sha256_text(
@@ -1062,9 +1379,40 @@ def convert_pan_pilot(
             ),
             "full_corpus_result": full_corpus_result,
         },
+        "exclusions": {
+            "policy": "prior-derived-split-disjoint-v1",
+            "rules": [
+                "exclude_parent_annotation_id",
+                "exclude_suspicious_document_reference",
+                "exclude_positive_source_document_reference",
+                "exclude_candidate_source_document_reference",
+            ],
+            "manifest_count": len(exclusions.manifest_records),
+            "manifests": list(exclusions.manifest_records),
+            "union_counts": {
+                "parent_annotation_ids": len(exclusions.parent_annotation_ids),
+                "suspicious_documents": len(exclusions.suspicious_references),
+                "candidate_source_documents": len(
+                    exclusions.candidate_source_references
+                ),
+            },
+            "union_checksums": {
+                "parent_annotation_ids_sha256": _sha256_text(
+                    _canonical_json(sorted(exclusions.parent_annotation_ids))
+                ),
+                "suspicious_documents_sha256": _sha256_text(
+                    _canonical_json(sorted(exclusions.suspicious_references))
+                ),
+                "candidate_source_documents_sha256": _sha256_text(
+                    _canonical_json(
+                        sorted(exclusions.candidate_source_references)
+                    )
+                ),
+            },
+        },
         "transformation": {
             "converter": "research.pan_pilot",
-            "converter_version": "2.0.0",
+            "converter_version": "2.1.0",
             "converter_provenance": _converter_provenance(),
             "query_unit": "annotated_suspicious_span_window",
             "target_scope": profile["target_scope"],
@@ -1080,6 +1428,11 @@ def convert_pan_pilot(
         "split": {
             "name": split_name.strip(),
             "unit": "source_document",
+            "leakage_grouping": [
+                "parent_annotation_id",
+                "suspicious_document_reference",
+                "candidate_source_document_reference",
+            ],
             "seed": seed,
             "document_ids": sorted(record["document_id"] for record in documents),
             "query_ids": sorted(record["query_id"] for record in queries),
