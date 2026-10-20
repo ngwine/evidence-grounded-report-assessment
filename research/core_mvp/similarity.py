@@ -17,6 +17,12 @@ from research.offline_retrieval.rrf import fuse_rrf
 
 
 SIMILARITY_TYPES = {"VERBATIM", "PARAPHRASE", "SUMMARY", "NONE"}
+# An exact alignment can be shown with fewer characters, but automatic
+# document coverage needs a substantial run of complete, varied words.
+_VERBATIM_MIN_EXACT_CHARS = 60
+_VERBATIM_MIN_EXACT_TOKENS = 8
+_VERBATIM_MIN_DISTINCT_TOKENS = 6
+_VERBATIM_MIN_LONG_DISTINCT_TOKENS = 2
 
 
 def _require_positive_int(value: Any, field: str) -> int:
@@ -184,6 +190,8 @@ def _dense_support_score(candidate: Mapping[str, Any]) -> float | None:
 def _classify(
     features: Mapping[str, Any],
     *,
+    alignment: Mapping[str, Any],
+    evidence_backed_exact_span: bool,
     dense_score: float | None,
     cross_encoder_score: float | None,
     thresholds: Mapping[str, Any],
@@ -198,11 +206,25 @@ def _classify(
         float(features["char_5gram_jaccard"]),
     )
     reasons: list[str] = []
+    if evidence_backed_exact_span:
+        exact_chars = int(alignment["exact_match_chars"])
+        exact_tokens = int(alignment["exact_match_token_count"])
+        # This is only a ranking heuristic, not a calibrated probability.
+        span_score = (
+            exact_chars / (exact_chars + _VERBATIM_MIN_EXACT_CHARS)
+            + exact_tokens / (exact_tokens + _VERBATIM_MIN_EXACT_TOKENS)
+        ) / 2
+        return (
+            "VERBATIM",
+            span_score,
+            ["substantial_exact_substring", "distinct_complete_word_run"],
+        )
     if (
         query_coverage >= thresholds["verbatim_query_coverage"]
         and exact_ratio >= thresholds["verbatim_exact_char_ratio"]
     ):
         reasons.extend(["high_query_token_coverage", "long_exact_character_run"])
+        reasons.append("exact_span_below_automatic_evidence_floor")
         return "VERBATIM", min(1.0, (query_coverage + exact_ratio) / 2), reasons
 
     reranker_pass = (
@@ -334,23 +356,80 @@ def _alignment(
         source_text,
         autojunk=False,
     ).find_longest_match()
+    matched_tokens: list[str] = []
     if block.size >= minimum_chars:
         query_start, query_end = block.a, block.a + block.size
         source_start, source_end = block.b, block.b + block.size
         kind = "EXACT_SUBSTRING"
+        # The character matcher can start in the middle of a word. Keep only
+        # tokens that are complete words on both sides of the alignment.
+        query_token_spans = token_spans(query_text)
+        source_token_spans = set(token_spans(source_text))
+        complete_query_spans = [
+            (left, right)
+            for left, right in query_token_spans
+            if query_start <= left
+            and right <= query_end
+            and (
+                source_start + left - query_start,
+                source_start + right - query_start,
+            )
+            in source_token_spans
+        ]
+        if complete_query_spans:
+            start_cuts_word = any(
+                left < query_start < right for left, right in query_token_spans
+            ) or any(left < source_start < right for left, right in source_token_spans)
+            end_cuts_word = any(
+                left < query_end < right for left, right in query_token_spans
+            ) or any(left < source_end < right for left, right in source_token_spans)
+            trimmed_start = (
+                complete_query_spans[0][0] if start_cuts_word else query_start
+            )
+            trimmed_end = complete_query_spans[-1][1] if end_cuts_word else query_end
+            if trimmed_end - trimmed_start >= minimum_chars:
+                source_start += trimmed_start - query_start
+                source_end -= query_end - trimmed_end
+                query_start, query_end = trimmed_start, trimmed_end
+            matched_tokens = [
+                unicodedata.normalize("NFKC", query_text[left:right]).casefold()
+                for left, right in complete_query_spans
+                if query_start <= left and right <= query_end
+            ]
     else:
         query_start, query_end = 0, len(query_text)
         source_start, source_end = 0, len(source_text)
         kind = "PASSAGE_LEVEL"
+    distinct_tokens = set(matched_tokens)
     return {
         "kind": kind,
-        "exact_match_chars": block.size,
+        "exact_match_chars": query_end - query_start if kind == "EXACT_SUBSTRING" else block.size,
+        "exact_match_token_count": len(matched_tokens),
+        "exact_match_distinct_token_count": len(distinct_tokens),
+        "exact_match_long_distinct_token_count": sum(
+            len(token) >= 5 for token in distinct_tokens
+        ),
         "report": _resolve_normalized_range(query, query_start, query_end),
         "source": _resolve_normalized_range(source, source_start, source_end),
     }
 
 
-def _evidence_status(label: str, alignment: Mapping[str, Any]) -> str:
+def _is_evidence_backed_exact_span(
+    alignment: Mapping[str, Any], *, minimum_alignment_chars: int
+) -> bool:
+    return (
+        alignment["kind"] == "EXACT_SUBSTRING"
+        and int(alignment["exact_match_chars"])
+        >= max(minimum_alignment_chars, _VERBATIM_MIN_EXACT_CHARS)
+        and int(alignment["exact_match_token_count"]) >= _VERBATIM_MIN_EXACT_TOKENS
+        and int(alignment["exact_match_distinct_token_count"])
+        >= _VERBATIM_MIN_DISTINCT_TOKENS
+        and int(alignment["exact_match_long_distinct_token_count"])
+        >= _VERBATIM_MIN_LONG_DISTINCT_TOKENS
+    )
+
+
+def _evidence_status(label: str, *, evidence_backed_exact_span: bool) -> str:
     """Keep retrieval relevance separate from evidence-backed similarity.
 
     Dense and Cross-Encoder scores establish topical relevance, not that a
@@ -361,7 +440,7 @@ def _evidence_status(label: str, alignment: Mapping[str, Any]) -> str:
 
     if label == "NONE":
         return "NO_SIMILARITY_HYPOTHESIS"
-    if label == "VERBATIM" and alignment["kind"] == "EXACT_SUBSTRING":
+    if label == "VERBATIM" and evidence_backed_exact_span:
         return "EVIDENCE_BACKED_EXACT_MATCH"
     return "PROVISIONAL_REVIEW_REQUIRED"
 
@@ -424,10 +503,6 @@ def _rerank_chunks(
             candidate["rank"] = rank
         output[query_id] = ordered
     return output
-
-
-def _count_tokens_in_range(text: str, start: int, end: int) -> int:
-    return sum(1 for left, right in token_spans(text) if left < end and right > start)
 
 
 def run_similarity_pipeline(
@@ -506,7 +581,7 @@ def run_similarity_pipeline(
     matches: list[dict[str, Any]] = []
     flagged_query_ids: set[str] = set()
     review_query_ids: set[str] = set()
-    exact_selected_ranges: dict[str, tuple[int, int]] = {}
+    exact_selected_ranges: dict[str, list[tuple[int, int]]] = defaultdict(list)
     selected_source_documents: Counter[str] = Counter()
     selected_by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
     label_counts: Counter[str] = Counter()
@@ -520,10 +595,21 @@ def run_similarity_pipeline(
                 str(report_chunk["text"]),
                 str(source_chunk["text"]),
             )
+            alignment = _alignment(
+                report_chunk,
+                source_chunk,
+                minimum_chars=resolved["classification"]["minimum_alignment_chars"],
+            )
+            evidence_backed_exact_span = _is_evidence_backed_exact_span(
+                alignment,
+                minimum_alignment_chars=resolved["classification"]["minimum_alignment_chars"],
+            )
             dense_score = _dense_support_score(candidate)
             cross_encoder_score = candidate.get("cross_encoder_score")
             label, heuristic_score, reasons = _classify(
                 features,
+                alignment=alignment,
+                evidence_backed_exact_span=evidence_backed_exact_span,
                 dense_score=dense_score,
                 cross_encoder_score=(
                     float(cross_encoder_score)
@@ -535,12 +621,9 @@ def run_similarity_pipeline(
             )
             if label not in SIMILARITY_TYPES:
                 raise AssertionError(f"Unexpected similarity label: {label}")
-            alignment = _alignment(
-                report_chunk,
-                source_chunk,
-                minimum_chars=resolved["classification"]["minimum_alignment_chars"],
+            evidence_status = _evidence_status(
+                label, evidence_backed_exact_span=evidence_backed_exact_span
             )
-            evidence_status = _evidence_status(label, alignment)
             record = {
                 "query_id": query_id,
                 "report_chunk_id": report_chunk["chunk_id"],
@@ -586,9 +669,11 @@ def run_similarity_pipeline(
             flagged_query_ids.add(query_id)
             report_range = selected["alignment"]["report"]
             if selected["alignment"]["kind"] == "EXACT_SUBSTRING":
-                exact_selected_ranges[query_id] = (
-                    int(report_range["normalized_start"]),
-                    int(report_range["normalized_end"]),
+                exact_selected_ranges[query_id].append(
+                    (
+                        int(report_range["normalized_start"]),
+                        int(report_range["normalized_end"]),
+                    )
                 )
             selected_source_documents[str(selected["source_document_id"])] += 1
             selected_by_source[str(selected["source_document_id"])].append(selected)
@@ -612,14 +697,15 @@ def run_similarity_pipeline(
         len(tokenize(str(query_map[query_id]["text"])))
         for query_id in flagged_query_ids
     )
-    exact_matched_report_tokens = sum(
-        _count_tokens_in_range(
-            str(query_map[query_id]["text"]),
-            start,
-            end,
+    exact_matched_report_tokens = 0
+    for query_id, ranges in exact_selected_ranges.items():
+        report_chunk = query_map[query_id]
+        report_text = str(report_chunk.get("normalized_text", report_chunk["text"]))
+        exact_matched_report_tokens += sum(
+            1
+            for left, right in token_spans(report_text)
+            if any(start <= left and right <= end for start, end in ranges)
         )
-        for query_id, (start, end) in exact_selected_ranges.items()
-    )
     flagged_passage_coverage = (
         100.0 * flagged_report_tokens / total_report_tokens
         if total_report_tokens

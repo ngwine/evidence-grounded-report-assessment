@@ -6,11 +6,12 @@ MongoDB, the API and the UI are not prerequisites for a feasibility run.
 It is a research prototype, not the integrated lecturer-facing application.
 
 Current outputs must be reviewed by a person. In particular, the Pipeline 1
-whole-chunk verbatim threshold can miss a short exact reuse inside a long
-chunk; Pipeline 2's phrase-based verification is not a semantic contradiction
-checker and can mishandle negation or missing required evidence. These are
-known correctness gaps to resolve and evaluate before using the outputs for
-real plagiarism decisions or grades.
+verbatim path requires a substantial, varied exact span; short or generic
+matches stay provisional, and only one span per report chunk contributes to
+coverage. Pipeline 2 now abstains on nearby lexical negation and withholds a
+score whenever evidence is unresolved, but it is not a semantic contradiction
+checker. Both paths need labelled evaluation before use for real plagiarism
+decisions or grades.
 
 ## Executed flow
 
@@ -55,7 +56,9 @@ BM25 seeds and deterministic Personalized PageRank over adjacency and shared-
 term edges. It is a testable structure-and-term graph baseline, not a claim of
 implementing full HippoRAG. Verification v0 matches explicit evidence
 requirements authored in the rubric; semantic entailment and automatic rubric
-decomposition still require separate evaluation.
+decomposition still require separate evaluation. Any `CANNOT_ASSESS` checklist
+withholds its criterion and total proposed score; `assessable_subtotal` is only
+a diagnostic for the parts that could be assessed.
 
 ## Run
 
