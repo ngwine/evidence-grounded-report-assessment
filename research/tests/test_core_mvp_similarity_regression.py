@@ -95,6 +95,66 @@ def test_long_chunk_with_substantial_copied_span_has_exact_evidence_and_span_cov
     assert sum(row["selected_report_passages"] for row in result["source_summary"]) == 1
 
 
+def test_one_report_chunk_keeps_distinct_exact_spans_from_multiple_sources(tmp_path):
+    first_copy = (
+        "The provenance ledger binds every extracted paragraph to a stable "
+        "source page and immutable document version."
+    )
+    second_copy = (
+        "The evaluation protocol separates development tuning from the sealed "
+        "test split to prevent experimental leakage."
+    )
+    report_text = (
+        "Introductory material unique to the report. "
+        + first_copy
+        + " A separate section contains unrelated discussion. "
+        + second_copy
+        + " Closing material unique to the report."
+    )
+    report_path = tmp_path / "report.txt"
+    first_source_path = tmp_path / "first-source.txt"
+    second_source_path = tmp_path / "second-source.txt"
+    report_path.write_text(report_text, encoding="utf-8")
+    first_source_path.write_text(first_copy, encoding="utf-8")
+    second_source_path.write_text(second_copy, encoding="utf-8")
+    report = parse_document(
+        report_path, role="student-report", max_tokens=256, min_tokens=1
+    )
+    sources = parse_documents(
+        [first_source_path, second_source_path],
+        role="comparison-source",
+        max_tokens=256,
+        min_tokens=1,
+    )
+    assert len(report.chunks) == 1
+
+    result = run_similarity_pipeline(
+        report.chunks,
+        [chunk for source in sources for chunk in source.chunks],
+        config=_config(),
+        encoder=None,
+        reranker=None,
+    )
+
+    selected = [
+        match
+        for match in result["matches"]
+        if match["selected_for_document_coverage"]
+    ]
+    assert len(selected) == 2
+    assert len({match["source_document_id"] for match in selected}) == 2
+    assert {match["alignment"]["report"]["text"] for match in selected} == {
+        first_copy,
+        second_copy,
+    }
+    assert result["exact_matched_report_tokens"] == len(
+        tokenize(first_copy)
+    ) + len(tokenize(second_copy))
+    assert sum(
+        row["selected_report_passages"] for row in result["source_summary"]
+    ) == 2
+
+
 @pytest.mark.parametrize(
     "phrase",
     [

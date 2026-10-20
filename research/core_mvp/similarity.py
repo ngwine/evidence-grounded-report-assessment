@@ -17,6 +17,7 @@ from research.offline_retrieval.rrf import fuse_rrf
 
 
 SIMILARITY_TYPES = {"VERBATIM", "PARAPHRASE", "SUMMARY", "NONE"}
+CLASSIFICATION_POLICY = "EXACT_EVIDENCE_OR_UNVERIFIED_RETRIEVAL_V1"
 # An exact alignment can be shown with fewer characters, but automatic
 # document coverage needs a substantial run of complete, varied words.
 _VERBATIM_MIN_EXACT_CHARS = 60
@@ -66,6 +67,50 @@ def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError(
             "pipeline1.top_k must be <= rerank_depth when reranking is enabled"
         )
+    dense_enabled = bool(config.get("dense_enabled", True))
+    candidate_selection = config.get("candidate_selection", "rrf")
+    if (
+        not isinstance(candidate_selection, str)
+        or candidate_selection not in {"rrf", "quota_union"}
+    ):
+        raise ValueError("pipeline1.candidate_selection must be rrf or quota_union")
+    raw_quotas = config.get("candidate_quotas")
+    if candidate_selection == "quota_union":
+        if not dense_enabled or not reranker_enabled:
+            raise ValueError(
+                "pipeline1.quota_union requires Dense retrieval and reranking"
+            )
+        if (
+            not isinstance(raw_quotas, Mapping)
+            or set(raw_quotas) != {"bm25", "dense"}
+        ):
+            raise ValueError(
+                "pipeline1.candidate_quotas must specify bm25 and dense"
+            )
+        quotas = {
+            method: _require_positive_int(
+                raw_quotas[method], f"pipeline1.candidate_quotas.{method}"
+            )
+            for method in ("bm25", "dense")
+        }
+        if sum(quotas.values()) > rerank_depth:
+            raise ValueError(
+                "pipeline1.candidate_quotas must fit within rerank_depth"
+            )
+    else:
+        if raw_quotas is not None:
+            raise ValueError(
+                "pipeline1.candidate_quotas requires candidate_selection=quota_union"
+            )
+        quotas = None
+    raw_evidence_budget = config.get("evidence_budget_per_source")
+    evidence_budget = (
+        None
+        if raw_evidence_budget is None
+        else _require_positive_int(
+            raw_evidence_budget, "pipeline1.evidence_budget_per_source"
+        )
+    )
     thresholds = config.get("classification", {})
     if not isinstance(thresholds, Mapping):
         raise ValueError("pipeline1.classification must be an object")
@@ -76,8 +121,11 @@ def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
         "bm25_k1": float(config.get("bm25_k1", 1.2)),
         "bm25_b": float(config.get("bm25_b", 0.75)),
         "rrf_k": _require_positive_int(config.get("rrf_k", 60), "pipeline1.rrf_k"),
-        "dense_enabled": bool(config.get("dense_enabled", True)),
+        "dense_enabled": dense_enabled,
         "reranker_enabled": reranker_enabled,
+        "candidate_selection": candidate_selection,
+        "candidate_quotas": quotas,
+        "evidence_budget_per_source": evidence_budget,
         "classification": {
             "verbatim_query_coverage": _probability(
                 thresholds.get("verbatim_query_coverage", 0.72),
@@ -104,6 +152,7 @@ def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
                 "pipeline1.classification.lexical_paraphrase_coverage",
             ),
             "summary_length_ratio": _probability(
+                # Accepted for old configs, but never used to infer a summary.
                 thresholds.get("summary_length_ratio", 0.65),
                 "pipeline1.classification.summary_length_ratio",
             ),
@@ -113,6 +162,92 @@ def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
             ),
         },
     }
+
+
+def _select_candidate_pool(
+    rankings: Mapping[str, list[dict[str, Any]]],
+    methods: Mapping[str, Mapping[str, list[dict[str, Any]]]],
+    *,
+    candidate_depth: int,
+    rerank_depth: int,
+    candidate_selection: str,
+    candidate_quotas: Mapping[str, int] | None,
+    evidence_budget_per_source: int | None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Reserve lexical/semantic evidence before filling by global RRF rank.
+
+    The optional source budget limits *candidate passages per query*, not the
+    number of report chunks or the final similarity percentage. A source can
+    therefore contribute several distinct passages without monopolising the
+    Cross-Encoder input. Quota overlaps count for both methods; all ties use
+    the existing RRF order (score, then chunk ID).
+    """
+
+    output: dict[str, list[dict[str, Any]]] = {}
+    for query_id in sorted(rankings):
+        fused = rankings[query_id]
+        by_id = {str(candidate["chunk_id"]): candidate for candidate in fused}
+        selected: list[str] = []
+        selected_set: set[str] = set()
+        source_counts: Counter[str] = Counter()
+        quota_methods: dict[str, set[str]] = defaultdict(set)
+
+        def add(candidate_id: str) -> bool:
+            if candidate_id in selected_set:
+                return True
+            candidate = by_id.get(candidate_id)
+            if candidate is None:
+                return False
+            source_id = str(candidate["document_id"])
+            if (
+                evidence_budget_per_source is not None
+                and source_counts[source_id] >= evidence_budget_per_source
+            ):
+                return False
+            selected.append(candidate_id)
+            selected_set.add(candidate_id)
+            source_counts[source_id] += 1
+            return True
+
+        if candidate_selection == "quota_union":
+            assert candidate_quotas is not None
+            for method in ("bm25", "dense"):
+                satisfied = 0
+                for candidate in methods[method].get(query_id, []):
+                    candidate_id = str(candidate["chunk_id"])
+                    if add(candidate_id):
+                        quota_methods[candidate_id].add(method)
+                        satisfied += 1
+                    if satisfied >= candidate_quotas[method]:
+                        break
+            # Quota reservation changes membership, not the RRF ordering of
+            # the reserved passages within the reranker head.
+            selected.sort(key=lambda candidate_id: int(by_id[candidate_id]["rank"]))
+
+        for candidate in fused:
+            if len(selected) >= rerank_depth:
+                break
+            add(str(candidate["chunk_id"]))
+        for candidate in fused:
+            if len(selected) >= candidate_depth:
+                break
+            add(str(candidate["chunk_id"]))
+
+        chosen: list[dict[str, Any]] = []
+        for rank, candidate_id in enumerate(selected, 1):
+            record = deepcopy(by_id[candidate_id])
+            record["global_preselection_rank"] = int(record["rank"])
+            if record.get("score_type") == "rrf":
+                record["global_rrf_rank"] = record["global_preselection_rank"]
+            record["rank"] = rank
+            record["candidate_selection_reasons"] = (
+                [f"{method}_quota" for method in sorted(quota_methods[candidate_id])]
+                if quota_methods[candidate_id]
+                else ["rrf_fill"]
+            )
+            chosen.append(record)
+        output[query_id] = chosen
+    return output
 
 
 def _normalise_for_character_match(text: str) -> str:
@@ -195,8 +330,13 @@ def _classify(
     dense_score: float | None,
     cross_encoder_score: float | None,
     thresholds: Mapping[str, Any],
-) -> tuple[str, float, list[str]]:
-    """Return a transparent heuristic baseline, never a plagiarism verdict."""
+) -> tuple[str | None, float, list[str]]:
+    """Identify exact overlap or retrieval candidates, never infer semantic reuse.
+
+    A null label means the relation was not assessed, not a negative label.
+    Retrieval relevance and relative passage length cannot distinguish shared
+    subject matter from paraphrasing or summarization.
+    """
 
     query_coverage = float(features["query_token_coverage"])
     exact_ratio = float(features["longest_exact_query_ratio"])
@@ -254,22 +394,18 @@ def _classify(
             1.0,
             (dense_score + lexical_signal + cross_encoder_signal) / 3,
         )
-        if (
-            float(features["length_ratio_query_to_source"])
-            <= thresholds["summary_length_ratio"]
-        ):
-            reasons.append("query_substantially_shorter_than_source")
-            return "SUMMARY", heuristic_score, reasons
-        return "PARAPHRASE", heuristic_score, reasons
+        reasons.append("semantic_relation_not_verified")
+        return None, heuristic_score, reasons
 
     if (
         query_coverage >= thresholds["lexical_paraphrase_coverage"]
         and reranker_pass
     ):
         reasons.extend(
-            ["moderate_lexical_coverage", "cross_encoder_above_conservative_gate"]
+            ["moderate_lexical_coverage", "cross_encoder_above_conservative_gate",
+             "semantic_relation_not_verified"]
         )
-        return "PARAPHRASE", query_coverage, reasons
+        return None, query_coverage, reasons
     if not reranker_pass:
         reasons.append("cross_encoder_below_conservative_gate")
     reasons.append("insufficient_similarity_signal")
@@ -429,13 +565,14 @@ def _is_evidence_backed_exact_span(
     )
 
 
-def _evidence_status(label: str, *, evidence_backed_exact_span: bool) -> str:
+def _evidence_status(label: str | None, *, evidence_backed_exact_span: bool) -> str:
     """Keep retrieval relevance separate from evidence-backed similarity.
 
     Dense and Cross-Encoder scores establish topical relevance, not that a
     passage was reused.  Until the semantic classifier has labelled
     validation, only the conservative verbatim path may contribute to
-    document coverage; other positive hypotheses stay visible for review.
+    document coverage; unverified candidates stay visible for review with no
+    inferred PARAPHRASE/SUMMARY label.
     """
 
     if label == "NONE":
@@ -443,6 +580,38 @@ def _evidence_status(label: str, *, evidence_backed_exact_span: bool) -> str:
     if label == "VERBATIM" and evidence_backed_exact_span:
         return "EVIDENCE_BACKED_EXACT_MATCH"
     return "PROVISIONAL_REVIEW_REQUIRED"
+
+
+def _group_review_candidates(matches: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group the review queue without deleting pairs or modifying exact matches.
+
+    Repeated source retrieval is a diagnostic, not a reason to suppress valid
+    reuse or a substitute for verifying each report/source pair.
+    """
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for match in matches:
+        if match["selected_for_manual_review"]:
+            grouped[(str(match["source_document_id"]), str(match["source_chunk_id"]))].append(match)
+    groups = []
+    for (document_id, chunk_id), values in sorted(grouped.items()):
+        group_id = "review-source-" + chunk_id
+        report_ids = sorted({str(value["report_chunk_id"]) for value in values})
+        for value in values:
+            value["review_group_id"] = group_id
+        groups.append({
+            "group_id": group_id,
+            "source_document_id": document_id,
+            "source_chunk_id": chunk_id,
+            "source_name": values[0]["source_name"],
+            "report_chunk_ids": report_ids,
+            "report_chunk_count": len(report_ids),
+            "classification_status": "PROVISIONAL_REVIEW_REQUIRED",
+            "warning": (
+                "REPEATED_SOURCE_CHUNK_NOT_INDEPENDENT_EVIDENCE"
+                if len(report_ids) > 1 else None
+            ),
+        })
+    return sorted(groups, key=lambda group: (-group["report_chunk_count"], group["group_id"]))
 
 
 def _rerank_chunks(
@@ -538,10 +707,18 @@ def run_similarity_pipeline(
     if len(source_map) != len(source_chunks):
         raise ValueError("Source chunk IDs must be unique")
 
+    # A per-source cap may discard a method's first several passages. Fetch
+    # the full ranked source list in that opt-in mode so another document can
+    # refill the bounded candidate pool; the default path keeps its old depth.
+    retrieval_depth = (
+        len(source_chunks)
+        if resolved["evidence_budget_per_source"] is not None
+        else resolved["candidate_depth"]
+    )
     bm25 = rank_bm25(
         source_chunks,
         queries,
-        top_k=resolved["candidate_depth"],
+        top_k=retrieval_depth,
         k1=resolved["bm25_k1"],
         b=resolved["bm25_b"],
     )
@@ -552,7 +729,7 @@ def run_similarity_pipeline(
             source_chunks,
             queries,
             encoder=encoder,
-            top_k=resolved["candidate_depth"],
+            top_k=retrieval_depth,
         )
     if len(methods) == 1:
         candidates = deepcopy(bm25)
@@ -563,11 +740,33 @@ def run_similarity_pipeline(
         candidates = fuse_rrf(
             methods,
             rrf_k=resolved["rrf_k"],
-            top_k=resolved["candidate_depth"],
+            top_k=(
+                len(source_chunks)
+                if resolved["candidate_selection"] == "quota_union"
+                or resolved["evidence_budget_per_source"] is not None
+                else resolved["candidate_depth"]
+            ),
         )
         for values in candidates.values():
             for candidate in values:
                 candidate["score_type"] = "rrf"
+    if (
+        resolved["candidate_selection"] == "quota_union"
+        or resolved["evidence_budget_per_source"] is not None
+    ):
+        candidates = _select_candidate_pool(
+            candidates,
+            methods,
+            candidate_depth=resolved["candidate_depth"],
+            rerank_depth=(
+                resolved["rerank_depth"]
+                if resolved["reranker_enabled"]
+                else resolved["top_k"]
+            ),
+            candidate_selection=resolved["candidate_selection"],
+            candidate_quotas=resolved["candidate_quotas"],
+            evidence_budget_per_source=resolved["evidence_budget_per_source"],
+        )
     if resolved["reranker_enabled"]:
         assert reranker is not None
         candidates = _rerank_chunks(
@@ -619,7 +818,7 @@ def run_similarity_pipeline(
                 ),
                 thresholds=resolved["classification"],
             )
-            if label not in SIMILARITY_TYPES:
+            if label is not None and label not in SIMILARITY_TYPES:
                 raise AssertionError(f"Unexpected similarity label: {label}")
             evidence_status = _evidence_status(
                 label, evidence_backed_exact_span=evidence_backed_exact_span
@@ -647,6 +846,9 @@ def run_similarity_pipeline(
                     else None
                 ),
                 "classification_status": evidence_status,
+                "semantic_verification_status": (
+                    "NOT_RUN" if label is None else "NOT_APPLICABLE"
+                ),
                 "heuristic_score": heuristic_score,
                 "score_calibration_status": "UNCALIBRATED",
                 "classification_reasons": reasons,
@@ -655,29 +857,62 @@ def run_similarity_pipeline(
                 "selected_for_document_coverage": False,
                 "selected_for_manual_review": False,
             }
+            if "global_preselection_rank" in candidate:
+                record["global_preselection_rank"] = candidate[
+                    "global_preselection_rank"
+                ]
+                record["candidate_selection_reasons"] = candidate[
+                    "candidate_selection_reasons"
+                ]
+                if "global_rrf_rank" in candidate:
+                    record["global_rrf_rank"] = candidate["global_rrf_rank"]
             query_matches.append(record)
-        selected = next(
-            (
-                match
-                for match in query_matches
-                if match["classification_status"] == "EVIDENCE_BACKED_EXACT_MATCH"
-            ),
-            None,
+        # One report chunk may contain distinct copied spans from different
+        # sources.  Selecting only the first exact candidate silently lost the
+        # later spans and their provenance.  Keep every exact candidate that
+        # adds at least one previously uncovered report token, while still
+        # suppressing duplicate sources for the very same span.
+        report_text = str(
+            report_chunk.get("normalized_text", report_chunk.get("text", ""))
         )
-        if selected is not None:
-            selected["selected_for_document_coverage"] = True
-            flagged_query_ids.add(query_id)
-            report_range = selected["alignment"]["report"]
-            if selected["alignment"]["kind"] == "EXACT_SUBSTRING":
-                exact_selected_ranges[query_id].append(
-                    (
-                        int(report_range["normalized_start"]),
-                        int(report_range["normalized_end"]),
-                    )
+        report_token_ranges = token_spans(report_text)
+        query_exact_ranges: list[tuple[int, int]] = []
+        selected_exact_matches: list[dict[str, Any]] = []
+        for match in query_matches:
+            if match["classification_status"] != "EVIDENCE_BACKED_EXACT_MATCH":
+                continue
+            report_range = match["alignment"]["report"]
+            candidate_range = (
+                int(report_range["normalized_start"]),
+                int(report_range["normalized_end"]),
+            )
+            adds_new_token = any(
+                candidate_range[0] <= token_start
+                and token_end <= candidate_range[1]
+                and not any(
+                    selected_start <= token_start and token_end <= selected_end
+                    for selected_start, selected_end in query_exact_ranges
                 )
-            selected_source_documents[str(selected["source_document_id"])] += 1
-            selected_by_source[str(selected["source_document_id"])].append(selected)
-            label_counts[str(selected["similarity_type"])] += 1
+                for token_start, token_end in report_token_ranges
+            )
+            if not adds_new_token:
+                match["selection_exclusion_reason"] = (
+                    "DUPLICATE_REPORT_TOKEN_COVERAGE"
+                )
+                continue
+            match["selected_for_document_coverage"] = True
+            query_exact_ranges.append(candidate_range)
+            selected_exact_matches.append(match)
+
+        if selected_exact_matches:
+            flagged_query_ids.add(query_id)
+            exact_selected_ranges[query_id].extend(query_exact_ranges)
+            for selected in selected_exact_matches:
+                selected_source_documents[str(selected["source_document_id"])] += 1
+                selected_by_source[str(selected["source_document_id"])].append(
+                    selected
+                )
+                label_counts[str(selected["similarity_type"])] += 1
         else:
             provisional = next(
                 (
@@ -692,6 +927,7 @@ def run_similarity_pipeline(
                 review_query_ids.add(query_id)
         matches.extend(query_matches)
 
+    review_source_groups = _group_review_candidates(matches)
     total_report_tokens = sum(len(tokenize(str(chunk["text"]))) for chunk in report_chunks)
     flagged_report_tokens = sum(
         len(tokenize(str(query_map[query_id]["text"])))
@@ -771,6 +1007,9 @@ def run_similarity_pipeline(
         "schema_version": 1,
         "pipeline": "similarity-core-mvp-v0",
         "research_status": "FEASIBILITY_BASELINE_NOT_FINAL_CLASSIFIER",
+        "classification_policy": CLASSIFICATION_POLICY,
+        "semantic_classifier_available": False,
+        "deprecated_unused_thresholds": ["summary_length_ratio"],
         "configuration": resolved,
         "retrieval_methods": sorted(methods),
         "report_chunk_count": len(report_chunks),
@@ -788,13 +1027,23 @@ def run_similarity_pipeline(
         "calibrated_similarity_status": "UNAVAILABLE_WITHOUT_LABELLED_CALIBRATION",
         "label_counts_for_selected_matches": dict(sorted(label_counts.items())),
         "source_summary": source_summary,
+        "review_source_groups": review_source_groups,
+        "coverage_definitions": {
+            "provisional_review": {
+                "is_similarity_percentage": False,
+                "unit": "chunk_token_mass",
+                "definition": "Tokens in selected unverified report chunks divided by tokens in all report chunks; overlaps may be counted more than once. Measures review workload, not matched spans or confirmed similarity.",
+            },
+        },
         "matches": matches,
         "disclaimer": (
             "Similarity is not a plagiarism verdict. The classifier in this MVP is "
-            "a transparent heuristic feasibility baseline. PARAPHRASE and SUMMARY "
-            "appear only in provisional_similarity_type pending human review; "
-            "they do not contribute "
-            "to flagged coverage until a labelled semantic validator exists. "
+            "a transparent heuristic feasibility baseline. Retrieval relevance "
+            "does not establish paraphrase or summary: both semantic labels remain "
+            "null until an independently evaluated semantic validator exists. "
+            "Review groups retain all selected pairs; repeated source retrieval "
+            "is not independent evidence. Review coverage measures chunk-token "
+            "workload, not similarity. "
             "Lecturer review is required before academic use."
         ),
     }

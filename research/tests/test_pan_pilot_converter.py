@@ -23,6 +23,20 @@ def _read_jsonl(path: Path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
+def _split_groups(pack: Path):
+    manifest = _read_json(pack / "dataset-manifest.json")
+    queries = _read_jsonl(pack / "queries.jsonl")
+    documents = _read_jsonl(pack / "documents.jsonl")
+    return {
+        "parents": set(manifest["split"]["parent_annotation_ids"]),
+        "suspicious": {
+            query["annotation_provenance"]["suspicious_document"]
+            for query in queries
+        },
+        "sources": {document["source_reference"] for document in documents},
+    }
+
+
 def _write_pan_fixture(
     root: Path,
     *,
@@ -289,6 +303,201 @@ def test_sampling_is_seeded_stratified_bounded_and_does_not_read_full_corpus(
     )
     for filename in OUTPUT_NAMES.values():
         assert (first_dir / filename).read_bytes() == (second_dir / filename).read_bytes()
+
+
+def test_prior_manifest_exclusions_create_repeatable_pairwise_disjoint_splits(
+    tmp_path,
+):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(
+        corpus,
+        annotation_count=24,
+        distractor_count=24,
+    )
+    dev0 = tmp_path / "dev0"
+    dev1 = tmp_path / "dev1"
+    dev1_repeat = tmp_path / "dev1-repeat"
+    test0 = tmp_path / "test0"
+
+    convert_pan_pilot(
+        dataset="pan-pc-11",
+        input_root=corpus,
+        output_dir=dev0,
+        dataset_version="fixture-v1",
+        split_name="DEV0",
+        max_positive_annotations=3,
+        max_candidate_documents=6,
+        seed=101,
+    )
+    dev0_manifest = dev0 / "dataset-manifest.json"
+    for output in (dev1, dev1_repeat):
+        convert_pan_pilot(
+            dataset="pan-pc-11",
+            input_root=corpus,
+            output_dir=output,
+            dataset_version="fixture-v1",
+            split_name="DEV1",
+            max_positive_annotations=3,
+            max_candidate_documents=6,
+            seed=102,
+            exclude_manifests=[dev0_manifest],
+        )
+    convert_pan_pilot(
+        dataset="pan-pc-11",
+        input_root=corpus,
+        output_dir=test0,
+        dataset_version="fixture-v1",
+        split_name="TEST0",
+        max_positive_annotations=3,
+        max_candidate_documents=6,
+        seed=103,
+        exclude_manifests=[
+            dev0_manifest,
+            dev1 / "dataset-manifest.json",
+        ],
+    )
+
+    for filename in OUTPUT_NAMES.values():
+        assert (dev1 / filename).read_bytes() == (
+            dev1_repeat / filename
+        ).read_bytes()
+
+    groups = [_split_groups(path) for path in (dev0, dev1, test0)]
+    for group in groups:
+        assert len(group["parents"]) == 3
+        assert len(group["suspicious"]) == 3
+        assert len(group["sources"]) == 6
+    for left_index, left in enumerate(groups):
+        for right in groups[left_index + 1 :]:
+            assert left["parents"].isdisjoint(right["parents"])
+            assert left["suspicious"].isdisjoint(right["suspicious"])
+            assert left["sources"].isdisjoint(right["sources"])
+
+    dev1_data = _read_json(dev1 / "dataset-manifest.json")
+    assert dev1_data["governance"]["status"] == "PENDING"
+    assert dev1_data["exclusions"]["policy"] == "prior-derived-split-disjoint-v1"
+    assert dev1_data["exclusions"]["manifest_count"] == 1
+    assert dev1_data["exclusions"]["union_counts"] == {
+        "parent_annotation_ids": 3,
+        "suspicious_documents": 3,
+        "candidate_source_documents": 6,
+    }
+    [prior] = dev1_data["exclusions"]["manifests"]
+    assert prior["manifest_sha256"] == hashlib.sha256(
+        dev0_manifest.read_bytes()
+    ).hexdigest()
+    assert prior["documents_sha256"] == hashlib.sha256(
+        (dev0 / "documents.jsonl").read_bytes()
+    ).hexdigest()
+    assert prior["queries_sha256"] == hashlib.sha256(
+        (dev0 / "queries.jsonl").read_bytes()
+    ).hexdigest()
+    assert dev1_data["sampling"]["source_documents_excluded"] == 6
+    assert dev1_data["sampling"]["annotations_excluded"] >= 3
+
+    test0_data = _read_json(test0 / "dataset-manifest.json")
+    assert test0_data["governance"]["status"] == "PENDING"
+    assert test0_data["exclusions"]["manifest_count"] == 2
+    assert test0_data["exclusions"]["union_counts"] == {
+        "parent_annotation_ids": 6,
+        "suspicious_documents": 6,
+        "candidate_source_documents": 12,
+    }
+    assert len(test0_data["exclusions"]["union_checksums"][
+        "candidate_source_documents_sha256"
+    ]) == 64
+
+
+def test_exclusion_manifest_companions_are_checksum_and_corpus_bound(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(corpus, annotation_count=8, distractor_count=8)
+    dev0 = tmp_path / "dev0"
+    dev0_manifest = convert_pan_pilot(
+        dataset="pan-pc-11",
+        input_root=corpus,
+        output_dir=dev0,
+        dataset_version="fixture-v1",
+        max_positive_annotations=2,
+        max_candidate_documents=4,
+    ).manifest_path
+
+    with (dev0 / "queries.jsonl").open("ab") as stream:
+        stream.write(b" ")
+    with pytest.raises(ValueError, match="queries checksum mismatch"):
+        convert_pan_pilot(
+            dataset="pan-pc-11",
+            input_root=corpus,
+            output_dir=tmp_path / "tampered",
+            dataset_version="fixture-v1",
+            max_positive_annotations=2,
+            max_candidate_documents=4,
+            exclude_manifests=[dev0_manifest],
+        )
+
+    # Restore the declared companion, then prove the manifest cannot be used
+    # against a different extraction inventory.
+    queries = (dev0 / "queries.jsonl").read_bytes().rstrip() + b"\n"
+    (dev0 / "queries.jsonl").write_bytes(queries)
+    other_corpus = tmp_path / "other-corpus"
+    _write_sampling_fixture(other_corpus, annotation_count=8, distractor_count=8)
+    (other_corpus / "src" / "source-document-extra.txt").write_text(
+        "changes metadata inventory", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="input fingerprint"):
+        convert_pan_pilot(
+            dataset="pan-pc-11",
+            input_root=other_corpus,
+            output_dir=tmp_path / "wrong-corpus",
+            dataset_version="fixture-v1",
+            max_positive_annotations=2,
+            max_candidate_documents=4,
+            exclude_manifests=[dev0_manifest],
+        )
+
+
+def test_cli_accepts_repeated_exclusion_manifests(tmp_path, capsys):
+    corpus = tmp_path / "corpus"
+    _write_sampling_fixture(corpus, annotation_count=18, distractor_count=18)
+    earlier_manifests = []
+    for index, seed in enumerate((201, 202)):
+        output = tmp_path / f"prior-{index}"
+        earlier_manifests.append(
+            convert_pan_pilot(
+                dataset="pan-pc-11",
+                input_root=corpus,
+                output_dir=output,
+                dataset_version="fixture-v1",
+                max_positive_annotations=2,
+                max_candidate_documents=4,
+                seed=seed,
+                exclude_manifests=earlier_manifests,
+            ).manifest_path
+        )
+
+    output = tmp_path / "cli-output-excluded"
+    argv = [
+        "--dataset",
+        "pan-pc-11",
+        "--input-root",
+        str(corpus),
+        "--output-dir",
+        str(output),
+        "--dataset-version",
+        "fixture-v1",
+        "--max-positive-annotations",
+        "2",
+        "--max-candidate-documents",
+        "4",
+        "--seed",
+        "203",
+    ]
+    for manifest in earlier_manifests:
+        argv.extend(["--exclude-manifest", str(manifest)])
+    assert main(argv) == 0
+    capsys.readouterr()
+    manifest = _read_json(output / "dataset-manifest.json")
+    assert manifest["exclusions"]["manifest_count"] == 2
+    assert manifest["governance"]["status"] == "PENDING"
 
 
 def test_converter_skips_and_reports_zero_length_annotations(tmp_path):

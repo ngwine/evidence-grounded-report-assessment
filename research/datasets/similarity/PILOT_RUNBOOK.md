@@ -51,6 +51,49 @@ seed, selected IDs/candidate pool and archive lineage. Full-corpus evaluation
 requires a streaming/inverted BM25 index and batched vector index rather than
 the in-memory reference runner.
 
+### Derive leakage-safe DEV1 and sealed TEST0
+
+Keep the existing 30-parent pack as `DEV0`. Derive `DEV1` with seed `20261012`
+while excluding DEV0, then derive `TEST0` with seed `20261013` while excluding
+both earlier manifests. The exclusion applies to parent annotations,
+suspicious documents, positive source documents, and the complete prior
+candidate pools (including distractors).
+
+```bash
+./.venv/bin/python -m research.pan_pilot \
+  --dataset pan-pc-11 \
+  --input-root var/datasets/raw/pan-pc-11/v1/extracted-unar/pan-plagiarism-corpus-2011/external-detection-corpus \
+  --output-dir var/datasets/derived/similarity/pan-pc-11-dev1-v1 \
+  --dataset-version zenodo-3250095-v1-external-derived-pilot \
+  --split-name DEV1-leakage-safe \
+  --max-positive-annotations 30 \
+  --max-candidate-documents 200 \
+  --seed 20261012 \
+  --source-archive var/datasets/raw/pan-pc-11/v1/pan-plagiarism-corpus-2011.part1.rar \
+  --source-archive var/datasets/raw/pan-pc-11/v1/pan-plagiarism-corpus-2011.part2.rar \
+  --exclude-manifest var/datasets/derived/similarity/pan-pc-11-pilot-v1/dataset-manifest.json
+
+./.venv/bin/python -m research.pan_pilot \
+  --dataset pan-pc-11 \
+  --input-root var/datasets/raw/pan-pc-11/v1/extracted-unar/pan-plagiarism-corpus-2011/external-detection-corpus \
+  --output-dir var/datasets/derived/similarity/pan-pc-11-test0-v1 \
+  --dataset-version zenodo-3250095-v1-external-derived-pilot \
+  --split-name TEST0-leakage-safe \
+  --max-positive-annotations 30 \
+  --max-candidate-documents 200 \
+  --seed 20261013 \
+  --source-archive var/datasets/raw/pan-pc-11/v1/pan-plagiarism-corpus-2011.part1.rar \
+  --source-archive var/datasets/raw/pan-pc-11/v1/pan-plagiarism-corpus-2011.part2.rar \
+  --exclude-manifest var/datasets/derived/similarity/pan-pc-11-pilot-v1/dataset-manifest.json \
+  --exclude-manifest var/datasets/derived/similarity/pan-pc-11-dev1-v1/dataset-manifest.json
+```
+
+Both new manifests intentionally remain `PENDING`; a real reviewer must finish
+the governance gate before any runner invocation. TEST0 stays sealed until the
+method and configuration have been frozen on DEV1. Current split audit evidence
+is recorded in
+`research/protocols/rq1-similarity/pan-pc-11-split-readiness.md`.
+
 PAN13 Text Alignment component diagnostic:
 
 ```bash

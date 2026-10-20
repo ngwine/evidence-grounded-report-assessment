@@ -136,7 +136,8 @@ def test_pipeline1_keeps_topical_semantic_hits_for_review_without_flagging_cover
 
     match = result["matches"][0]
     assert match["similarity_type"] is None
-    assert match["provisional_similarity_type"] in {"PARAPHRASE", "SUMMARY"}
+    assert match["provisional_similarity_type"] is None
+    assert match["semantic_verification_status"] == "NOT_RUN"
     assert match["classification_status"] == "PROVISIONAL_REVIEW_REQUIRED"
     assert match["selected_for_manual_review"] is True
     assert match["selected_for_document_coverage"] is False

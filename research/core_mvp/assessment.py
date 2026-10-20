@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from copy import deepcopy
+from dataclasses import dataclass
 import math
 import re
 import unicodedata
@@ -30,6 +31,96 @@ _CLAUSE_BREAK = re.compile(
     r"[.!?;:,\n]|\b(?:but|however|nhưng|tuy nhiên)\b",
     flags=re.IGNORECASE,
 )
+
+
+@dataclass(frozen=True)
+class _ScopedEvidence:
+    """A retrieval hit resolved against the current report, never a raw hit."""
+
+    record: dict[str, Any]
+    chunk: Mapping[str, Any]
+
+
+def _document_version(item: Mapping[str, Any]) -> str | None:
+    """Accept the chunk and span field names without silently mixing versions."""
+
+    values = [
+        value
+        for key in ("document_version", "document_version_id")
+        if (value := item.get(key)) is not None
+    ]
+    if any(not isinstance(value, str) or not value for value in values):
+        raise ValueError("Evidence document version must be a non-empty string")
+    if len(set(values)) > 1:
+        raise ValueError("Conflicting evidence document versions")
+    return values[0] if values else None
+
+
+def _report_scope(
+    report_chunks: Sequence[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], str, str | None]:
+    """Require one report/version even when a caller bypasses parse_document."""
+
+    report_map: dict[str, dict[str, Any]] = {}
+    report_id = report_chunks[0].get("document_id")
+    if not isinstance(report_id, str) or not report_id:
+        raise ValueError("Report chunks require a non-empty document_id")
+    version = _document_version(report_chunks[0])
+    for chunk in report_chunks:
+        chunk_id = chunk.get("chunk_id")
+        if not isinstance(chunk_id, str) or not chunk_id:
+            raise ValueError("Report chunks require a non-empty chunk_id")
+        if chunk_id in report_map:
+            raise ValueError("Report chunk IDs must be unique")
+        if chunk.get("document_id") != report_id:
+            raise ValueError("Report chunks must belong to one report")
+        if _document_version(chunk) != version:
+            raise ValueError("Report chunks must belong to one document version")
+        report_map[chunk_id] = chunk
+    return report_map, report_id, version
+
+
+def _validated_evidence_pack(
+    candidates: Sequence[dict[str, Any]],
+    report_map: Mapping[str, dict[str, Any]],
+    *,
+    report_id: str,
+    report_version: str | None,
+) -> list[_ScopedEvidence]:
+    """Resolve every hit to a canonical report chunk before verification."""
+
+    pack: list[_ScopedEvidence] = []
+    seen_ids: set[str] = set()
+    for candidate in candidates:
+        chunk_id = candidate.get("chunk_id")
+        if not isinstance(chunk_id, str) or chunk_id not in report_map:
+            raise ValueError(f"Dangling evidence chunk_id: {chunk_id!r}")
+        if chunk_id in seen_ids:
+            raise ValueError(f"Duplicate evidence chunk_id: {chunk_id}")
+        seen_ids.add(chunk_id)
+        chunk = report_map[chunk_id]
+        if candidate.get("document_id") != report_id or chunk["document_id"] != report_id:
+            raise ValueError(f"Cross-report evidence chunk_id: {chunk_id}")
+        candidate_version = _document_version(candidate)
+        if candidate_version is not None and candidate_version != report_version:
+            raise ValueError(f"Cross-version evidence chunk_id: {chunk_id}")
+        if _document_version(chunk) != report_version:
+            raise ValueError(f"Cross-version evidence chunk_id: {chunk_id}")
+        spans = chunk.get("source_spans", [])
+        if isinstance(spans, (str, bytes)) or not isinstance(spans, Sequence):
+            raise ValueError(f"Invalid evidence source spans for {chunk_id}")
+        if report_version is not None and not spans:
+            raise ValueError(f"Missing evidence source spans for {chunk_id}")
+        for span in spans:
+            if not isinstance(span, Mapping):
+                raise ValueError(f"Invalid evidence source span for {chunk_id}")
+            if span.get("document_id") != report_id:
+                raise ValueError(f"Cross-report evidence source span for {chunk_id}")
+            span_version = _document_version(span)
+            if span_version != report_version:
+                raise ValueError(f"Cross-version evidence source span for {chunk_id}")
+        pack.append(_ScopedEvidence(_evidence_record(candidate, chunk), chunk))
+    return pack
 
 
 def _positive_int(value: Any, field: str) -> int:
@@ -201,8 +292,10 @@ def _evidence_record(
         "evidence_id": f"evidence-{chunk['chunk_id']}",
         "chunk_id": chunk["chunk_id"],
         "document_id": chunk["document_id"],
-        "document_version_id": chunk.get("document_version"),
+        "document_version_id": _document_version(chunk),
         "source_name": chunk.get("source_name"),
+        "section_path": deepcopy(chunk.get("section_path", [])),
+        "locator": deepcopy(chunk.get("locator")),
         "rank": int(candidate["rank"]),
         "retrieval_score": candidate.get("score"),
         "retrieval_score_type": candidate.get("score_type"),
@@ -214,21 +307,17 @@ def _evidence_record(
 
 def _verify(
     checklist: Mapping[str, Any],
-    candidates: Sequence[dict[str, Any]],
-    report_chunks: Mapping[str, dict[str, Any]],
+    evidence_pack: Sequence[_ScopedEvidence],
 ) -> dict[str, Any]:
-    evidence = [
-        _evidence_record(candidate, report_chunks[str(candidate["chunk_id"])])
-        for candidate in candidates
-    ]
+    evidence = [entry.record for entry in evidence_pack]
     requirement_results: list[dict[str, Any]] = []
     matched_spans: list[dict[str, Any]] = []
     negated_spans: list[dict[str, Any]] = []
     for requirement in checklist["requirements"]:
         hits: list[dict[str, Any]] = []
         negated_hits: list[dict[str, Any]] = []
-        for candidate in candidates:
-            chunk = report_chunks[str(candidate["chunk_id"])]
+        for entry in evidence_pack:
+            chunk = entry.chunk
             text = str(chunk.get("normalized_text", chunk.get("text", "")))
             for alternative in requirement["any_of"]:
                 for start, end in _phrase_matches(text, str(alternative)):
@@ -239,7 +328,7 @@ def _verify(
                     hit = {
                         "requirement_id": requirement["requirement_id"],
                         "matched_alternative": alternative,
-                        "evidence_id": f"evidence-{chunk['chunk_id']}",
+                        "evidence_id": entry.record["evidence_id"],
                         "span": _resolve_normalized_range(chunk, span_start, span_end),
                     }
                     if negated_clause is not None:
@@ -260,8 +349,8 @@ def _verify(
 
     contradiction_hits: list[dict[str, Any]] = []
     for pattern in checklist["contradiction_patterns"]:
-        for candidate in candidates:
-            chunk = report_chunks[str(candidate["chunk_id"])]
+        for entry in evidence_pack:
+            chunk = entry.chunk
             text = str(chunk.get("normalized_text", chunk.get("text", "")))
             location = _phrase_match(text, str(pattern))
             if location is None:
@@ -270,7 +359,7 @@ def _verify(
             contradiction_hits.append(
                 {
                     "pattern": pattern,
-                    "evidence_id": f"evidence-{chunk['chunk_id']}",
+                    "evidence_id": entry.record["evidence_id"],
                     "span": _resolve_normalized_range(chunk, start, end),
                 }
             )
@@ -420,9 +509,7 @@ def run_assessment_pipeline(
         raise ValueError("Pipeline 2 requires at least one report chunk")
     resolved = validate_assessment_config(config)
     compiled = compile_rubric(rubric)
-    report_map = {str(chunk["chunk_id"]): chunk for chunk in report_chunks}
-    if len(report_map) != len(report_chunks):
-        raise ValueError("Report chunk IDs must be unique")
+    report_map, report_id, report_version = _report_scope(report_chunks)
 
     checklist_results: list[dict[str, Any]] = []
     for criterion in compiled["criteria"]:
@@ -453,7 +540,13 @@ def run_assessment_pipeline(
                     "reranked": False,
                     "graph_diagnostics": graph_diagnostics,
                 }
-            verification = _verify(checklist, candidates, report_map)
+            evidence_pack = _validated_evidence_pack(
+                candidates,
+                report_map,
+                report_id=report_id,
+                report_version=report_version,
+            )
+            verification = _verify(checklist, evidence_pack)
             checklist_results.append(
                 {
                     "criterion_id": criterion["criterion_id"],

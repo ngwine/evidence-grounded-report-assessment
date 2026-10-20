@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "provenance": "Entirely fictional text authored for deterministic software diagnostics; no student report or external corpus is included.",
+  "cases": [
+    {
+      "id": "distinctive-verbatim",
+      "kind": "positive_exact_span",
+      "report": "The station stores each soil moisture reading with a UTC timestamp and hashes the calibration table before issuing a watering command.",
+      "source": "The station stores each soil moisture reading with a UTC timestamp and hashes the calibration table before issuing a watering command.",
+      "expect_evidence_backed_verbatim": true,
+      "notes": "Checks an exact, distinctive span and document aggregation."
+    },
+    {
+      "id": "attributed-quotation",
+      "kind": "quote_or_citation",
+      "report": "The fictional operation manual states: \"The controller closes the irrigation valve whenever the soil sensor remains above the wet threshold for three consecutive samples.\" (Source A, section 2).",
+      "source": "The controller closes the irrigation valve whenever the soil sensor remains above the wet threshold for three consecutive samples.",
+      "expect_evidence_backed_verbatim": true,
+      "notes": "An attributed quotation remains a similarity match, not a plagiarism verdict. Citation detection itself is not implemented."
+    },
+    {
+      "id": "negated-hard-negative",
+      "kind": "same_topic_conflicting_claim",
+      "report": "The controller never opens the valve when moisture is above seventy percent; it waits for three dry readings.",
+      "source": "At more than seventy percent moisture, the valve always opens immediately; three readings of dry soil are ignored by the controller.",
+      "expect_evidence_backed_verbatim": false,
+      "notes": "Lexical overlap is high, but opposite polarity cannot be treated as an exact reused claim."
+    },
+    {
+      "id": "no-relevant-source",
+      "kind": "no_source",
+      "report": "A camera estimates greenhouse leaf area from purple calibration cards and uploads images at dawn.",
+      "source": "A library catalog tracks bicycle rentals and sends overdue reminders each Tuesday.",
+      "expect_evidence_backed_verbatim": false,
+      "notes": "The supplied corpus has no relevant source; top-k retrieval alone does not prove reuse."
+    },
+    {
+      "id": "generic-stock-sentence",
+      "kind": "generic_overlap",
+      "report": "The results are shown in Table 1.",
+      "source": "The results are shown in Table 1.",
+      "expect_evidence_backed_verbatim": false,
+      "notes": "A stock phrase must not contribute to automatic document coverage."
+    },
+    {
+      "id": "semantic-rewrite",
+      "kind": "paraphrase_candidate",
+      "report": "The pump starts after three consecutive dry soil readings and stops when a later measurement reports wet soil.",
+      "source": "Three successive sensor measurements below the dry threshold trigger irrigation. The controller closes the pump after a subsequent sample crosses the wet threshold.",
+      "expect_evidence_backed_verbatim": false,
+      "notes": "This is only a candidate for independent human labelling; a final PARAPHRASE label is not asserted by this fixture."
+    }
+  ]
+}

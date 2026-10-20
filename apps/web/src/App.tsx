@@ -12,6 +12,7 @@ import type {
   RunRecord,
   SimilarityMatch,
   SimilarityReport,
+  SimilarityReviewSourceGroup,
   SourceSpan,
 } from './types';
 
@@ -225,6 +226,9 @@ function UploadPanel({ onCreated }: { onCreated: (run: RunRecord) => void }) {
 
 function SimilarityCard({ match, index, inputs }: { match: SimilarityMatch; index: number; inputs?: RunRecord['inputs'] }) {
   const exact = match.classification_status === 'EVIDENCE_BACKED_EXACT_MATCH';
+  const candidateLabel = match.provisional_similarity_type === 'VERBATIM'
+    ? 'Khớp chữ cần kiểm tra — chưa đủ bằng chứng VERBATIM'
+    : 'Ứng viên liên quan — chưa xác minh';
   const reportSpan = match.alignment?.report;
   const sourceSpan = match.alignment?.source;
   return (
@@ -240,7 +244,7 @@ function SimilarityCard({ match, index, inputs }: { match: SimilarityMatch; inde
         <div><span className="quote-label">TRONG NGUỒN ĐỐI CHỨNG</span><Quote text={sourceSpan?.text} /><p className="locator">{spanLocation(sourceSpan?.source_spans, sourceSpan)}</p></div>
       </div>
       <div className="evidence-footer">
-        <span>{exact ? match.similarity_type ?? 'VERBATIM' : `Giả thuyết: ${match.provisional_similarity_type ?? 'chưa rõ'}`}</span>
+        <span>{exact ? match.similarity_type ?? 'VERBATIM' : candidateLabel}</span>
         <span>Passage #{shortId(match.report_chunk_id)} · source #{shortId(match.source_chunk_id)}</span>
       </div>
     </article>
@@ -253,19 +257,45 @@ function SimilarityView({ report, inputs }: { report: SimilarityReport | null | 
   const matches = (report.matches ?? []).filter(
     (match) => match.selected_for_document_coverage || match.selected_for_manual_review,
   );
-  const selected = showAll ? matches : matches.slice(0, 10);
+  const sourceGroups = new Map((report.review_source_groups ?? []).map((group) => [group.group_id, group]));
+  const displayGroups: Array<{ key: string; group?: SimilarityReviewSourceGroup; matches: SimilarityMatch[] }> = [];
+  const groupedReviews = new Map<string, (typeof displayGroups)[number]>();
+  for (const match of matches) {
+    const group = match.selected_for_manual_review && match.review_group_id
+      ? sourceGroups.get(match.review_group_id)
+      : undefined;
+    if (group) {
+      let entry = groupedReviews.get(group.group_id);
+      if (!entry) {
+        entry = { key: `review-${group.group_id}`, group, matches: [] };
+        groupedReviews.set(group.group_id, entry);
+        displayGroups.push(entry);
+      }
+      entry.matches.push(match);
+    } else {
+      displayGroups.push({ key: `${match.query_id}-${match.source_chunk_id}-${match.rank}`, matches: [match] });
+    }
+  }
+  // Page by source group so repeated candidates stay together and none are dropped.
+  const selected = showAll ? displayGroups : displayGroups.slice(0, 10);
+  const displayedMatches = selected.flatMap((entry) => entry.matches);
+  const matchIndices = new Map(displayedMatches.map((match, index) => [match, index]));
   return (
     <div className="result-body">
-      <div className="explainer"><strong>Đọc kết quả này thế nào?</strong><p>Chỉ những đoạn khớp nguyên văn đủ bằng chứng mới vào coverage. Các đoạn gần nghĩa hoặc có score truy xuất cao vẫn là ứng viên để giảng viên xem, chưa phải phát hiện đạo văn.</p></div>
+      <div className="explainer"><strong>Đọc kết quả này thế nào?</strong><p>Chỉ những đoạn khớp nguyên văn đủ bằng chứng mới vào coverage đã xác nhận. Các đoạn có điểm truy xuất cao là ứng viên liên quan cần giảng viên xác minh; điểm này chưa chứng minh diễn đạt lại, tóm tắt hay đạo văn.</p></div>
       <div className="stats-grid">
         <div className="stat"><span>Khớp chính xác có bằng chứng</span><strong>{percent(report.exact_match_coverage_percentage)}</strong><small>Coverage token trong báo cáo; không phải tỷ lệ đạo văn</small></div>
-        <div className="stat"><span>Đoạn cần kiểm tra tiếp</span><strong>{report.provisional_review_report_chunks ?? 0}</strong><small>{percent(report.provisional_review_passage_coverage_percentage)} coverage tạm xét</small></div>
+        <div className="stat"><span>Đoạn cần kiểm tra tiếp</span><strong>{report.provisional_review_report_chunks ?? 0}</strong><small>{percent(report.provisional_review_passage_coverage_percentage)}: tỷ lệ token trong các chunk cần review, không phải tỷ lệ tương đồng</small></div>
         <div className="stat"><span>Tỷ lệ tương đồng hiệu chuẩn</span><strong>{percent(report.calibrated_similarity_percentage)}</strong><small>Chưa có gold set để hiệu chuẩn</small></div>
       </div>
       {(report.source_summary ?? []).length > 0 && <div className="source-summary"><h3>Nguồn có đoạn khớp nguyên văn được chọn</h3>{(report.source_summary ?? []).map((source) => <div key={source.source_document_id}><span>{displayDocumentName(source.source_name, inputs)}</span><strong>{source.selected_report_passages} đoạn</strong></div>)}</div>}
       <div className="list-heading"><div><h3>Đoạn đối chiếu</h3><p>{matches.length} đoạn được chọn để xem bằng chứng hoặc review thủ công.</p></div><span className="count-badge">{matches.length}</span></div>
-      {selected.length ? selected.map((match, index) => <SimilarityCard key={`${match.query_id}-${match.source_chunk_id}-${match.rank}`} match={match} index={index} inputs={inputs} />) : <div className="empty-result">Chưa có đoạn được chọn để gắn cờ. Điều này không chứng minh báo cáo không có tương đồng; cần kiểm tra corpus và độ bao phủ truy xuất.</div>}
-      {!showAll && matches.length > selected.length && <button className="subtle-button load-more" type="button" onClick={() => setShowAll(true)}>Xem thêm {matches.length - selected.length} đoạn</button>}
+      {selected.length ? selected.map((entry) => <section key={entry.key}>
+        {entry.group && <div className="list-heading"><div><h3>{displayDocumentName(entry.group.source_name, inputs)}</h3><p>{entry.matches.length} đoạn báo cáo cùng đối chiếu với source #{shortId(entry.group.source_chunk_id)}.</p></div></div>}
+        {entry.group && (entry.group.warning === 'REPEATED_SOURCE_CHUNK_NOT_INDEPENDENT_EVIDENCE' || entry.matches.length > 1) && <div className="notice"><strong>Nhiều ứng viên cùng trỏ tới một đoạn nguồn</strong><span>Các cặp này không phải những bằng chứng hỗ trợ độc lập. Cần kiểm tra từng đoạn báo cáo và vị trí đối chiếu bên dưới.</span></div>}
+        {entry.matches.map((match) => <SimilarityCard key={`${match.query_id}-${match.source_chunk_id}-${match.rank}`} match={match} index={matchIndices.get(match)!} inputs={inputs} />)}
+      </section>) : <div className="empty-result">Chưa có đoạn được chọn để gắn cờ. Điều này không chứng minh báo cáo không có tương đồng; cần kiểm tra corpus và độ bao phủ truy xuất.</div>}
+      {!showAll && matches.length > displayedMatches.length && <button className="subtle-button load-more" type="button" onClick={() => setShowAll(true)}>Xem thêm {matches.length - displayedMatches.length} đoạn</button>}
     </div>
   );
 }

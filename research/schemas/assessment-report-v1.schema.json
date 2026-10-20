@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kltn.local/schemas/assessment-report-v1.schema.json",
+  "title": "Evidence-grounded Assessment Report v1",
+  "type": "object",
+  "required": [
+    "schema_version", "pipeline", "compiled_rubric", "checklist_results",
+    "criterion_results", "proposed_total_score", "max_score",
+    "requires_lecturer_review"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "pipeline": {"type": "string", "minLength": 1},
+    "compiled_rubric": {"type": "object"},
+    "checklist_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "checklist_id", "criterion_id", "verification_relation",
+          "checklist_outcome", "reason_code", "rationale", "evidence_pack"
+        ],
+        "properties": {
+          "checklist_id": {"type": "string", "minLength": 1},
+          "criterion_id": {"type": "string", "minLength": 1},
+          "verification_relation": {"enum": ["SUPPORTED", "CONTRADICTED", "INSUFFICIENT"]},
+          "checklist_outcome": {"enum": ["MET", "UNMET", "CANNOT_ASSESS"]},
+          "reason_code": {"type": "string", "minLength": 1},
+          "rationale": {"type": "string", "minLength": 1},
+          "evidence_pack": {
+            "type": "array",
+            "items": {"$ref": "evidence-v1.schema.json"}
+          }
+        }
+      }
+    },
+    "criterion_results": {"type": "array"},
+    "proposed_total_score": {"type": ["number", "null"]},
+    "max_score": {"type": "number", "exclusiveMinimum": 0},
+    "requires_lecturer_review": {"type": "boolean"}
+  }
+}

@@ -40,6 +40,9 @@ research/results/**
 research/configs/**/*.local.json
 research/notebooks/.ipynb_checkpoints/
 
+# Private weekly-submission bundles and source PDFs
+submission/
+
 # Tool caches
 .cache/
 .tmp/

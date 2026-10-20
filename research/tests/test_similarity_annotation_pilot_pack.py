@@ -54,7 +54,10 @@ def _passage(chunk_id: str, document_id: str, text: str, page: int) -> dict:
     }
 
 
-def _inputs(tmp_path: Path, *, wrong_hash: bool = False) -> tuple[Path, Path]:
+def _inputs(
+    tmp_path: Path, *, wrong_hash: bool = False,
+    semantic_label: str | None = "PARAPHRASE",
+) -> tuple[Path, Path]:
     reports = {
         "abstract": ("Abstract: Sudoku constraint encoding and search methods.", 1),
         "page-one-email": ("Private Person, person@example.test", 1),
@@ -83,7 +86,7 @@ def _inputs(tmp_path: Path, *, wrong_hash: bool = False) -> tuple[Path, Path]:
                     ),
                     "selected_for_document_coverage": False,
                     "similarity_type": None,
-                    "provisional_similarity_type": "PARAPHRASE",
+                    "provisional_similarity_type": semantic_label,
                     "classification_status": "PROVISIONAL_REVIEW_REQUIRED",
                     "heuristic_score": 0.42,
                     "classification_reasons": ["test-only"],
@@ -138,12 +141,13 @@ def _csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(stream))
 
 
+@pytest.mark.parametrize("semantic_label", ["PARAPHRASE", None])
 def test_pack_is_blinded_private_deterministic_and_preserves_original_offsets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, semantic_label: str | None,
 ) -> None:
     var_root = tmp_path / "var"
     monkeypatch.setattr(pilot_pack, "_VAR_ROOT", var_root)
-    report_path, manifest_path = _inputs(tmp_path)
+    report_path, manifest_path = _inputs(tmp_path, semantic_label=semantic_label)
     kwargs = {
         "similarity_report_path": report_path,
         "run_manifest_path": manifest_path,
@@ -186,6 +190,8 @@ def test_pack_is_blinded_private_deterministic_and_preserves_original_offsets(
     assert all(row["decision_by"] == "" and row["decided_at"] == "" for row in adjudication)
     assert all("heuristic_score" not in row for row in quy)
     assert all("heuristic_score" in row for row in predictions)
+    assert all(row["provisional_similarity_type"] == semantic_label for row in predictions)
+    assert all("provisional_similarity_type" not in row for row in quy)
     tail = next(row for row in pairs if row["report_provenance"]["chunk_id"] == "contribution-tail")
     assert tail["report_text"] == "Sudoku requires exactly one value per cell."
     provenance = tail["report_provenance"]
