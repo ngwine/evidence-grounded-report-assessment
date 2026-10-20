@@ -773,4 +773,19 @@ def extract_pdf_elements(file_path, line_gap_factor=2.0, indent_threshold_factor
             ))
             i = j
     doc.close()
-    return elements
+    # PDF text can contain identical overlaid glyphs at the same coordinates.
+    # They produce the same source identity and must not reach the chunker twice.
+    unique_elements = []
+    first_by_key = {}
+    for element in elements:
+        previous = first_by_key.get(element["element_key"])
+        if previous is not None:
+            current_identity = {key: value for key, value in element.items() if key != "order"}
+            previous_identity = {key: value for key, value in previous.items() if key != "order"}
+            if current_identity != previous_identity:
+                raise ValueError("PDF elements share an element_key but differ in content")
+            continue
+        element["order"] = len(unique_elements)
+        unique_elements.append(element)
+        first_by_key[element["element_key"]] = element
+    return unique_elements

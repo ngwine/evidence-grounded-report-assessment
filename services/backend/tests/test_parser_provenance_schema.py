@@ -150,6 +150,26 @@ def test_repeated_body_text_is_not_removed_as_header_or_footer(tmp_path):
     assert "Unique body 1." in combined
 
 
+def test_pdf_overlaid_text_is_emitted_once(tmp_path):
+    path = tmp_path / "overlaid-text.pdf"
+    document = pymupdf.open()
+    page = document.new_page(width=595, height=842)
+    page.insert_text((72, 180), "OVERLAID LABEL", fontsize=11)
+    page.insert_text((72, 260), "UNIQUE BODY", fontsize=11)
+    page.insert_text((72, 180), "OVERLAID LABEL", fontsize=11)
+    document.save(path)
+    document.close()
+
+    elements = extract_pdf_elements(str(path))
+
+    _assert_element_schema(elements, "pdf")
+    assert [element["normalized_text"] for element in elements] == [
+        "OVERLAID LABEL",
+        "UNIQUE BODY",
+    ]
+    assert chunk_elements(elements, max_tokens=20, min_tokens=0)
+
+
 def test_two_column_pdf_uses_column_major_reading_order(tmp_path):
     path = tmp_path / "two-column.pdf"
     document = pymupdf.open()

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "rubric_id": "core-mvp-test",
+  "version": "1.0.0",
+  "title": "Core MVP test rubric",
+  "max_score": 10.0,
+  "decision_rules": {
+    "rule_version": "fixture-v1",
+    "cannot_assess_count_threshold": 2,
+    "cannot_assess_ratio_threshold": 0.4,
+    "required_unmet_score": 0.0
+  },
+  "criteria": [
+    {
+      "criterion_id": "C1",
+      "title": "Retrieval method",
+      "weight": 6.0,
+      "checklists": [
+        {
+          "checklist_id": "C1.1",
+          "statement": "Báo cáo mô tả BM25.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "requirements": [
+            {
+              "requirement_id": "bm25",
+              "description": "Nêu BM25",
+              "any_of": ["BM25"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "C1.2",
+          "statement": "Báo cáo liên kết lexical và semantic retrieval bằng fusion.",
+          "mode": "GRAPH",
+          "importance": "REQUIRED",
+          "requirements": [
+            {
+              "requirement_id": "lexical",
+              "description": "Nêu BM25",
+              "any_of": ["BM25"]
+            },
+            {
+              "requirement_id": "semantic",
+              "description": "Nêu Dense retrieval",
+              "any_of": ["Dense retrieval"]
+            },
+            {
+              "requirement_id": "fusion",
+              "description": "Nêu RRF",
+              "any_of": ["RRF", "Reciprocal Rank Fusion"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    },
+    {
+      "criterion_id": "C2",
+      "title": "Runtime status",
+      "weight": 4.0,
+      "checklists": [
+        {
+          "checklist_id": "C2.1",
+          "statement": "API production đã triển khai hoàn chỉnh.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "requirements": [
+            {
+              "requirement_id": "production-ready",
+              "description": "Xác nhận API production hoàn chỉnh",
+              "any_of": ["API production đã được triển khai hoàn chỉnh"]
+            }
+          ],
+          "contradiction_patterns": [
+            "API production chưa được triển khai hoàn chỉnh"
+          ]
+        }
+      ]
+    }
+  ]
+}

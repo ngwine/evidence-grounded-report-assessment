@@ -1,0 +1,7 @@
+Phương pháp truy xuất sử dụng BM25 để tìm các đoạn trùng khớp từ vựng trong tài liệu nguồn.
+
+Dense retrieval bổ sung các ứng viên gần nhau về ngữ nghĩa. Hai danh sách được hợp nhất bằng Reciprocal Rank Fusion, viết tắt là RRF.
+
+Đoạn văn này được giữ nguyên để kiểm tra khả năng phát hiện sao chép gần nguyên văn trong pipeline tương đồng.
+
+API production chưa được triển khai hoàn chỉnh và kết quả vẫn cần giảng viên review.

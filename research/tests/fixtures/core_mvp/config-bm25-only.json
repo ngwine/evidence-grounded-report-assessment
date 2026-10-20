@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "experiment_id": "core-mvp-test",
+  "seed": 7,
+  "documents": {
+    "max_tokens": 40,
+    "min_tokens": 1
+  },
+  "models": {},
+  "pipeline1": {
+    "candidate_depth": 5,
+    "rerank_depth": 3,
+    "top_k": 3,
+    "dense_enabled": false,
+    "reranker_enabled": false,
+    "classification": {
+      "verbatim_query_coverage": 0.7,
+      "verbatim_exact_char_ratio": 0.4,
+      "semantic_similarity": 0.7,
+      "semantic_min_lexical": 0.05,
+      "cross_encoder_min_score": 0.0,
+      "lexical_paraphrase_coverage": 0.3,
+      "summary_length_ratio": 0.65,
+      "minimum_alignment_chars": 12
+    }
+  },
+  "pipeline2": {
+    "candidate_depth": 5,
+    "rerank_depth": 3,
+    "top_k": 3,
+    "dense_enabled": false,
+    "reranker_enabled": false,
+    "graph": {
+      "seed_depth": 5,
+      "iterations": 20,
+      "damping": 0.85,
+      "minimum_shared_terms": 1,
+      "maximum_term_degree": 30
+    }
+  }
+}

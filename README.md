@@ -24,7 +24,10 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
 
 ## Trạng thái
 
-Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
+Ứng dụng web/API/worker hiện vẫn ở giai đoạn **scaffold**. Một
+[core MVP chạy offline](research/core_mvp/README.md) đã nối hai pipeline để
+kiểm tra tính khả thi trên PDF/DOCX thật; đây chưa phải ứng dụng tích hợp và
+kết quả chưa được xác nhận đủ chất lượng để chấm điểm hay kết luận đạo văn.
 
 | Hạng mục                                  | Trạng thái                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |

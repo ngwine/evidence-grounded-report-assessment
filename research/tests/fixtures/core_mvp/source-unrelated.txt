@@ -1,0 +1,3 @@
+Nghiên cứu này trình bày phương pháp phân loại ảnh vệ tinh và đánh giá độ che phủ mây.
+
+Các thí nghiệm xử lý ảnh không đề cập đến truy xuất văn bản hoặc đánh giá báo cáo sinh viên.
