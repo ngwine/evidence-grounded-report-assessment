@@ -121,3 +121,12 @@ def test_compiler_rejects_duplicate_checklist_ids_across_criteria():
 
     with pytest.raises(ValueError, match="Duplicate checklist_id"):
         compile_rubric(value)
+
+
+def test_authored_score_levels_cannot_be_silently_discarded():
+    value = _rubric()
+    value["criteria"][0]["levels"] = [
+        {"level_key": "PASS", "score": 6, "rule": "all checklist items are MET"}
+    ]
+    with pytest.raises(ValueError, match=r"criteria\[0\].levels is not supported"):
+        compile_rubric(value)
