@@ -44,6 +44,41 @@ _ADJUDICATION_FIELDS = (
 )
 
 
+def _span_ids(value: str) -> tuple[str, ...]:
+    identifiers = [part.strip() for part in value.split(";")]
+    if not identifiers or any(not part for part in identifiers) or len(identifiers) != len(set(identifiers)):
+        raise ValueError("evidence_span_ids must be unique non-empty IDs separated by ';'")
+    return tuple(sorted(identifiers))
+
+
+def _exact_quote(quote: str, text: str, field: str) -> None:
+    # pilot_pack protects spreadsheet formulas by prefixing text with one quote.
+    if text.startswith("'") and text[1:].lstrip().startswith(("=", "+", "-", "@")):
+        text = text[1:]
+    if not quote.strip() or quote not in text:
+        raise ValueError(f"{field} must be an exact excerpt")
+
+
+def _same_evidence(task: str, first: Mapping[str, str], second: Mapping[str, str]) -> bool:
+    label = first["label"].strip()
+    if label != second["label"].strip() or label == "UNSURE":
+        return False
+    if task == "similarity":
+        if first["quote_or_citation"].strip() != second["quote_or_citation"].strip():
+            return False
+        if label in _SIMILARITY_LABELS[:3]:
+            return all(
+                first[field].strip() == second[field].strip()
+                for field in ("report_evidence_quote", "source_evidence_quote")
+            )
+        return True
+    if first["verification_relation"].strip() != second["verification_relation"].strip():
+        return False
+    if label in ("MET", "UNMET"):
+        return _span_ids(first["evidence_span_ids"]) == _span_ids(second["evidence_span_ids"])
+    return True
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -93,16 +128,10 @@ def _check_sheet(rows: Mapping[str, Mapping[str, str]], task: str, sheet_name: s
                     ("report_evidence_quote", "report_text"),
                     ("source_evidence_quote", "source_text"),
                 ):
-                    quote = row[quote_field]
-                    # pilot_pack escapes spreadsheet formula prefixes with a
-                    # single apostrophe; it is not part of the original span.
-                    text = row[text_field]
-                    if text.startswith("'") and text[1:].lstrip().startswith(("=", "+", "-", "@")):
-                        text = text[1:]
-                    if not quote.strip() or quote not in text:
-                        raise ValueError(
-                            f"{sheet_name}: {quote_field} must be an exact excerpt at row {row_number}"
-                        )
+                    try:
+                        _exact_quote(row[quote_field], row[text_field], quote_field)
+                    except ValueError as error:
+                        raise ValueError(f"{sheet_name}: {error} at row {row_number}") from error
         else:
             for field in ("report_id", "report_version", "rubric_id", "rubric_version", "checklist_id"):
                 if not row[field].strip():
@@ -113,8 +142,11 @@ def _check_sheet(rows: Mapping[str, Mapping[str, str]], task: str, sheet_name: s
                     raise ValueError(f"{sheet_name}: invalid relation at row {row_number}")
             elif relation != _RELATION_FOR_OUTCOME[label]:
                 raise ValueError(f"{sheet_name}: outcome/relation conflict at row {row_number}")
-            if label in ("MET", "UNMET") and not row["evidence_span_ids"].strip():
-                raise ValueError(f"{sheet_name}: missing evidence_span_ids at row {row_number}")
+            if label in ("MET", "UNMET"):
+                try:
+                    _span_ids(row["evidence_span_ids"])
+                except ValueError as error:
+                    raise ValueError(f"{sheet_name}: {error} at row {row_number}") from error
 
 
 def _agreement(
@@ -210,6 +242,7 @@ def summarize(
         raise ValueError("Assessment adjudication requires final_verification_relation column")
     gold: Counter[str] = Counter()
     unresolved = excluded = adjudicated = 0
+    evidence_disagreement = 0
     for item in first:
         a_label = first[item]["label"].strip()
         b_label = second[item]["label"].strip()
@@ -217,7 +250,9 @@ def summarize(
         if row["quy_label"].strip() not in ("", a_label) or row["yen_label"].strip() not in ("", b_label):
             raise ValueError("Adjudication copied labels disagree with independent sheets")
         label = row["final_label"].strip()
-        agreed = a_label == b_label and a_label != "UNSURE"
+        agreed = _same_evidence(task, first[item], second[item])
+        if a_label == b_label and a_label != "UNSURE" and not agreed:
+            evidence_disagreement += 1
         if not label and agreed:
             label = a_label
         elif not label:
@@ -225,16 +260,31 @@ def summarize(
             continue
         if label not in (*labels, "EXCLUDE"):
             raise ValueError("Adjudication contains an invalid final label")
+        needs_decision = not agreed or label != a_label or label == "EXCLUDE"
         relation = row.get("final_verification_relation", "").strip()
         if task == "assessment" and label in labels:
             agreed_relation = first[item]["verification_relation"].strip()
-            if not relation and agreed:
+            if not relation and not needs_decision:
                 relation = agreed_relation
             if relation != _RELATION_FOR_OUTCOME[label]:
                 raise ValueError("Adjudicated outcome/relation conflict")
         if task == "assessment" and label == "EXCLUDE" and relation:
             raise ValueError("Excluded assessment item must not have a final relation")
-        if not agreed or label != a_label or label == "EXCLUDE":
+        if needs_decision and label in labels:
+            if task == "assessment" and label in ("MET", "UNMET"):
+                if "final_evidence_span_ids" not in row:
+                    raise ValueError("Disputed assessment label requires final_evidence_span_ids column")
+                _span_ids(row["final_evidence_span_ids"])
+            elif task == "similarity":
+                if row.get("final_quote_or_citation", "").strip() not in ("YES", "NO", "UNSURE"):
+                    raise ValueError("Disputed similarity label requires final_quote_or_citation")
+                if label in _SIMILARITY_LABELS[:3]:
+                    for final_field, source_field in (
+                        ("final_report_evidence_quote", "report_text"),
+                        ("final_source_evidence_quote", "source_text"),
+                    ):
+                        _exact_quote(row.get(final_field, ""), first[item][source_field], final_field)
+        if needs_decision:
             if not all(row[field].strip() for field in ("decision_rationale", "decision_by", "decided_at")):
                 raise ValueError("Changed/disputed labels require rationale, decider and date")
             decided_at = row["decided_at"].strip()
@@ -255,6 +305,7 @@ def summarize(
         "unresolved_count": unresolved,
         "excluded_count": excluded,
         "adjudicated_count": adjudicated,
+        "evidence_disagreement_count": evidence_disagreement,
     }
     # A partial label distribution is not a sealed gold set.
     if unresolved == 0:

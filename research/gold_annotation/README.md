@@ -31,9 +31,13 @@ Sau khi khóa hai phiếu, chạy:
 
 Nếu bất đồng hoặc có `UNSURE`, adjudicator đọc lại nguồn và điền `final_label`
 (`VERBATIM`, `PARAPHRASE`, `SUMMARY`, `NONE` hoặc `EXCLUDE`),
-`decision_rationale`, `decision_by`, `decided_at` (`YYYY-MM-DD`). Với dòng hai
-người đồng ý, có thể để `final_label` trống: nhãn chung được dùng sau khi hai
-phiếu đã khóa. Mọi thay đổi so với nhãn chung phải ghi đủ ba trường quyết định.
+`final_quote_or_citation`, `decision_rationale`, `decision_by`, `decided_at`
+(`YYYY-MM-DD`). Với nhãn tương đồng dương, còn phải điền
+`final_report_evidence_quote` và `final_source_evidence_quote` đúng nguyên văn.
+Với dòng hai người đồng ý **cả nhãn lẫn evidence**, có thể để `final_label`
+trống: kết quả chung được dùng sau khi hai phiếu đã khóa. Nếu chỉ nhãn giống
+nhưng quote/citation hoặc đoạn evidence khác nhau, vẫn phải phân xử. Mọi thay
+đổi so với kết quả chung phải ghi đủ ba trường quyết định.
 `EXCLUDE` dùng cho cặp không thể phân xử; nó không nằm trong gold metric. Phiếu
 còn bất đồng chưa xử lý cho kết quả `INCOMPLETE` và không xuất phân bố gold.
 
@@ -58,12 +62,15 @@ từ việc không tìm thấy evidence.
 Phiếu adjudication của Pipeline 2 có header:
 
 ```csv
-item_id,quy_label,yen_label,final_label,final_verification_relation,decision_rationale,decision_by,decided_at
+item_id,quy_label,yen_label,final_label,final_verification_relation,final_evidence_span_ids,decision_rationale,decision_by,decided_at
 ```
 
 `quy_label`/`yen_label` có thể để trống hoặc chép đúng từ phiếu độc lập;
-`final_verification_relation` có thể để trống ở dòng đồng thuận. Dòng bất đồng
-phải có cả nhãn, quan hệ evidence hợp lệ, lý do, người quyết định và ngày. Dùng
+`final_verification_relation` có thể để trống ở dòng đồng thuận. Nếu hai người
+chọn cùng nhãn nhưng khác evidence span thì vẫn phải phân xử; với nhãn cuối
+`MET`/`UNMET`, điền `final_evidence_span_ids` (các ID cách nhau bằng `;`).
+Dòng bất đồng phải có nhãn, quan hệ evidence hợp lệ, lý do, người quyết định
+và ngày. Dùng
 `EXCLUDE` nếu sau khi đối chiếu vẫn chưa giải quyết được. Chạy lệnh trên với
 `--task assessment` và đường dẫn đến ba phiếu Pipeline 2; đặt output dưới
 `var/results/gold-annotation/`.
