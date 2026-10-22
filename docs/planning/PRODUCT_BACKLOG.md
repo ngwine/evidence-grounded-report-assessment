@@ -121,7 +121,7 @@ Một item chỉ được kéo lên `Ready` khi:
 | `EP-03-S04` | Lập lexical/vector index có version và có thể rebuild | P0 | 8 | Q | Y | W05–W06 | `EP-03-S03`, `EP-02-S02` | Index idempotent/resumable; model/config/index version lưu; smoke recall/latency/RAM có artifact | IN PROGRESS |
 | `EP-03-S05` | Hỗ trợ PDF scan bằng OCR | P2 | 8 | Y | Q | Sau W16 | `EP-03-S02–04`, `G-07` | OCR confidence/page mapping được lưu; benchmark riêng; không làm giảm parser text | ICEBOX |
 | `EP-03-S06` | Xử lý tác vụ dài qua queue/worker có retry và idempotency | P0 | 8 | Q | Y | W03–W04 | `EP-03-S01` | State queued/processing/failed/review-ready/completed; restart không mất checkpoint; retry hữu hạn | IN PROGRESS |
-| `EP-03-S07` | Ánh xạ quote/citation/reference marker vào span/chunk có provenance | P0 | 5 | Y | Q | W04, W08 | `EP-03-S02/03` | Marker/entry và ngữ cảnh quote/citation giữ raw/confidence/page/span/chunk; mở đúng vị trí; parse failure là unknown | PLANNED |
+| `EP-03-S07` | Ánh xạ quote/citation/reference marker vào span/chunk có provenance | P0 | 5 | Y | Q | W04, W08 | `EP-03-S02/03` | Marker/entry và ngữ cảnh quote/citation giữ raw/confidence/page/span/chunk; mở đúng vị trí; parse failure là unknown | IN PROGRESS |
 | `EP-03-S08` | Xây golden fixture và benchmark parser/chunking | P0 | 5 | Y | Q | W04 | `EP-03-S02/03` | Corpus khóa trước; expected structure/page/span mapping; báo coverage, lỗi và thời gian xử lý | IN PROGRESS |
 
 ## 5. Epic EP-04 — Hybrid Retrieval và Similarity Analysis
@@ -327,6 +327,7 @@ Tên issue:
 | 1.4 | 10/09/2026 | Bổ sung API Contract v1/OpenAPI draft cho `W2.3`; khóa auth/scope, resource, async job/run, evidence/review, error, pagination, idempotency và revision |
 | 1.5 | 16/09/2026 | Ghi nhận PR #6 `W2.2` đã được Yến approve và merge; bổ sung quan hệ `document_elements → chunks`; chuyển design item `EP-02-S02` sang `DONE` |
 | 1.6 | 20/10/2026 | Đồng bộ status với WBS v1.7 và repository: API/UX, local upload-worker app, parser golden benchmark, BM25/Dense/RRF/Cross-Encoder, Similarity technical slice, rubric compiler/LOCAL/GRAPH-v0 assessment, output contracts và experiment manifest chuyển `IN PROGRESS`; không nâng `DONE` khi còn thiếu production persistence/security hoặc gold evaluation |
+| 1.7 | 22/10/2026 | Dẫn chiếu audit đủ 66 task theo WBS v1.8; citation/span mapping chuyển IN PROGRESS với adapter và runner artifact; ghi nhận Mongo replica-set/queue, vector generation, parser budgets, JSON Schema runtime, RRF/coverage/gold fixes trong PR #19. Các điều kiện rights/gold/production và gate chưa đạt vẫn mở |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|
