@@ -1,0 +1,55 @@
+name: kltn-evidence-db
+
+x-mongo-image: &mongo-image mongo:8.0.29-noble@sha256:021b2d5ae9d253f2cca17491cc8d03aed8df3c840f3252066aa62d3277fc406e
+
+services:
+  mongo:
+    image: *mongo-image
+    entrypoint: [bash, /opt/kltn/start.sh]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME_FILE: /run/secrets/root_user
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/root_password
+    secrets: [root_user, root_password, replica_key]
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+      - ./start.sh:/opt/kltn/start.sh:ro
+      - ./health.js:/opt/kltn/health.js:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    ports:
+      - 127.0.0.1:${KLTN_MONGO_PORT:-27188}:27017
+    healthcheck:
+      test: [CMD, mongosh, --quiet, --nodb, --file, /opt/kltn/health.js]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    restart: unless-stopped
+
+  mongo-init:
+    image: *mongo-image
+    entrypoint: [mongosh, --quiet, --nodb, --file, /opt/kltn/init.js]
+    depends_on:
+      mongo:
+        condition: service_started
+    secrets: [root_user, root_password]
+    volumes:
+      - ./init.js:/opt/kltn/init.js:ro
+    mem_limit: 256m
+    restart: "no"
+
+secrets:
+  root_user:
+    file: ../../var/infra/mongodb/root-user
+  root_password:
+    file: ../../var/infra/mongodb/root-password
+  replica_key:
+    file: ../../var/infra/mongodb/replica-key
+
+volumes:
+  mongo-data:
+  mongo-config:

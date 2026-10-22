@@ -12,6 +12,7 @@ import json
 from pathlib import Path, PureWindowsPath
 from typing import Any
 import zipfile
+from uuid import uuid4
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -120,6 +121,8 @@ def _run_response(store: LocalStore, run_id: str) -> dict[str, Any]:
         "review": review_record["review"],
         "revision": review_record["revision"],
         "error": job.get("error"),
+        "error_code": job.get("error_code"),
+        "request_id": job.get("request_id"),
     }
     if job["status"] == "SUCCEEDED":
         # A completed artifact does not grant permission to keep exposing it.
@@ -172,6 +175,7 @@ def create_app(*, root: Path | str | None = None, allow_test_client: bool = Fals
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):  # type: ignore[no-untyped-def]
+        request.state.request_id = "req-" + uuid4().hex
         peer = request.client.host if request.client is not None else ""
         permitted_peers = {"127.0.0.1", "::1"}
         permitted_hosts = {"127.0.0.1", "localhost"}
@@ -194,6 +198,7 @@ def create_app(*, root: Path | str | None = None, allow_test_client: bool = Fals
                 return JSONResponse(status_code=413, content={"detail": "Request exceeds local demo limit"})
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Request-ID"] = request.state.request_id
         return response
 
     @app.get(f"{API_PREFIX}/health")
@@ -202,6 +207,7 @@ def create_app(*, root: Path | str | None = None, allow_test_client: bool = Fals
 
     @app.post(f"{API_PREFIX}/runs", status_code=202)
     async def create_run(
+        request: Request,
         report: UploadFile = File(...),
         sources: list[UploadFile] = File(...),
         rubric: UploadFile = File(...),
@@ -241,10 +247,12 @@ def create_app(*, root: Path | str | None = None, allow_test_client: bool = Fals
             config_id=config_id,
             report_display_name=_display_name(report.filename),
             source_display_names=[_display_name(source.filename) for source in sources],
+            request_id=request.state.request_id,
         )
         return {
             "run_id": job["run_id"],
             "job_id": job["job_id"],
+            "request_id": job["request_id"],
             "status": job["status"],
             "config_id": job["config_id"],
             "method_warning": job["method_warning"],

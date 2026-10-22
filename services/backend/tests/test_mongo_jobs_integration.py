@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from bson import ObjectId
 from pymongo import MongoClient
+from pymongo.errors import OperationFailure
+from pymongo.write_concern import WriteConcern
 import pytest
 
 from services.backend.src.kltn_ai.db.mongo_jobs import MongoJobQueue
@@ -55,4 +57,35 @@ def test_real_mongo_atomic_claim_and_stale_lease() -> None:
         assert done is not None and done["state"] == "SUCCEEDED"
     finally:
         client.drop_database(database_name)
+        client.close()
+
+
+def test_replica_set_transactions_majority_writes_and_unauthenticated_denial() -> None:
+    uri = os.environ.get("KLTN_MONGO_TEST_URI")
+    if not uri:
+        pytest.skip("Set KLTN_MONGO_TEST_URI for the real MongoDB test")
+    client = MongoClient(uri, serverSelectionTimeoutMS=3000)
+    name = f"kltn_transaction_test_{uuid4().hex}"
+    database = client.get_database(name, write_concern=WriteConcern(w="majority", wtimeout=3000))
+    try:
+        hello = client.admin.command("hello")
+        assert hello.get("setName") == "kltn-rs"
+        assert client.server_info()["version"].startswith("8.0.")
+        database.create_collection("records")
+        with client.start_session() as session:
+            with session.start_transaction(write_concern=WriteConcern(w="majority")):
+                database.records.insert_one({"_id": "committed"}, session=session)
+            session.start_transaction()
+            database.records.insert_one({"_id": "aborted"}, session=session)
+            session.abort_transaction()
+        assert database.records.find_one({"_id": "committed"}) is not None
+        assert database.records.find_one({"_id": "aborted"}) is None
+        assert client.address is not None
+        with MongoClient(host=client.address[0], port=client.address[1],
+                         directConnection=True, serverSelectionTimeoutMS=3000) as anonymous:
+            with pytest.raises(OperationFailure) as error:
+                anonymous[name].records.find_one({})
+            assert error.value.code == 13
+    finally:
+        client.drop_database(name)
         client.close()
