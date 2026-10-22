@@ -475,6 +475,31 @@ def _resolve_normalized_range(
     }
 
 
+def _document_token_keys(chunk: Mapping[str, Any]) -> list[tuple[int, int, tuple[Any, ...]]]:
+    """Map tokens to immutable element coordinates, deduplicating chunk overlap."""
+    text = str(chunk.get("normalized_text", chunk.get("text", "")))
+    result = []
+    for left, right in token_spans(text):
+        key: tuple[Any, ...] | None = None
+        for span in chunk.get("source_spans", []):
+            start, end = span.get("chunk_normalized_char_start"), span.get("chunk_normalized_char_end")
+            element_start = span.get("element_normalized_char_start")
+            version = span.get("document_version_id", chunk.get("document_version_id"))
+            if (all(isinstance(value, int) and not isinstance(value, bool)
+                    for value in (start, end, element_start))
+                    and start <= left < right <= end
+                    and version and span.get("element_key")):
+                key = ("element", str(version), str(span["element_key"]),
+                       element_start + left - start, element_start + right - start)
+                break
+        if key is None:
+            # Older test/research inputs lack authoritative element coordinates.
+            # Keep the old chunk-local interpretation and disclose the fallback.
+            key = ("chunk", str(chunk["chunk_id"]), left, right)
+        result.append((left, right, key))
+    return result
+
+
 def _alignment(
     query: Mapping[str, Any],
     source: Mapping[str, Any],
@@ -928,29 +953,29 @@ def run_similarity_pipeline(
         matches.extend(query_matches)
 
     review_source_groups = _group_review_candidates(matches)
-    total_report_tokens = sum(len(tokenize(str(chunk["text"]))) for chunk in report_chunks)
-    flagged_report_tokens = sum(
-        len(tokenize(str(query_map[query_id]["text"])))
-        for query_id in flagged_query_ids
-    )
-    exact_matched_report_tokens = 0
-    for query_id, ranges in exact_selected_ranges.items():
-        report_chunk = query_map[query_id]
-        report_text = str(report_chunk.get("normalized_text", report_chunk["text"]))
-        exact_matched_report_tokens += sum(
-            1
-            for left, right in token_spans(report_text)
-            if any(start <= left and right <= end for start, end in ranges)
-        )
+    keys_by_query = {
+        query_id: _document_token_keys(chunk) for query_id, chunk in query_map.items()
+    }
+    all_token_keys = {key for tokens in keys_by_query.values() for _, _, key in tokens}
+    flagged_token_keys = {
+        key for query_id in flagged_query_ids for _, _, key in keys_by_query[query_id]
+    }
+    exact_token_keys = {
+        key for query_id, ranges in exact_selected_ranges.items()
+        for left, right, key in keys_by_query[query_id]
+        if any(start <= left and right <= end for start, end in ranges)
+    }
+    total_report_tokens = len(all_token_keys)
+    flagged_report_tokens = len(flagged_token_keys)
+    exact_matched_report_tokens = len(exact_token_keys)
     flagged_passage_coverage = (
         100.0 * flagged_report_tokens / total_report_tokens
         if total_report_tokens
         else 0.0
     )
-    provisional_review_tokens = sum(
-        len(tokenize(str(query_map[query_id]["text"])))
-        for query_id in review_query_ids
-    )
+    provisional_review_tokens = len({
+        key for query_id in review_query_ids for _, _, key in keys_by_query[query_id]
+    })
     provisional_review_coverage = (
         100.0 * provisional_review_tokens / total_report_tokens
         if total_report_tokens
@@ -961,21 +986,31 @@ def run_similarity_pipeline(
         if total_report_tokens
         else 0.0
     )
+    exact_keys_by_source: dict[str, set[tuple[Any, ...]]] = {}
+    for document_id, values in selected_by_source.items():
+        source_keys: set[tuple[Any, ...]] = set()
+        for value in values:
+            location = value["alignment"]["report"]
+            source_keys.update(
+                key for left, right, key in keys_by_query[str(value["query_id"])]
+                if location["normalized_start"] <= left and right <= location["normalized_end"]
+            )
+        exact_keys_by_source[document_id] = source_keys
     source_summary: list[dict[str, Any]] = []
     for source_rank, (document_id, count) in enumerate(
         sorted(
             selected_source_documents.items(),
-            key=lambda item: (-item[1], item[0]),
+            key=lambda item: (-len(exact_keys_by_source[item[0]]), item[0]),
         ),
         1,
     ):
         values = selected_by_source[document_id]
         scores = [float(value["heuristic_score"]) for value in values]
         source_query_ids = {str(value["query_id"]) for value in values}
-        source_flagged_tokens = sum(
-            len(tokenize(str(query_map[query_id]["text"])))
-            for query_id in source_query_ids
-        )
+        source_flagged_tokens = len({
+            key for query_id in source_query_ids for _, _, key in keys_by_query[query_id]
+        })
+        source_exact_tokens = len(exact_keys_by_source[document_id])
         source_summary.append(
             {
                 "rank": source_rank,
@@ -995,6 +1030,11 @@ def run_similarity_pipeline(
                 "max_uncalibrated_heuristic_score": max(scores),
                 "mean_uncalibrated_heuristic_score": sum(scores) / len(scores),
                 "flagged_report_tokens": source_flagged_tokens,
+                "exact_matched_report_tokens": source_exact_tokens,
+                "exact_token_coverage_weight": (
+                    round(source_exact_tokens / total_report_tokens, 8)
+                    if total_report_tokens else 0.0
+                ),
                 "flagged_report_token_coverage_percentage": round(
                     100.0 * source_flagged_tokens / total_report_tokens,
                     4,
@@ -1029,10 +1069,25 @@ def run_similarity_pipeline(
         "source_summary": source_summary,
         "review_source_groups": review_source_groups,
         "coverage_definitions": {
+            "version": "document-element-token-union-v2",
+            "scope": (
+                "DOCUMENT_VERSION_ELEMENT_COORDINATES"
+                if all(key[0] == "element" for key in all_token_keys)
+                else "CHUNK_LOCAL_FALLBACK_PRESENT"
+            ),
+            "exact": {
+                "unit": "unique_report_token",
+                "definition": "Union of exact aligned report tokens divided by the union of all report tokens, keyed by document version, parser element and normalized offsets. Overlapping chunks count once.",
+            },
+            "source_aggregation": {
+                "formula": "source exact-token union / report token union",
+                "ranking": "descending exact token coverage weight, then source_document_id",
+                "is_calibrated_probability": False,
+            },
             "provisional_review": {
                 "is_similarity_percentage": False,
-                "unit": "chunk_token_mass",
-                "definition": "Tokens in selected unverified report chunks divided by tokens in all report chunks; overlaps may be counted more than once. Measures review workload, not matched spans or confirmed similarity.",
+                "unit": "unique_report_token",
+                "definition": "Union of tokens in selected unverified report chunks divided by all report tokens. Measures review workload, not matched spans or confirmed similarity; legacy inputs without element coordinates fall back to chunk-local counting.",
             },
         },
         "matches": matches,

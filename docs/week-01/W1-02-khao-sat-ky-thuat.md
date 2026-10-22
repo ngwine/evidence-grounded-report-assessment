@@ -1,9 +1,61 @@
 # W1-02 — Khảo sát kỹ thuật
 
-**Đề tài:** Hệ thống hỗ trợ đánh giá báo cáo sinh viên bằng AI cục bộ  
-**Phiên bản:** 1.0  
-**Ngày hoàn thành khảo sát:** 13/08/2026  
-**Phạm vi:** phát hiện tương đồng; Rubric-RAG/chấm dựa trên bằng chứng; kiểm chứng tài liệu tham khảo; giới hạn phát hiện văn bản do AI tạo.
+**Đề tài:** Hệ thống hỗ trợ kiểm tra đạo văn và đánh giá báo cáo sinh viên dựa trên bằng chứng
+
+**Phiên bản:** 1.1 — cập nhật phạm vi ngày 22/10/2026; chờ review chéo
+
+**Ngày khảo sát ban đầu:** 13/08/2026
+**Phạm vi hiện hành:** Similarity; Evidence-grounded Assessment; Targeted Questions bổ sung có điều kiện.
+
+## 0. Quyết định kỹ thuật hiện hành
+
+Phần này thay thế các quyết định triển khai và cách đánh số RQ/thí nghiệm trong
+bản khảo sát tháng 8 bên dưới. WBS, SRS v2 và ADR là nguồn quyết định hiện tại;
+phần khảo sát cũ được giữ để truy lại quá trình lựa chọn, không phải backlog.
+
+| RQ | Thành phần | Đầu vào/đầu ra | Cách kiểm chứng |
+|---|---|---|---|
+| RQ1 | Similarity Retrieval/Detection | Report passage + source corpus đã duyệt → Top-K nguồn, alignment và review report | Recall/MRR/nDCG cấp source; gold bốn nhãn và span F1 khi có nhãn độc lập |
+| RQ2 | Evidence-grounded Assessment | Report + rubric → atomic checklist → LOCAL/GRAPH evidence → verification → rationale/scoring | Evidence precision/recall, three-state agreement, score agreement và unsupported rationale |
+| RQ3 | Targeted Questions — CONDITIONAL | Evidence/issues đã có → câu hỏi kiểm tra có mục tiêu | Relevance, grounding, answerability và lecturer review; mở sau hai pipeline chính |
+
+P1 dùng BM25 và Dense song song, RRF và Cross-Encoder trên tập ứng viên giới
+hạn. P2 dùng rubric do người dùng cung cấp, authored atomic checklist, ba quan
+hệ `SUPPORTED/CONTRADICTED/INSUFFICIENT` và ba trạng thái
+`MET/UNMET/CANNOT_ASSESS`; rule/scorer giữ riêng khỏi rationale sinh bởi model.
+Graph cần node/edge có nguồn và version; structure/term PageRank hiện hành chỉ
+là baseline truy xuất, chưa chứng minh quan hệ claim–evidence.
+
+Baseline model hiện là BM25 và `intfloat/multilingual-e5-small`. Theo
+[ADR-003](../adr/ADR-003-provisional-model-selection.md), reranker mMARCO đã
+chạy nhưng chưa được chọn làm mặc định vì kết quả DEV0 giảm early ranking.
+Qwen/BGE trong khảo sát cũ vẫn là ứng viên, không phải model đã triển khai.
+
+| Cấu hình DEV0 hiện hành | Mục đích |
+|---|---|
+| A1 — BM25 | Baseline lexical; báo rõ chunking view trong config |
+| A2 — Dense | Baseline semantic |
+| A3 — BM25 + Dense + RRF | Đo fusion trước rerank |
+| A4 — Dense + Cross-Encoder | Đo tác động rerank trên Dense candidates |
+| A5 — Multi-view + RRF + Cross-Encoder | Đo pipeline kết hợp hai chunking views và rerank |
+
+Protocol/config cụ thể ở [RQ1](../../research/protocols/rq1-similarity/README.md)
+và [báo cáo A1–A5](../benchmarks/pan-pc-11-cross-encoder-ablation-dev0-result.md).
+DEV0 là tập chẩn đoán; giữ kết quả âm, không tune tiếp hoặc diễn giải là
+holdout. Dataset theo vai trò: PAN-PC-11/PAN13 cho P1 retrieval/alignment;
+MMDocIR/HoVer/HARMOGEN-R cho các thành phần P2; report–rubric in-domain cho
+end-to-end. Trạng thái chọn dataset và approval từng frozen pack là hai trường
+riêng trong [registry](../../research/governance/README.md).
+
+Standalone DOI/reference verification, AI-writing detector và web provider/
+crawling nằm ngoài baseline hiện hành. Marker/citation-to-span context vẫn
+thuộc P1. Các đề xuất/thời hạn provider trong bản tháng 8 dưới đây chỉ ghi lại
+khảo sát tại thời điểm đó; khi mở lại cần khảo sát nguồn sơ cấp và change request.
+
+## Phụ lục — Khảo sát và các phương án ngày 13/08/2026
+
+Các phần đánh số 1–11 dưới đây là nội dung lịch sử. Các nhãn RQ1–RQ5, A1–A5,
+model ứng viên và feature ngoài phạm vi trong phụ lục không ghi đè mục 0.
 
 ## 1. Kết luận điều hành
 

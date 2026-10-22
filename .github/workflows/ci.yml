@@ -30,11 +30,13 @@ jobs:
             research/requirements-research.txt
             services/backend/requirements-app.txt
             services/backend/requirements-dev.txt
+            services/backend/requirements-quality.txt
       - name: Install Python dependencies
         run: >-
           python -m pip install
           -r research/requirements-research.txt
           -r services/backend/requirements-app.txt
+          -r services/backend/requirements-quality.txt
       - name: Validate reviewed OpenAPI document
         run: >-
           python -c "from pathlib import Path; import yaml;
@@ -42,6 +44,21 @@ jobs:
           assert str(value['openapi']).startswith('3.'); assert value['paths']"
       - name: Run synthetic and unit test suites
         run: python -m pytest research/tests services/backend/tests -q
+      - name: Ruff core syntax and unused-name gate
+        run: >-
+          python -m ruff check --select E4,E7,E9,F
+          services/backend/src research/offline_retrieval
+          research/core_mvp research/evidence_graph
+      - name: Mypy typed backend slice
+        run: >-
+          python -m mypy --check-untyped-defs --show-error-codes
+          --follow-imports=silent
+          services/backend/src/kltn_ai/db
+          services/backend/src/kltn_ai/integrations/parsing/citation_markers.py
+      - name: Bandit backend SAST (medium and high severity)
+        run: python -m bandit -q -r services/backend/src -ll
+      - name: Audit resolved Python dependency environment
+        run: python -m pip_audit --strict --progress-spinner off
 
   web-build:
     runs-on: ubuntu-latest
@@ -60,3 +77,88 @@ jobs:
         run: npm ci
       - name: Type-check and build
         run: npm run build
+      - name: Audit locked frontend dependency tree (high and critical)
+        working-directory: .
+        run: python3 scripts/audit_web_dependencies.py
+
+  mongo-integration:
+    # Declared Mongo integration target; this does not pin the host kernel.
+    # New/unsupported kernels must still fail MongoDB's startup guard.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            services/backend/requirements-app.txt
+            services/backend/requirements-dev.txt
+      - name: Create isolated integration environment
+        run: |
+          python -m venv .venv-research
+          .venv-research/bin/python -m pip install -r services/backend/requirements-app.txt
+          .venv-research/bin/python scripts/prepare_mongodb_local.py
+      - name: Start dedicated authenticated replica set
+        run: |
+          uname -sr
+          printf 'runner_image=%s:%s\n' "$ImageOS" "$ImageVersion"
+          docker compose -f infra/mongodb/compose.yaml config --images
+          docker compose -f infra/mongodb/compose.yaml up -d --wait
+      - name: Check validators, database roles, transactions and restart recovery
+        run: .venv-research/bin/python scripts/test_mongodb_local.py --restart
+      - name: Apply committed migration as the restricted migration identity
+        run: |
+          .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
+          .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
+      - name: Summarize failure without exposing MongoDB logs or credentials
+        if: failure()
+        run: .venv-research/bin/python scripts/diagnose_mongodb_local.py
+      - name: Stop only the dedicated test deployment
+        if: always()
+        run: docker compose -f infra/mongodb/compose.yaml down
+
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            services/backend/requirements-app.txt
+            services/backend/requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Create the Python environment expected by the E2E bootstrap
+        run: |
+          python -m venv .venv-research
+          .venv-research/bin/python -m pip install -r services/backend/requirements-app.txt
+      - name: Install locked frontend and browser dependencies
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run synthetic localhost API, worker and browser flow
+        working-directory: apps/web
+        run: npm run test:e2e
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan checked-out files for exposed secrets
+        uses: docker://ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+        with:
+          args: dir --no-banner --redact=100 --ignore-gitleaks-allow --exit-code=1 /github/workspace

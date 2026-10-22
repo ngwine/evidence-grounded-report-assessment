@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
-import math
 import re
 import unicodedata
 from typing import Any, Mapping, Sequence

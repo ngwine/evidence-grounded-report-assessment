@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "dataset_id": "mmdocir-local-evidence-pilot",
+  "dataset_version": "UNFROZEN_AFTER_REVIEW",
+  "description": "MMDocIR text-only LOCAL evidence retrieval pilot on five selected PDFs.",
+  "result_classification": "COMPONENT_DIAGNOSTIC",
+  "governance": {
+    "status": "PENDING",
+    "rights_basis": "Apache-2.0 per dataset README recorded in Dataset mapping!D6; verify source terms when freezing",
+    "allowed_purposes": ["EVIDENCE_RETRIEVAL_EXPERIMENT"],
+    "classification": "PUBLIC_RESEARCH_CORPUS",
+    "contains_pii": "UNKNOWN_UNTIL_REVIEW",
+    "anonymization": null,
+    "retention": null,
+    "approver": null,
+    "approved_at": null,
+    "approval_evidence": null
+  },
+  "source": {
+    "provider": "MMDocIR Evaluation Dataset",
+    "landing_page": "https://huggingface.co/datasets/MMDocIR/MMDocIR_Evaluation_Dataset",
+    "files": [
+      {"name": "doc_pdfs.rar", "local_sha256": "360e0c7907f1c78012bbc9016623a0ec0d05cb3308ec6ded7c8b46e582b785df"},
+      {"name": "MMDocIR_annotations.jsonl", "local_sha256": "812d14b22d92389a1d9b288c0143b0ffc31fba6d114322e2e75cab2528833e09"}
+    ]
+  },
+  "split": {
+    "name": "text-only-p5-seed20261018",
+    "unit": "pdf_document",
+    "seed": 20261018,
+    "document_ids": [
+      "P18-1125.pdf",
+      "NYSE_ACN_2020.pdf",
+      "FBS_PM_29NOV2023_Public.pdf",
+      "N19-1170.pdf",
+      "2020.emnlp-main.213.pdf"
+    ]
+  },
+  "files": {
+    "annotations": {"path": "MMDocIR_annotations.jsonl", "sha256": "812d14b22d92389a1d9b288c0143b0ffc31fba6d114322e2e75cab2528833e09"},
+    "pdf_archive": {"path": "doc_pdfs.rar", "sha256": "360e0c7907f1c78012bbc9016623a0ec0d05cb3308ec6ded7c8b46e582b785df"}
+  }
+}

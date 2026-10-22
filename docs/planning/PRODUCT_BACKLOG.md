@@ -4,9 +4,9 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.6 |
+| Phiên bản | 1.9 |
 | Ngày lập baseline | 21/08/2026 |
-| Ngày cập nhật | 20/10/2026 |
+| Ngày cập nhật | 23/10/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
 | Thành viên | Nguyễn Trần Ngọc Quý — 523H0087 (Q), Võ Thị Kim Yến — 52200229 (Y) |
 | GVHD | Vũ Đình Hồng |
@@ -14,13 +14,13 @@
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | Phạm vi, pipeline và dataset-task mapping đã chốt; hai technical slice và app local đã chạy; quyền dữ liệu, gold evaluation, production persistence/security và các gate vẫn mở; actual/evidence theo WBS v1.7 |
+| Trạng thái baseline | Hai technical slice/app local chạy; audit đủ 66 task W1–W11 ở [snapshot và bổ sung 23/10](./W1-W11_STATUS_2026-10-22.md); code commit37c6277 đạt cả năm CI jobs. Quyền dữ liệu, gold evaluation và production integration/security vẫn mở; actual/evidence theo WBS v1.10 |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.7; không đổi target backlog để che độ trễ.
+phiên bản 1.10; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
@@ -121,7 +121,7 @@ Một item chỉ được kéo lên `Ready` khi:
 | `EP-03-S04` | Lập lexical/vector index có version và có thể rebuild | P0 | 8 | Q | Y | W05–W06 | `EP-03-S03`, `EP-02-S02` | Index idempotent/resumable; model/config/index version lưu; smoke recall/latency/RAM có artifact | IN PROGRESS |
 | `EP-03-S05` | Hỗ trợ PDF scan bằng OCR | P2 | 8 | Y | Q | Sau W16 | `EP-03-S02–04`, `G-07` | OCR confidence/page mapping được lưu; benchmark riêng; không làm giảm parser text | ICEBOX |
 | `EP-03-S06` | Xử lý tác vụ dài qua queue/worker có retry và idempotency | P0 | 8 | Q | Y | W03–W04 | `EP-03-S01` | State queued/processing/failed/review-ready/completed; restart không mất checkpoint; retry hữu hạn | IN PROGRESS |
-| `EP-03-S07` | Ánh xạ quote/citation/reference marker vào span/chunk có provenance | P0 | 5 | Y | Q | W04, W08 | `EP-03-S02/03` | Marker/entry và ngữ cảnh quote/citation giữ raw/confidence/page/span/chunk; mở đúng vị trí; parse failure là unknown | PLANNED |
+| `EP-03-S07` | Ánh xạ quote/citation/reference marker vào span/chunk có provenance | P0 | 5 | Y | Q | W04, W08 | `EP-03-S02/03` | Marker/entry và ngữ cảnh quote/citation giữ raw/confidence/page/span/chunk; mở đúng vị trí; parse failure là unknown | IN PROGRESS |
 | `EP-03-S08` | Xây golden fixture và benchmark parser/chunking | P0 | 5 | Y | Q | W04 | `EP-03-S02/03` | Corpus khóa trước; expected structure/page/span mapping; báo coverage, lỗi và thời gian xử lý | IN PROGRESS |
 
 ## 5. Epic EP-04 — Hybrid Retrieval và Similarity Analysis
@@ -207,7 +207,7 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 
 | ID | Outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
-| `EP-11-S01` | Test pyramid và CI quality/security gates | P0 | 8 | Q | Y | W03 initial; W16/W21 gates | `EP-02-S01/04` | Unit/integration/E2E; SAST/secret/dependency scan; Critical/High được sửa hoặc waiver có owner/expiry | PLANNED |
+| `EP-11-S01` | Test pyramid và CI quality/security gates | P0 | 8 | Q | Y | W03 initial; W16/W21 gates | `EP-02-S01/04` | Unit/integration/E2E; SAST/secret/dependency scan; Critical/High được sửa hoặc waiver có owner/expiry | IN PROGRESS |
 | `EP-11-S02` | Malicious upload, parser isolation và prompt-injection defense | P0 | 8 | Q | Y | W04, W10, W16 | `EP-02-S04`, `EP-03`, `EP-05` | MIME/path/zip/resource limit; tenant/report isolation; untrusted text không điều khiển tool; output sanitize/schema validate | PLANNED |
 | `EP-11-S03` | Performance/resilience/data-safety và backup-restore benchmark | P0 | 8 | Q | Y | W16, W21 | `EP-11-S05` | p50/p95, throughput, RAM/VRAM; timeout/restart/outage; restore drill và bottleneck evidence | PLANNED |
 | `EP-11-S04` | Release Candidate và Release 1.0 có thể cài lại | P0 | 8 | Q | Y | W16, W21, W23–W24 | `EP-11-S01–03/05` | Clean install/smoke; migration/rollback; release notes/known issues/checksum; không đóng gói dữ liệu nhạy cảm | PLANNED |
@@ -327,6 +327,9 @@ Tên issue:
 | 1.4 | 10/09/2026 | Bổ sung API Contract v1/OpenAPI draft cho `W2.3`; khóa auth/scope, resource, async job/run, evidence/review, error, pagination, idempotency và revision |
 | 1.5 | 16/09/2026 | Ghi nhận PR #6 `W2.2` đã được Yến approve và merge; bổ sung quan hệ `document_elements → chunks`; chuyển design item `EP-02-S02` sang `DONE` |
 | 1.6 | 20/10/2026 | Đồng bộ status với WBS v1.7 và repository: API/UX, local upload-worker app, parser golden benchmark, BM25/Dense/RRF/Cross-Encoder, Similarity technical slice, rubric compiler/LOCAL/GRAPH-v0 assessment, output contracts và experiment manifest chuyển `IN PROGRESS`; không nâng `DONE` khi còn thiếu production persistence/security hoặc gold evaluation |
+| 1.7 | 22/10/2026 | Dẫn chiếu audit đủ 66 task theo WBS v1.8; citation/span mapping chuyển IN PROGRESS với adapter và runner artifact; ghi nhận Mongo replica-set/queue, vector generation, parser budgets, JSON Schema runtime, RRF/coverage/gold fixes trong PR #19. Các điều kiện rights/gold/production và gate chưa đạt vẫn mở |
+| 1.8 | 22/10/2026 | Theo WBS v1.9: thêm rubric API compiler adapter, migration/DB roles, browser E2E và quality/security/browser CI jobs; EP-11-S01 sang IN PROGRESS. Không tính database role là application RBAC hoặc adapter là HTTP implementation; các acceptance/gold gates giữ mở |
+| 1.9 | 23/10/2026 | Theo WBS v1.10, xác nhận CI5/5 trên code commit37c6277 với Mongo8.0.34/Ubuntu22.04 target, six live tests/restart/reapply, Chromium và quality/security gates; chưa nâng story DONE khi thiếu phần app integration hoặc review/gold |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|

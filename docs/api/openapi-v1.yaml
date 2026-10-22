@@ -1713,45 +1713,64 @@ components:
     RubricDefinition:
       type: object
       additionalProperties: false
-      required: [criteria]
+      required: [max_score, criteria]
       properties:
+        max_score:
+          type: number
+          exclusiveMinimum: 0
+          description: Explicit total; must equal the sum of criterion weights.
         criteria:
           type: array
           minItems: 1
           maxItems: 100
           items:
             $ref: '#/components/schemas/RubricCriterion'
+        decision_rules:
+          type: object
+          additionalProperties: false
+          description: Optional authored rule parameters; omitted fields use the documented compiler defaults.
+          properties:
+            rule_version:
+              type: string
+              minLength: 1
+            cannot_assess_count_threshold:
+              type: integer
+              minimum: 1
+            cannot_assess_ratio_threshold:
+              type: number
+              minimum: 0
+              maximum: 1
+            required_unmet_score:
+              type: number
+              minimum: 0
     RubricCriterion:
       type: object
       additionalProperties: false
-      required: [criterion_key, title, weight, checklists, levels]
+      required: [criterion_key, title, weight, scoring_mode, checklists]
       properties:
         criterion_key:
           type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
         title:
           type: string
+          minLength: 1
         weight:
           type: number
-          minimum: 0
+          exclusiveMinimum: 0
+        scoring_mode:
+          type: string
+          enum: [PROPORTIONAL_CHECKLIST_V0]
+          description: Only the deterministic proportional checklist rule is executable in v1.
         checklists:
           type: array
           minItems: 1
           maxItems: 100
           items:
-            type: object
-            required: [checklist_key, requirement, evidence_mode]
-            properties:
-              checklist_key:
-                type: string
-              requirement:
-                type: string
-              evidence_mode:
-                type: string
-                enum: [LOCAL, GRAPH]
+            $ref: '#/components/schemas/RubricChecklist'
         levels:
           type: array
-          minItems: 1
           maxItems: 20
+          description: Authoring-only descriptor; nonempty levels are rejected by the v1 execution adapter until level scoring is implemented.
           items:
             type: object
             required: [level_key, score, rule]
@@ -1762,6 +1781,60 @@ components:
                 type: number
               rule:
                 type: string
+    RubricChecklist:
+      type: object
+      additionalProperties: false
+      required: [checklist_key, statement, evidence_mode, requirements]
+      properties:
+        checklist_key:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+        statement:
+          type: string
+          minLength: 1
+        requirement:
+          type: string
+          deprecated: true
+          description: Legacy free-text property; never executable and rejected by the v1 compiler adapter.
+        evidence_mode:
+          type: string
+          enum: [LOCAL, GRAPH]
+        importance:
+          type: string
+          enum: [CORE, REQUIRED, OPTIONAL]
+          description: Defaults to REQUIRED when absent.
+        query:
+          type: string
+          minLength: 1
+          description: Defaults to statement when absent.
+        requirements:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/RubricEvidenceRequirement'
+        contradiction_patterns:
+          type: array
+          items:
+            type: string
+            minLength: 1
+    RubricEvidenceRequirement:
+      type: object
+      additionalProperties: false
+      required: [requirement_id, any_of]
+      properties:
+        requirement_id:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+        description:
+          type: string
+          minLength: 1
+        any_of:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
     RubricVersion:
       type: object
       additionalProperties: false

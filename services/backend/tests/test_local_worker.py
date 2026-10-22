@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import subprocess
 import sys
 
 from services.backend.src.kltn_ai.local_store import LocalStore
 from services.backend.src.kltn_ai.worker.local_worker import process_one, recover_interrupted
+from services.backend.src.kltn_ai.worker import local_worker
 
 
 FIXTURES = Path(__file__).resolve().parents[3] / "research" / "tests" / "fixtures" / "core_mvp"
@@ -66,3 +68,26 @@ def test_interrupted_job_is_not_automatically_retried(tmp_path):
         recover_interrupted(store)
         assert process_one(store) is False
     assert store.get_job(job["run_id"])["status"] == "FAILED"
+
+
+def test_worker_correlation_events_omit_raw_exception_and_input_text(tmp_path, monkeypatch, capsys):
+    store = LocalStore(tmp_path / "private-app")
+    request_id = "req-" + "a" * 32
+    job = store.create_run(
+        report=(".txt", b"private student content"),
+        sources=[(".txt", b"source content")], rubric=b"{}",
+        config_id="bm25-smoke", request_id=request_id,
+    )
+    def rejected(*_args):
+        raise ValueError("PRIVATE_STUDENT_EXCERPT_DO_NOT_LOG")
+    monkeypatch.setattr(local_worker, "_run_job", rejected)
+    with store.worker_lock():
+        assert process_one(store)
+    logs = capsys.readouterr().err
+    assert "PRIVATE_STUDENT_EXCERPT_DO_NOT_LOG" not in logs
+    assert "private student content" not in logs
+    events = [json.loads(line) for line in logs.splitlines()]
+    assert [event["event"] for event in events] == ["JOB_STARTED", "JOB_FINISHED"]
+    assert all(event["request_id"] == request_id and event["run_id"] == job["run_id"]
+               for event in events)
+    assert events[-1]["error_code"] == "PROCESSING_FAILED"

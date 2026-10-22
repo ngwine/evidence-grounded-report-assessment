@@ -246,6 +246,7 @@ def test_two_pipeline_runner_writes_reports_and_reproducibility_manifest(tmp_pat
         "assessment_report",
         "summary",
         "run_manifest",
+        "citation_context",
     }
     for path in result["output_paths"].values():
         assert Path(path).is_file()
@@ -257,3 +258,16 @@ def test_two_pipeline_runner_writes_reports_and_reproducibility_manifest(tmp_pat
         result["summary"]["pipeline1"]["flagged_passage_coverage_percentage"]
         > 0
     )
+    assert tmp_path.stat().st_mode & 0o077 == 0
+    citation = json.loads((tmp_path / "citation-context.json").read_text(encoding="utf-8"))
+    assert citation["policy"] == "candidate_keys_only; citation_validity_and_plagiarism_unknown"
+    before = (tmp_path / "run-manifest.json").read_bytes()
+    with pytest.raises(FileExistsError, match="previous run"):
+        run_core_mvp(
+            report_path=FIXTURE_DIR / "report.txt",
+            source_paths=[FIXTURE_DIR / "source-overlap.txt"],
+            rubric_path=FIXTURE_DIR / "rubric.json",
+            config_path=FIXTURE_DIR / "config-bm25-only.json",
+            output_dir=tmp_path, pipeline="both",
+        )
+    assert (tmp_path / "run-manifest.json").read_bytes() == before
