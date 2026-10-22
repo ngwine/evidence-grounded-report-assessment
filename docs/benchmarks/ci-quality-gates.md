@@ -69,6 +69,13 @@ and its tests, and a live invocation with **high=0, critical=0, moderate=0,
 low=0**. These checks did not modify the dependency lockfile or suppress any
 advisory, and do not substitute for the next clean-checkout GitHub CI result.
 
+That clean-checkout result is now available for code commit `37c6277`:
+[run `39834435765`](https://github.com/ngwine/evidence-grounded-report-assessment/actions/runs/39834435765)
+passed **all five jobs** on 23/10/2026 (local timezone). Mongo's job records
+Linux 6.8.0-1064-azure, Ubuntu runner image20261012.322.1 and locked Mongo8.0.34
+digest, plus six live tests/restart/reapply. This records those exact targets,
+not an assurance for every kernel or future advisory snapshot.
+
 ## Local preflight, 22/10/2026
 
 - Ruff on the declared core scope: pass, after removing one unused import in

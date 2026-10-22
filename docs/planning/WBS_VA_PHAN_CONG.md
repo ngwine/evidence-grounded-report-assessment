@@ -4,9 +4,9 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.9 |
+| Phiên bản | 1.10 |
 | Ngày lập baseline | 21/08/2026 |
-| Ngày cập nhật tiến độ/reforecast | 22/10/2026 |
+| Ngày cập nhật tiến độ/reforecast | 23/10/2026 |
 | Thời gian dự án | 08/08/2026–22/01/2027 (24 tuần) |
 | Hạn nộp | 23/01/2027 |
 | Thành viên 1 | Nguyễn Trần Ngọc Quý — 523H0087 — Nhóm trưởng |
@@ -33,6 +33,10 @@ PR đã merge và phân biệt adapter/test cục bộ với DoD tích hợp c�
 Phiên bản 1.9 bổ sung migration/DB identities, rubric API adapter, Chromium E2E
 và CI quality/security gates có test; giữ nguyên các review/production/gold
 conditions còn mở, không tự nâng các work package sang DONE.
+Phiên bản 1.10 xác nhận [CI của code commit 37c6277](https://github.com/ngwine/evidence-grounded-report-assessment/actions/runs/39834435765)
+đạt cả năm job, gồm MongoDB 8.0.34 trên target Ubuntu 22.04 và Chromium E2E.
+Tổng DoD vẫn 4 DONE/54 PARTIAL/8 chờ điều kiện; CI không thay cho review hoặc
+phần tích hợp/auth/gold còn thiếu.
 
 ---
 
@@ -218,7 +222,7 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W2.4` | IN PROGRESS | 75% | [UX P0](../ux/p0-local-flow.md) có navigation, wireframe, state và ma trận quyền; app local hiện thực luồng chính | Y/Q review; auth/permission runtime thuộc W3.2/W3.4 |
 | `W2.5` | IN PROGRESS | 75% | [Rubric v1](../rubric/rubric-v1.md) đã merge PR #16; authored atomic checklist, LOCAL/GRAPH và three-state có | Review cuối; chốt example thật và rule/levels có thể thực thi, không coi levels trong tài liệu đã được compiler hỗ trợ |
 | `W2.6` | CARRY-OVER | 75% | [Registry/pack gate](../../research/governance/README.md), PAN split và MMDocIR gate kiểm exact inputs/split có; template report có consent và PII-review fields | Rights/access/retention/approver; approved DEV1; sửa HoVer wiki lệch checksum; không tự ký consent/PII |
-| `W3.1` | CARRY-OVER | 75% | Backend/Compose replica-set/transaction/restart; [migration/roles](../architecture/mongodb-executable-baseline.md) bốn collection/ba identity và sáu live tests; [CI gates](../benchmarks/ci-quality-gates.md) + browser job có local verification | CI commit mới và review/merge; validator/index catalog còn lại, repositories, backup/restore; app vẫn dùng local store |
+| `W3.1` | CARRY-OVER | 75% | [CI 37c6277](https://github.com/ngwine/evidence-grounded-report-assessment/actions/runs/39834435765) đạt Python/quality/security/web/browser/Mongo gates; Mongo 8.0.34 pin digest, bốn validator/ba DB identities, sáu live tests và restart/reapply đạt | Review/merge; validator/index catalog còn lại, repositories, backup/restore; app vẫn dùng local store, chưa có application RBAC |
 | `W3.2` | CARRY-OVER | 0% | Chưa có auth/session/RBAC production | Identity provider, tenant/ownership enforcement, audit và negative auth tests |
 | `W3.3` | IN PROGRESS | 75% | Fixture PDF/DOCX an toàn; duplicate/self/invalid PDF-DOCX/NUL/rubric/config validation tests đã có | Rights metadata và malicious-content corpus mở rộng; review chéo |
 | `W3.4` | IN PROGRESS | 50% | React/Vite app hiển thị local workflow và states | Routing/auth/forbidden state và frontend test suite |
@@ -876,6 +880,7 @@ hoặc hạn nộp 23/01/2027.
 | 1.7 | 19/10/2026 | Ghi nhận app local upload→worker→hai pipeline→review, Pipeline 1 exact-span/coverage/report, Pipeline 2 compiler/LOCAL/GRAPH-v0/verifier/scorer/report; tích hợp API/UX/rubric/golden benchmark/ADR/output contract vào working tree; bổ sung contract/regression/fixture tests; cập nhật W2–W11 theo artifact thật nhưng giữ gate OPEN đến khi commit-review-merge, governance và gold annotation hoàn tất |
 | 1.8 | 22/10/2026 | Audit đủ 66 task W1–W11 của Q/Y: 4 DONE, 54 PARTIAL và 8 chưa triển khai/chờ điều kiện; kiểm chứng GitHub approvals và chốt W4.4 theo PR #9; sửa evidence PR đã merge; bổ sung parser resource boundary, citation context, exact-vector adapter, Mongo replica-set/transaction/restart evidence, runtime JSON Schema, correlation log và RRF/coverage/gold fixes. Cập nhật khảo sát/Chương 1; giữ approval/gold/production gates OPEN, hạ W9.2–3 khi phát hiện API–compiler mismatch |
 | 1.9 | 22/10/2026 | Thêm explicit rubric API→compiler mapping/tám contract tests; Mongo migration/validator bốn collection và ba DB identities qua sáu live tests; queue validation/progress regressions; Chromium E2E local và CI quality/security/browser jobs. App vẫn local store, auth/persistence/gold/review chưa đủ để đóng task; tổng 4 DONE/54 PARTIAL/8 chờ điều kiện giữ nguyên |
+| 1.10 | 23/10/2026 | Kiểm chứng CI đủ 5/5 trên code commit37c6277; pin Mongo8.0.34 digest và khai báo targetUbuntu22.04, không bypass kernel guard; sửa secret permission/config drift và audit503 retry fail-closed. Local343 pass/7 skip, sáu liveMongo + restart/reapply, Chromium đạt; giữ DoD chưa đủ ở PARTIAL và bàn giao PR#19 review |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|
