@@ -21,8 +21,12 @@ docker compose -f infra/mongodb/compose.yaml ps
 Secret ngẫu nhiên nằm dưới `var/infra/mongodb/`, không có trong Git. Script giữ
 nguyên secret đã tạo để lần khởi động sau dùng được volume cũ. URI admin dùng
 cho setup/test ở file `admin-uri`; không dùng tài khoản admin cho API/worker.
-Các role migration/API/worker tối thiểu theo ADR-001 vẫn cần hiện thực trước
-khi nối production repository. Không công khai port hoặc chia sẻ URI.
+Custom roles migration/API/worker đã được bootstrap; repository/auth integration
+và toàn bộ collection validators vẫn chưa xong. Không công khai port/chia sẻ URI.
+`prepare` kiểm lại mode/nội dung URI và từ chối port/credential drift, không
+ghi đè secret để ép volume cũ khởi động. Bootstrap runtime URI hiện quản lý một
+application database duy nhất; nếu đổi `--database`, phải tách cấu hình secret
+trước, không xóa credential hoặc database đang dùng để vượt reconciliation.
 
 Healthcheck yêu cầu authenticated writable primary. Init service chỉ tạo
 replica set nếu chưa có. Muốn dừng mà giữ dữ liệu:
