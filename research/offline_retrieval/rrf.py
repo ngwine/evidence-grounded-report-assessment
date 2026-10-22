@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+import math
 from typing import Any, Mapping
 
 
@@ -12,10 +14,21 @@ def fuse_rrf(
     rrf_k: int = 60,
     top_k: int,
     key_field: str = "chunk_id",
+    method_weights: Mapping[str, float] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    if rrf_k <= 0 or top_k <= 0:
+    if (isinstance(rrf_k, bool) or not isinstance(rrf_k, int) or rrf_k <= 0
+            or isinstance(top_k, bool) or not isinstance(top_k, int) or top_k <= 0):
         raise ValueError("rrf_k and top_k must be positive")
     methods = sorted(rankings)
+    weights = {method: 1.0 for method in methods}
+    if method_weights is not None:
+        if not isinstance(method_weights, Mapping) or set(method_weights) - set(methods):
+            raise ValueError("method_weights must name only available methods")
+        for method, weight in method_weights.items():
+            if (isinstance(weight, bool) or not isinstance(weight, (int, float))
+                    or not math.isfinite(weight) or weight <= 0):
+                raise ValueError("RRF method weights must be finite and positive")
+            weights[method] = float(weight)
     query_ids = sorted(
         {query_id for method in methods for query_id in rankings[method]}
     )
@@ -28,12 +41,27 @@ def fuse_rrf(
         supporting_ids: dict[str, dict[str, str]] = {}
         supports_by_method: dict[str, dict[str, dict[str, Any]]] = {}
         for method in methods:
-            for candidate in rankings[method].get(query_id, []):
+            method_candidates = rankings[method].get(query_id, [])
+            for candidate in method_candidates:
                 if key_field not in candidate:
                     raise ValueError(f"RRF candidate requires {key_field}")
+                if (isinstance(candidate.get("rank"), bool)
+                        or not isinstance(candidate.get("rank"), int)
+                        or candidate["rank"] <= 0):
+                    raise ValueError("RRF candidate rank must be a positive integer")
+            for candidate in sorted(
+                method_candidates,
+                key=lambda item: (
+                    item["rank"], str(item[key_field]),
+                    json.dumps(item, sort_keys=True, ensure_ascii=False, default=str),
+                ),
+            ):
                 candidate_id = str(candidate[key_field])
-                rank = int(candidate["rank"])
-                scores[candidate_id] = scores.get(candidate_id, 0.0) + 1.0 / (
+                if method in contributions.get(candidate_id, {}):
+                    # A method contributes at most its best rank for one ID.
+                    continue
+                rank = candidate["rank"]
+                scores[candidate_id] = scores.get(candidate_id, 0.0) + weights[method] / (
                     rrf_k + rank
                 )
                 if candidate_id not in payloads:
@@ -69,6 +97,9 @@ def fuse_rrf(
             candidate["score"] = scores[candidate_id]
             candidate["rank"] = rank
             candidate["rrf_ranks"] = contributions[candidate_id]
+            candidate["rrf_weights"] = {
+                method: weights[method] for method in contributions[candidate_id]
+            }
             candidate["rrf_supporting_ids"] = supporting_ids.get(candidate_id, {})
             candidate["supports_by_method"] = supports_by_method[candidate_id]
             candidate["representative_support_method"] = representative_methods[

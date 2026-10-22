@@ -28,6 +28,12 @@ source khác khỏi bảng xếp hạng.
 dùng chunk ID khác nhau, nên mỗi view phải gom về source document trước rồi mới
 có thể fusion một cách có nghĩa.
 
+`rrf.k` và `rrf.weights` (tùy chọn) nằm trong config của run. Weight mặc định
+là `1.0`; các khóa hợp lệ là `bm25`, `dense`, `fixed_window_bm25` và
+`structure_dense`. Mỗi phương pháp chỉ đóng góp **một** rank tốt nhất cho một
+candidate ID, kể cả khi danh sách đầu vào vô tình lặp ID. Đổi weight tạo một
+config/run mới, không sửa số liệu của DEV0 đã chạy.
+
 Hai phương pháp Cross-Encoder cũng chỉ chạy ở document scope. Runner giữ
 `pre_rerank_rank`, điểm candidate, điểm Cross-Encoder, support passage/method và
 raw span thắng cuộc. Chỉ phần đầu `cross_encoder.rerank_depth` được chấm lại;

@@ -2,11 +2,37 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import pytest
 
 from research.core_mvp.documents import parse_document, parse_documents
 from research.core_mvp.similarity import run_similarity_pipeline
 from research.offline_retrieval.common import tokenize
+
+
+def test_overlapping_report_chunk_views_count_physical_tokens_once(tmp_path):
+    copied = (
+        "The provenance ledger preserves every extracted passage with an immutable "
+        "document version and a reproducible source coordinate for evidence review."
+    )
+    report_path = tmp_path / "report.txt"
+    source_path = tmp_path / "source.txt"
+    report_path.write_text(copied, encoding="utf-8")
+    source_path.write_text(copied + " Additional source context.", encoding="utf-8")
+    report = parse_document(report_path, role="student-report", max_tokens=256, min_tokens=1)
+    source = parse_document(source_path, role="comparison-source", max_tokens=256, min_tokens=1)
+    # Two retrieval views can refer to the same physical paragraph coordinates.
+    first = deepcopy(report.chunks[0])
+    second = deepcopy(first)
+    second["chunk_id"] = "overlapping-other-view"
+    result = run_similarity_pipeline([first, second], source.chunks, config=_config(),
+                                     encoder=None, reranker=None)
+    assert result["report_chunk_count"] == 2
+    assert result["total_report_tokens"] == len(tokenize(copied))
+    assert result["exact_matched_report_tokens"] == len(tokenize(copied))
+    assert result["exact_match_coverage_percentage"] == 100.0
+    assert result["coverage_definitions"]["scope"] == "DOCUMENT_VERSION_ELEMENT_COORDINATES"
+    assert result["source_summary"][0]["exact_token_coverage_weight"] == 1.0
 
 
 def _config() -> dict:
