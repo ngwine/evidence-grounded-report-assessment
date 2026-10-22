@@ -47,10 +47,13 @@ one source passage trigger a diagnostic warning, not a hard cap: genuine reuse
 of the same source in several places must remain detectable.
 
 `provisional_review_passage_coverage_percentage` is a legacy field name for the
-token mass of chunks selected for review divided by that of all report chunks.
-It measures review workload, not similarity, matched-span coverage or precision;
-overlapping chunk text can be counted more than once. The report includes
-`coverage_definitions` to make this scope explicit. Calibrated similarity stays
+union of report tokens in chunks selected for review divided by the report token
+union. With parser-v2 provenance, tokens are keyed by document version, element
+and normalized offsets, so overlapping chunks count once. Legacy inputs without
+coordinates explicitly disclose a chunk-local fallback. Exact-token coverage
+uses the same denominator; source aggregation ranks by each source's exact-token
+coverage weight. Review coverage measures workload, not confirmed similarity.
+The report records the formula/version in `coverage_definitions`. Calibrated similarity stays
 `null`. Similarity evidence is not a plagiarism verdict. A trained/evaluated
 pairwise verifier and independently labelled examples are still needed to
 distinguish actual paraphrases, summaries and same-topic hard negatives.
@@ -109,6 +112,20 @@ TOKENIZERS_PARALLELISM=false \
 
 `--source` can be repeated. Supported document formats are PDF, DOCX, UTF-8
 TXT and Markdown.
+
+Parsing in the runner uses a separate child process per input. Defaults are a
+60-second wall timeout, 45 CPU seconds, 20 MiB input, 64 MiB parser output,
+2 million extracted characters and 20,000 chunks. `documents.resource_limits`
+can set a smaller explicit budget in a versioned config. Linux also enforces a
+2 GiB address-space limit; macOS records that a memory cap is not enforced.
+A failed or timed-out parser does not return a successful partial document.
+Outputs use a private directory and a nonempty run directory cannot be reused.
+
+`citation-context.json` stores numeric/author-year markers, bibliography-entry
+candidates, original spans and unresolved/ambiguous states. It is included in
+the run manifest hashes. These candidates do not validate a citation or change
+the similarity/assessment score. JSON Schema validation and semantic runtime
+checks both run before either pipeline report is written.
 
 To reproduce the W10 Pipeline 1 technical slice without private files, use the
 committed synthetic fixture and locked model revisions:

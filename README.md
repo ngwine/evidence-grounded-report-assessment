@@ -34,14 +34,16 @@ xác nhận đủ để chấm điểm hoặc kết luận đạo văn.
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
 | SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
-| Product Backlog/WBS                         | Baseline v1.5 cập nhật actual/evidence đến 16/09/2026; chờ Q/Y review/ký                                      |
+| Product Backlog/WBS                         | WBS v1.8 có [audit đủ 66 task W1–W11](docs/planning/W1-W11_STATUS_2026-10-22.md) ngày 22/10; chờ Q/Y review/ký baseline                                      |
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
 | API contract (`W2.3`) | Có [API Contract v1](docs/api/API_CONTRACT_V1.md) và [OpenAPI draft](docs/api/openapi-v1.yaml); YAML/$ref đã kiểm tra, chờ Yến review |
 | Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
 | Frontend, API, worker                       | Đã có bản demo local: upload → job worker → hai báo cáo evidence → ghi nhận review; chưa có auth/MongoDB/publish |
-| Parser và chunking | Parser PDF/DOCX/TXT và chunker provenance đã được nối vào worker demo; vẫn cần golden benchmark trên corpus đủ đại diện |
+| Parser và chunking | Worker/runner gọi parser process riêng có wall/CPU/input/output budgets; stable provenance và synthetic golden có; vẫn cần corpus đủ đại diện |
+| Citation context | Runner lưu marker/bibliography candidates với exact span và unknown/ambiguous status; không tự xác minh nguồn hay trừ similarity |
+| MongoDB runtime/index | Có [Compose replica set local](infra/mongodb/README.md), queue adapter và exact-vector generation baseline đã test; API/worker demo chưa nối MongoDB |
 | Model local | `research-v0` chạy E5 và mMARCO revision đã khóa từ cache local; hiệu quả tổng quát vẫn cần đánh giá trên tập nhãn độc lập |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
@@ -146,8 +148,8 @@ flowchart LR
 
 ## Thiết lập
 
-Chưa có `compose.yaml` hoặc môi trường production. Để chạy bản demo local, cài
-dependency Python và web từ thư mục repo:
+Có [Compose MongoDB phát triển riêng](infra/mongodb/README.md), hiện chưa nối
+vào app demo. Để chạy bản demo local, cài dependency Python và web từ thư mục repo:
 
 ```bash
 python3.12 -m venv .venv-research

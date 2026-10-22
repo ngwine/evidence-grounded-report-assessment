@@ -4,9 +4,9 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.6 |
+| Phiên bản | 1.7 |
 | Ngày lập baseline | 21/08/2026 |
-| Ngày cập nhật | 20/10/2026 |
+| Ngày cập nhật | 22/10/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
 | Thành viên | Nguyễn Trần Ngọc Quý — 523H0087 (Q), Võ Thị Kim Yến — 52200229 (Y) |
 | GVHD | Vũ Đình Hồng |
@@ -14,13 +14,13 @@
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | Phạm vi, pipeline và dataset-task mapping đã chốt; hai technical slice và app local đã chạy; quyền dữ liệu, gold evaluation, production persistence/security và các gate vẫn mở; actual/evidence theo WBS v1.7 |
+| Trạng thái baseline | Hai technical slice/app local chạy; audit đủ 66 task W1–W11 và thay đổi hardening được ghi tại [snapshot 22/10](./W1-W11_STATUS_2026-10-22.md); quyền dữ liệu, gold evaluation, production persistence/security và các gate vẫn mở; actual/evidence theo WBS v1.8 |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.7; không đổi target backlog để che độ trễ.
+phiên bản 1.8; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
