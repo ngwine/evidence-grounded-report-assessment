@@ -1,4 +1,4 @@
-"""Additive, idempotent and fenced Mongo schema migration for controlled local use.
+"""Additive, idempotent Mongo schema migration with a maintenance lease.
 
 Pause application writers first. No documents are repaired, deleted or dropped.
 An existing invalid document aborts before any collection validator is changed.

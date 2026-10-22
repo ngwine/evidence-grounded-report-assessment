@@ -106,6 +106,9 @@ jobs:
         run: |
           .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
           .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
+      - name: Summarize failure without exposing MongoDB logs or credentials
+        if: failure()
+        run: .venv-research/bin/python scripts/diagnose_mongodb_local.py
       - name: Stop only the dedicated test deployment
         if: always()
         run: docker compose -f infra/mongodb/compose.yaml down
