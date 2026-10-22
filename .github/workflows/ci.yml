@@ -53,7 +53,7 @@ jobs:
         run: >-
           python -m mypy --check-untyped-defs --show-error-codes
           --follow-imports=silent
-          services/backend/src/kltn_ai/db/mongo_jobs.py
+          services/backend/src/kltn_ai/db
           services/backend/src/kltn_ai/integrations/parsing/citation_markers.py
       - name: Bandit backend SAST (medium and high severity)
         run: python -m bandit -q -r services/backend/src -ll

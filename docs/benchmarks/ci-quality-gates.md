@@ -6,7 +6,7 @@ OpenAPI parsing, frontend type-check/build, and these blocking quality gates:
 | Gate | Enforced scope | Failure policy |
 |---|---|---|
 | Ruff `E4,E7,E9,F` | Backend source and offline retrieval/core MVP/Evidence Graph Python source | Any selected finding fails; this is not full style coverage |
-| Mypy | MongoDB job adapter and citation-marker adapter only | Any typing error fails; other legacy/experimental modules are not yet covered |
+| Mypy | MongoDB schema/migration/roles/queue package and citation-marker adapter | Any typing error fails; other legacy/experimental modules are not yet covered |
 | Bandit `-ll` | All backend source | Medium/high severity findings fail; no project-level skip or baseline |
 | `pip-audit --strict` | Actual resolved Python environment installed by CI (research, backend and quality dependencies) | Any known advisory or audit-resolution failure fails; no ignored advisory IDs |
 | `npm audit --audit-level=high` | The locked web dependency tree, including dev dependencies | High/critical advisories fail; `npm ci` remains required |
@@ -25,7 +25,7 @@ Local rerun after installing the quality requirements:
 ```bash
 .venv-research/bin/python -m pip install -r services/backend/requirements-quality.txt
 .venv-research/bin/ruff check --select E4,E7,E9,F services/backend/src research/offline_retrieval research/core_mvp research/evidence_graph
-.venv-research/bin/mypy --check-untyped-defs --show-error-codes --follow-imports=silent services/backend/src/kltn_ai/db/mongo_jobs.py services/backend/src/kltn_ai/integrations/parsing/citation_markers.py
+.venv-research/bin/mypy --check-untyped-defs --show-error-codes --follow-imports=silent services/backend/src/kltn_ai/db services/backend/src/kltn_ai/integrations/parsing/citation_markers.py
 .venv-research/bin/bandit -q -r services/backend/src -ll
 .venv-research/bin/python -m pip_audit --strict --progress-spinner off
 npm --prefix apps/web audit --audit-level=high
@@ -41,7 +41,7 @@ issues outside these tools.
 
 - Ruff on the declared core scope: pass, after removing one unused import in
   `research/core_mvp/assessment.py`.
-- Mypy on the two declared backend modules: pass. Extending the same invocation
+- Mypy on the MongoDB package plus citation adapter: pass. Extending the same invocation
   to `research/evidence_graph/contract.py` currently reports 16 type errors;
   graph is therefore **not** covered by the type gate yet.
 - Bandit backend source at medium/high severity: pass.

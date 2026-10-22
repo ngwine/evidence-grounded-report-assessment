@@ -1,5 +1,11 @@
 # MongoDB queue slice (`W3.1`, `W3.6`)
 
+Executable schema/roles baseline ở
+[`mongodb-executable-baseline.md`](../../../../../docs/architecture/mongodb-executable-baseline.md).
+Migration cài job indexes; runtime API/worker không có quyền `createIndex`,
+nên không gọi `ensure_indexes()` bằng runtime credential. Queue adapter vẫn
+chưa nối app local; database role không thay thế actor/workspace authorization.
+
 `mongo_jobs.py` implements the `jobs` state transitions from ADR-001: unique
 idempotency key, atomic claim with a bounded lease, revision-guarded heartbeat
 and completion, finite retry, cancellation and the indexes used by those

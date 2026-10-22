@@ -3,6 +3,10 @@
 Baseline này hiện thực một phần thiết kế ở ADR-001, không thay thế repository
 authorization hay nối app local sang MongoDB một cách ngầm định.
 
+Compose hiện dùng replica-set name `kltn-rs`; ADR design ghi `rs0`. Đây là
+configuration deviation cần reviewer xác nhận. URI/health/test đã dùng nhất
+quán `kltn-rs`; không tự đổi tên replica set trên volume đang có dữ liệu.
+
 ## Phạm vi đã có code
 
 - Migration `001-identity-and-job-validators-v1`: validator strict/error cho

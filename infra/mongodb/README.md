@@ -5,6 +5,12 @@ member, xác thực SCRAM/keyfile và volume riêng `kltn-evidence-db_*`. Host c
 mở `127.0.0.1:27188`. Bộ này phục vụ phát triển và integration test; API/worker
 hiện vẫn dùng local store và chưa sử dụng database này.
 
+[Executable baseline](../../docs/architecture/mongodb-executable-baseline.md)
+có migration/validator bốn collection và ba database identities tách quyền.
+Sau khi commit source và dừng writer, chạy
+`.venv-research/bin/python scripts/setup_mongodb_local.py --operator ngwine`;
+không đưa URI/password private vào cấu hình public hoặc Git.
+
 ```bash
 .venv-research/bin/python scripts/prepare_mongodb_local.py
 docker compose -f infra/mongodb/compose.yaml up -d --wait

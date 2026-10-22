@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.8 |
+| Phiên bản | 1.9 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật tiến độ/reforecast | 22/10/2026 |
 | Thời gian dự án | 08/08/2026–22/01/2027 (24 tuần) |
@@ -30,6 +30,9 @@ artifact thiết kế đã tích hợp vào working tree ngày 19/10/2026. Basel
 21/08/2026 vẫn được giữ để đối chiếu schedule variance. Phiên bản 1.8 đối chiếu
 đủ 66 work package W1–W11 ngày 22/10: xác minh 4 mục DONE có bằng chứng, cập nhật
 PR đã merge và phân biệt adapter/test cục bộ với DoD tích hợp của hệ thống.
+Phiên bản 1.9 bổ sung migration/DB identities, rubric API adapter, Chromium E2E
+và CI quality/security gates có test; giữ nguyên các review/production/gold
+conditions còn mở, không tự nâng các work package sang DONE.
 
 ---
 
@@ -211,11 +214,11 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W1.6` | CARRY-OVER | 50% | [Chương 1 bản nháp](../thesis/chuong-01.md) được biên tập từ file của nhóm và scope hiện tại, có RQ/mục tiêu/phương pháp/nguồn | Y/Q review nội dung và GVHD góp ý; chưa coi bản nháp là đã duyệt |
 | `W2.1` | DONE | 100% | [C4](../architecture/c4.md), [data flow/trust boundary](../architecture/data-flow.md) và [threat model](../threat-model/threat-model-v1.md) đã merge qua PR #5; scope đã đồng bộ qua PR #8 | Review lại threat model tại W16 theo kế hoạch |
 | `W2.2` | DONE | 100% | [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](../architecture/data-dictionary.md) đã được Y approve/merge qua PR #6 | Runtime MongoDB/persistence thuộc `W3.1/W4.2`, không mở lại design task này |
-| `W2.3` | IN PROGRESS | 75% | [API Contract](../api/API_CONTRACT_V1.md) và OpenAPI đã merge PR #7 | Review cuối; thống nhất schema rubric API với compiler (keys, authored requirements, levels) |
+| `W2.3` | IN PROGRESS | 75% | [API Contract](../api/API_CONTRACT_V1.md)/OpenAPI đã merge PR #7; thêm explicit [API→compiler mapping](../api/rubric-compiler-mapping.md) và tám contract tests | Review cuối, review scoring mode/adapter mới; HTTP implementation không được tính đã có chỉ vì schema/test đạt |
 | `W2.4` | IN PROGRESS | 75% | [UX P0](../ux/p0-local-flow.md) có navigation, wireframe, state và ma trận quyền; app local hiện thực luồng chính | Y/Q review; auth/permission runtime thuộc W3.2/W3.4 |
 | `W2.5` | IN PROGRESS | 75% | [Rubric v1](../rubric/rubric-v1.md) đã merge PR #16; authored atomic checklist, LOCAL/GRAPH và three-state có | Review cuối; chốt example thật và rule/levels có thể thực thi, không coi levels trong tài liệu đã được compiler hỗ trợ |
 | `W2.6` | CARRY-OVER | 75% | [Registry/pack gate](../../research/governance/README.md), PAN split và MMDocIR gate kiểm exact inputs/split có; template report có consent và PII-review fields | Rights/access/retention/approver; approved DEV1; sửa HoVer wiki lệch checksum; không tự ký consent/PII |
-| `W3.1` | CARRY-OVER | 75% | Backend/CI pytest+web build; [Compose Mongo 8.0.29](../../infra/mongodb/README.md) pin digest, localhost/auth/replica-set/health; transaction và restart test chạy thật | Runtime least-privilege roles/repositories; CI lint/type/SAST/secret/dependency gates; review/merge thay đổi mới |
+| `W3.1` | CARRY-OVER | 75% | Backend/Compose replica-set/transaction/restart; [migration/roles](../architecture/mongodb-executable-baseline.md) bốn collection/ba identity và sáu live tests; [CI gates](../benchmarks/ci-quality-gates.md) + browser job có local verification | CI commit mới và review/merge; validator/index catalog còn lại, repositories, backup/restore; app vẫn dùng local store |
 | `W3.2` | CARRY-OVER | 0% | Chưa có auth/session/RBAC production | Identity provider, tenant/ownership enforcement, audit và negative auth tests |
 | `W3.3` | IN PROGRESS | 75% | Fixture PDF/DOCX an toàn; duplicate/self/invalid PDF-DOCX/NUL/rubric/config validation tests đã có | Rights metadata và malicious-content corpus mở rộng; review chéo |
 | `W3.4` | IN PROGRESS | 50% | React/Vite app hiển thị local workflow và states | Routing/auth/forbidden state và frontend test suite |
@@ -238,9 +241,9 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W8.1–W8.3` | IN PROGRESS | 75% | P1/app local đã merge #17/#18; mới thêm document-level element-token union và source exact-token coverage weight; runner chặn overwrite run cũ | Review/merge coverage fix; Mongo persistence/versioned API; semantic gold evaluation |
 | `W8.4` | IN PROGRESS | 25% | Có guideline và blinded annotation workflow; chưa tự gán PARAPHRASE/SUMMARY | Hai người gán nhãn, adjudicate, train/calibrate/evaluate classifier |
 | `W8.5` | IN PROGRESS | 50% | Synthetic quote/generic/no-source/hard-negative fixtures và regression có | Chốt citation policy và expected output qua review chéo |
-| `W8.6` | IN PROGRESS | 50% | App local hiển thị evidence/result/review | Side-by-side span UX, empty/error/forbidden và E2E frontend test |
+| `W8.6` | IN PROGRESS | 50% | App local có hai evidence views và Chromium E2E qua upload/hai pipeline/review/source gate/stale revision | User/workspace forbidden flow, PDF locator highlight và review/merge; browser test synthetic không đo chất lượng mô hình |
 | `W9.1` | IN PROGRESS | 25% | Rubric JSON được upload/lưu trong local job | Draft/clone/publish/immutable version lifecycle và RBAC |
-| `W9.2–W9.3` | IN PROGRESS | 50% | Compiler deterministic/hash/field validation có; schema API và executable rubric đang lệch keys/requirements/levels | API→compiler adapter/schema alignment, rule-conflict/lifecycle tests và persistence; chưa được gọi là contract integration hoàn chỉnh |
+| `W9.2–W9.3` | IN PROGRESS | 50% | Compiler deterministic/hash/field validation và explicit API→compiler adapter có tám contract tests; từ chối legacy free text/unsupported levels | Rule-conflict/HTTP lifecycle tests, persistence và review; contract adapter chưa thay rubric management API |
 | `W9.4–W9.5` | IN PROGRESS | 75% | Rubric domain/template, authored atomic checklist, LOCAL/GRAPH mode và decision rules đã có | Review trên rubric môn học thật được phép |
 | `W9.6` | CONDITIONAL | 0% | Chưa có rubric management UI | Làm sau core pipeline nếu capacity cho phép |
 | `W10.1–W10.2` | IN PROGRESS | 75% | LOCAL assessment, Evidence Pack và scope/version/source-span validators chạy offline/app local | Mongo persistence, immutable run linking và API production |
@@ -872,6 +875,7 @@ hoặc hạn nộp 23/01/2027.
 | 1.6 | 12/10/2026 | Đối chiếu lại repository: scope sync PR #8, provenance PR #9, offline runner PR #11, PAN pilot PR #12 và A1–A5 DEV0; phân biệt component diagnostic với pipeline hoàn chỉnh; cập nhật actual/gate; reforecast W10–W17 ưu tiên Pipeline 1, Rubric/LOCAL, GRAPH/Assessment, offline E2E và dataset freeze; đưa Targeted Questions/UI polish/OCR/full Docling–GROBID/PDF xuống cut-line |
 | 1.7 | 19/10/2026 | Ghi nhận app local upload→worker→hai pipeline→review, Pipeline 1 exact-span/coverage/report, Pipeline 2 compiler/LOCAL/GRAPH-v0/verifier/scorer/report; tích hợp API/UX/rubric/golden benchmark/ADR/output contract vào working tree; bổ sung contract/regression/fixture tests; cập nhật W2–W11 theo artifact thật nhưng giữ gate OPEN đến khi commit-review-merge, governance và gold annotation hoàn tất |
 | 1.8 | 22/10/2026 | Audit đủ 66 task W1–W11 của Q/Y: 4 DONE, 54 PARTIAL và 8 chưa triển khai/chờ điều kiện; kiểm chứng GitHub approvals và chốt W4.4 theo PR #9; sửa evidence PR đã merge; bổ sung parser resource boundary, citation context, exact-vector adapter, Mongo replica-set/transaction/restart evidence, runtime JSON Schema, correlation log và RRF/coverage/gold fixes. Cập nhật khảo sát/Chương 1; giữ approval/gold/production gates OPEN, hạ W9.2–3 khi phát hiện API–compiler mismatch |
+| 1.9 | 22/10/2026 | Thêm explicit rubric API→compiler mapping/tám contract tests; Mongo migration/validator bốn collection và ba DB identities qua sáu live tests; queue validation/progress regressions; Chromium E2E local và CI quality/security/browser jobs. App vẫn local store, auth/persistence/gold/review chưa đủ để đóng task; tổng 4 DONE/54 PARTIAL/8 chờ điều kiện giữ nguyên |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|
