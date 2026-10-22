@@ -1,0 +1,5 @@
+# CI-only quality/security tooling; install alongside project dependencies.
+ruff==0.17.0
+mypy==1.18.2
+bandit==1.8.6
+pip-audit==2.10.1

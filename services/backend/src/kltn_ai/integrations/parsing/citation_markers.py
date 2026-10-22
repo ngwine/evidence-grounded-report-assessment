@@ -262,8 +262,11 @@ def extract_citation_candidates(chunks: Iterable[Mapping[str, Any]]) -> dict[str
 
             matches: list[tuple[int, int, str, list[str], float]] = []
             for match in _NUMERIC_CANDIDATE.finditer(piece):
-                keys = _numeric_keys(match.group("body"))
-                matches.append((match.start(), match.end(), "NUMERIC", keys or [], 1.0 if keys else 0.0))
+                numeric_keys = _numeric_keys(match.group("body"))
+                matches.append((
+                    match.start(), match.end(), "NUMERIC", numeric_keys or [],
+                    1.0 if numeric_keys else 0.0,
+                ))
             for regex, kind in ((_PAREN_AUTHOR_YEAR, "AUTHOR_YEAR"), (_NARRATIVE_AUTHOR_YEAR, "AUTHOR_YEAR")):
                 for match in regex.finditer(piece):
                     matches.append((
