@@ -15,7 +15,7 @@ but their MongoDB cases must run in `mongo-integration` before CI is green.
 | Mypy | MongoDB schema/migration/roles/queue package and citation-marker adapter | Any typing error fails; other legacy/experimental modules are not yet covered |
 | Bandit `-ll` | All backend source | Medium/high severity findings fail; no project-level skip or baseline |
 | `pip-audit --strict` | Actual resolved Python environment installed by CI (research, backend and quality dependencies) | Any known advisory or audit-resolution failure fails; no ignored advisory IDs |
-| `npm audit --audit-level=high` | The locked web dependency tree, including dev dependencies | High/critical advisories fail; `npm ci` remains required |
+| npm audit wrapper (`scripts/audit_web_dependencies.py`) | The locked web dependency tree, explicitly including dev dependencies | High/critical advisories fail immediately; recognized transport errors retry at most three times; unresolved audit failures still block |
 | Gitleaks v8.30.1 container digest | Checked-out repository files in a separate job | Any detected secret fails; output redacted; inline `gitleaks:allow` comments ignored |
 
 All tool versions are pinned in `services/backend/requirements-quality.txt`;
@@ -34,7 +34,7 @@ Local rerun after installing the quality requirements:
 .venv-research/bin/mypy --check-untyped-defs --show-error-codes --follow-imports=silent services/backend/src/kltn_ai/db services/backend/src/kltn_ai/integrations/parsing/citation_markers.py
 .venv-research/bin/bandit -q -r services/backend/src -ll
 .venv-research/bin/python -m pip_audit --strict --progress-spinner off
-npm --prefix apps/web audit --audit-level=high
+.venv-research/bin/python scripts/audit_web_dependencies.py
 ```
 
 The dependency audits query external advisory services and therefore cannot
@@ -42,6 +42,28 @@ be reproduced offline. Passing these checks means no findings **under the
 declared scanners, scopes and advisory snapshot**; it does not establish
 production readiness, complete RBAC, secured MongoDB, or absence of security
 issues outside these tools.
+
+## Audit-service reliability check, 23/10/2026
+
+GitHub Actions run `39740629863`, web job `119696714938`, installed the lockfile
+and completed TypeScript/Vite build successfully. Its web failure was the npm
+advisory service returning HTTP 503, not a reported dependency advisory. A fresh
+local read-only audit returned zero vulnerabilities.
+
+The wrapper checks findings before retry and never waives an advisory. Only
+recognized HTTP 5xx/network failures or an 18-second process timeout retry, at
+most three attempts with 1- and 2-second delays (57 seconds maximum waiting).
+Internal npm retries are disabled; each fetch is limited to five seconds.
+HTTP 401/403/429, configuration errors, invalid JSON and unexplained nonzero
+exits fail without retry. Exhausted retries still fail CI. Logs contain only
+safe error codes/counts, not raw registry URLs or npm output. Offline unit tests
+exercise these decisions, including JSON shapes observed from actual npm HTTP
+503 and connection-refused invocations against local fixtures.
+
+The final wrapper preflight passed **34 offline tests**, Ruff on the wrapper
+and its tests, and a live invocation with **high=0, critical=0, moderate=0,
+low=0**. These checks did not modify the dependency lockfile or suppress any
+advisory, and do not substitute for the next clean-checkout GitHub CI result.
 
 ## Local preflight, 22/10/2026
 

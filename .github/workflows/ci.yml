@@ -78,7 +78,8 @@ jobs:
       - name: Type-check and build
         run: npm run build
       - name: Audit locked frontend dependency tree (high and critical)
-        run: npm audit --audit-level=high
+        working-directory: .
+        run: python3 scripts/audit_web_dependencies.py
 
   mongo-integration:
     runs-on: ubuntu-latest
