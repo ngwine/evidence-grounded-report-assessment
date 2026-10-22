@@ -3,6 +3,12 @@
 The workflow in `.github/workflows/ci.yml` now runs unit/integration fixtures,
 OpenAPI parsing, frontend type-check/build, and these blocking quality gates:
 
+Separate jobs also run the synthetic Chromium E2E and an authenticated MongoDB
+replica set. The latter executes six live validator/role/queue/transaction tests,
+restart recovery and two idempotent bootstrap runs; private generated secrets
+are not uploaded. Optional tests still skip in the dependency-heavy unit job,
+but their MongoDB cases must run in `mongo-integration` before CI is green.
+
 | Gate | Enforced scope | Failure policy |
 |---|---|---|
 | Ruff `E4,E7,E9,F` | Backend source and offline retrieval/core MVP/Evidence Graph Python source | Any selected finding fails; this is not full style coverage |

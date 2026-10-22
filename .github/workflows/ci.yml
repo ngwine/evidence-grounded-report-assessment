@@ -80,6 +80,35 @@ jobs:
       - name: Audit locked frontend dependency tree (high and critical)
         run: npm audit --audit-level=high
 
+  mongo-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            services/backend/requirements-app.txt
+            services/backend/requirements-dev.txt
+      - name: Create isolated integration environment
+        run: |
+          python -m venv .venv-research
+          .venv-research/bin/python -m pip install -r services/backend/requirements-app.txt
+          .venv-research/bin/python scripts/prepare_mongodb_local.py
+      - name: Start dedicated authenticated replica set
+        run: docker compose -f infra/mongodb/compose.yaml up -d --wait
+      - name: Check validators, database roles, transactions and restart recovery
+        run: .venv-research/bin/python scripts/test_mongodb_local.py --restart
+      - name: Apply committed migration as the restricted migration identity
+        run: |
+          .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
+          .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
+      - name: Stop only the dedicated test deployment
+        if: always()
+        run: docker compose -f infra/mongodb/compose.yaml down
+
   browser-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
