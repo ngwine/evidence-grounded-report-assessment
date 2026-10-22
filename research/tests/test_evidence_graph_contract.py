@@ -8,6 +8,7 @@ import stat
 
 import pytest
 
+from services.backend.src.kltn_ai.integrations.indexing.chunking import chunk_elements
 from research.evidence_graph import (
     GraphValidationError, LocalGraphStore, make_chunk_reference, make_edge,
     make_node, make_span, validate_snapshot,
@@ -235,6 +236,23 @@ def test_parser_projection_rejects_modified_content_and_locator_bounds():
     chunk["source_spans"][0]["chunk_raw_char_end"] = 1000
     with pytest.raises(GraphValidationError, match="exceeds chunk text"):
         make_chunk_reference(chunk, document_id="report-A")
+
+
+def test_projection_accepts_real_chunker_output_and_preserves_authoritative_span():
+    [chunk] = chunk_elements([{
+        "type": "paragraph", "text": "Nội dung báo cáo có provenance thật.",
+        "para_index": 2, "page": 3, "section_path": ["Method"],
+    }], max_tokens=100, min_tokens=0)
+    reference = make_chunk_reference(chunk, document_id="report-A")
+    scope = {
+        "workspace_id": "workspace-A", "report_id": "report-A",
+        "report_version_id": chunk["document_version_id"],
+        "graph_version": "gv1", "analysis_run_id": "run-001",
+    }
+    span = make_span(scope, reference, 0)
+    assert reference["chunk_id"] == chunk["chunk_id"]
+    assert span["source_span"] == chunk["source_spans"][0]
+    assert span["source_span"]["locator"]["legacy_page"] == 3
 
 
 def test_immutable_generation_tombstone_and_cascade(tmp_path):
