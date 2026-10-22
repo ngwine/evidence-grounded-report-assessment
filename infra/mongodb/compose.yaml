@@ -1,6 +1,6 @@
 name: kltn-evidence-db
 
-x-mongo-image: &mongo-image mongo:8.0.29-noble@sha256:021b2d5ae9d253f2cca17491cc8d03aed8df3c840f3252066aa62d3277fc406e
+x-mongo-image: &mongo-image mongo:8.0.34-noble@sha256:c2d54fddfb3738fb27fe117f51692e3f44e640a3e7aeb8da3937ee9cd33a650b
 
 services:
   mongo:

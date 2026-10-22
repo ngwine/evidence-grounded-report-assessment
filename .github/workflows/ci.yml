@@ -99,7 +99,9 @@ jobs:
           .venv-research/bin/python -m pip install -r services/backend/requirements-app.txt
           .venv-research/bin/python scripts/prepare_mongodb_local.py
       - name: Start dedicated authenticated replica set
-        run: docker compose -f infra/mongodb/compose.yaml up -d --wait
+        run: |
+          uname -sr
+          docker compose -f infra/mongodb/compose.yaml up -d --wait
       - name: Check validators, database roles, transactions and restart recovery
         run: .venv-research/bin/python scripts/test_mongodb_local.py --restart
       - name: Apply committed migration as the restricted migration identity

@@ -20,3 +20,9 @@ def test_unknown_logs_are_not_printed_as_fallback():
     assert summarize("unknown failure with private report contents") == {
         "recognized_categories": [], "mongo_error_event_ids": [],
     }
+
+
+def test_kernel_guard_is_identified_from_numeric_mongo_event_only():
+    value = summarize(json.dumps({"s": "F", "id": 12257600, "msg": "redacted"}))
+    assert value == {"recognized_categories": ["KERNEL_TCMALLOC_RSEQ_GUARD"],
+                     "mongo_error_event_ids": [12257600]}

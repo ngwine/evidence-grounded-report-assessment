@@ -30,6 +30,8 @@ def summarize(log: str) -> dict[str, object]:
             continue
         if isinstance(record, dict) and record.get("s") in {"E", "F"} and type(record.get("id")) is int:
             fatal_ids.add(record["id"])
+    if 12257600 in fatal_ids:
+        categories.append("KERNEL_TCMALLOC_RSEQ_GUARD")
     return {"recognized_categories": categories, "mongo_error_event_ids": sorted(fatal_ids)}
 
 
