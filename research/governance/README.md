@@ -19,7 +19,9 @@ An experiment uses a particular frozen pack. Its manifest must state the
 dataset version, allowed purpose, rights basis, approval evidence/person/date,
 PII decision, retention, split identifiers and SHA-256 for each input file.
 Private report packs also need a consent/authority evidence reference. The
-validator verifies all declared input files and checks declared source hashes
+validator also requires an explicit `pii_review` decision, reviewer, date and
+private evidence reference; filling a `contains_pii` boolean alone is not a
+PII review. It verifies all declared input files and checks declared source hashes
 against the registry. Historical checksum values in Excel do not prove that
 today's local copy still matches; rehash source files when preparing a pack.
 

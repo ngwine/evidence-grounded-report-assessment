@@ -201,6 +201,16 @@ def validate_pack_manifest(
             raise ValueError("Private reports require granted consent or authority")
         _text(authority.get("evidence_ref"), "governance.consent_or_authority.evidence_ref")
         _text(governance.get("anonymization"), "governance.anonymization")
+        pii_review = governance.get("pii_review")
+        if not isinstance(pii_review, dict) or pii_review.get("status") != "CLEARED":
+            raise ValueError("Private reports require a CLEARED PII review")
+        _text(pii_review.get("reviewer"), "governance.pii_review.reviewer")
+        _text(pii_review.get("evidence_ref"), "governance.pii_review.evidence_ref")
+        reviewed_at = _text(pii_review.get("reviewed_at"), "governance.pii_review.reviewed_at")
+        try:
+            date.fromisoformat(reviewed_at)
+        except ValueError as error:
+            raise ValueError("governance.pii_review.reviewed_at must be an ISO date") from error
     _verify_split(manifest.get("split"))
     _verify_pack_files(manifest_path, manifest.get("files"), verify_files=verify_files)
 

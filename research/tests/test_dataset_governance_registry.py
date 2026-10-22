@@ -64,6 +64,18 @@ def test_registry_keeps_excel_mapping_separate_from_pack_approval():
     assert entries["in-domain-report-rubric"]["mapping"]["decision"] == "PENDING"
 
 
+def test_in_domain_template_exposes_every_human_approval_gate():
+    template = json.loads((
+        Path(__file__).resolve().parents[1]
+        / "datasets/assessment/in-domain-report-rubric-pilot-v1/dataset-manifest.template.json"
+    ).read_text(encoding="utf-8"))
+    governance = template["governance"]
+    assert governance["status"] == "PENDING"
+    assert governance["consent_or_authority"]["status"] == "PENDING"
+    assert governance["pii_review"]["status"] == "PENDING"
+    assert "approval_evidence" in governance
+
+
 def test_frozen_approved_pack_passes_with_exact_hash(tmp_path: Path):
     path = _pack(tmp_path)
     result = validate_pack_manifest(path, "RETRIEVAL_EXPERIMENT")
@@ -108,5 +120,13 @@ def test_private_report_needs_authority_even_if_status_is_approved(tmp_path: Pat
     _edit(path, lambda data: data["governance"].update(
         anonymization="Names removed and manually checked",
         consent_or_authority={"status": "GRANTED", "evidence_ref": "private-consent-record-id"},
+    ))
+    with pytest.raises(ValueError, match="CLEARED PII review"):
+        validate_pack_manifest(path, "RETRIEVAL_EXPERIMENT")
+    _edit(path, lambda data: data["governance"].update(
+        pii_review={
+            "status": "CLEARED", "reviewer": "Second reviewer",
+            "reviewed_at": "2026-10-01", "evidence_ref": "private-pii-review-id",
+        },
     ))
     assert validate_pack_manifest(path, "RETRIEVAL_EXPERIMENT")["registry_id"] == "in-domain-report-rubric"
