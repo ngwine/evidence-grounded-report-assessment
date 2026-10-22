@@ -49,6 +49,11 @@ role đúng database và ghi URI runtime ở `var/infra/mongodb/*_app-uri` (0600
 Không copy URI, password, replica key vào Git, report hoặc command line.
 Không dùng admin URI cho API/worker. App local hiện chưa đọc các URI này.
 
+Entrypoint copy secret từ read-only Compose mount sang tmpfs, owner `mongodb`,
+mode `0400` trước khi official entrypoint drop root. Host secret vẫn `0600`;
+không nới quyền file gốc để chữa permission khác nhau giữa Linux/Docker Desktop.
+Bootstrap fresh-volume cũng phải qua CI, không chỉ test trên volume đã có DB.
+
 Migration có lease năm phút, renew trước các DDL, cùng server/driver timeout;
 lease chỉ phối hợp maintenance client, **không phải atomic fence cho DDL**.
 MongoDB không gộp `collMod`/`createIndexes` với kiểm tra lease trong một
