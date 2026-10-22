@@ -82,7 +82,9 @@ jobs:
         run: python3 scripts/audit_web_dependencies.py
 
   mongo-integration:
-    runs-on: ubuntu-latest
+    # Declared Mongo integration target; this does not pin the host kernel.
+    # New/unsupported kernels must still fail MongoDB's startup guard.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -101,6 +103,8 @@ jobs:
       - name: Start dedicated authenticated replica set
         run: |
           uname -sr
+          printf 'runner_image=%s:%s\n' "$ImageOS" "$ImageVersion"
+          docker compose -f infra/mongodb/compose.yaml config --images
           docker compose -f infra/mongodb/compose.yaml up -d --wait
       - name: Check validators, database roles, transactions and restart recovery
         run: .venv-research/bin/python scripts/test_mongodb_local.py --restart

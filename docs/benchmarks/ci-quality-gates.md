@@ -8,6 +8,10 @@ replica set. The latter executes six live validator/role/queue/transaction tests
 restart recovery and two idempotent bootstrap runs; private generated secrets
 are not uploaded. Optional tests still skip in the dependency-heavy unit job,
 but their MongoDB cases must run in `mongo-integration` before CI is green.
+Mongo integration uses the explicitly declared `ubuntu-22.04` hosted target,
+logs kernel/runner image identity and the locked Mongo image, and leaves the
+upstream kernel startup guard enabled. OS label is not a frozen kernel version;
+passing this job does not prove support for arbitrary newer Linux kernels.
 
 | Gate | Enforced scope | Failure policy |
 |---|---|---|

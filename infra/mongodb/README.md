@@ -37,6 +37,11 @@ Kiểm thử bản vá dùng volume mới riêng, không nâng/xóa volume cũ �
 trước khi dùng image mới với volume có dữ liệu cần giữ, phải backup và xác nhận
 quy trình upgrade/restore. Đổi image trong Git không tự tạo backup.
 
+CI Mongo target được khai báo riêng là `ubuntu-22.04` hosted runner; các job
+Python/web vẫn dùng `ubuntu-latest`. Label OS không pin kernel: CI ghi `uname`,
+runner image version và image digest, giữ startup guard và fail nếu target
+không tương thích. Không suy rộng CI/local pass thành hỗ trợ mọi Linux kernel.
+
 Healthcheck yêu cầu authenticated writable primary. Init service chỉ tạo
 replica set nếu chưa có. Muốn dừng mà giữ dữ liệu:
 
