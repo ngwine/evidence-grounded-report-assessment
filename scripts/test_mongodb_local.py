@@ -70,7 +70,8 @@ def main() -> int:
     uri = (ROOT / "var/infra/mongodb/admin-uri").read_text().strip()
     environment = dict(os.environ, KLTN_MONGO_TEST_URI=uri)
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "services/backend/tests/test_mongo_jobs_integration.py"],
+        [sys.executable, "-m", "pytest", "-q", "services/backend/tests/test_mongo_jobs_integration.py",
+         "services/backend/tests/test_mongo_schema_integration.py"],
         cwd=ROOT, env=environment, check=False,
     )
     if result.returncode == 0 and args.restart:

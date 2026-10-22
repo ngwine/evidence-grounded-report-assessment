@@ -99,6 +99,7 @@ def test_expired_final_lease_and_cancel_guard(queue):
     first = queue.claim(owner="w", lease_seconds=5, now=BASE)
     assert queue.claim(owner="other", now=BASE + timedelta(seconds=6)) is None
     assert queue.get(job_id=record["_id"], workspace_id=record["workspace_id"])["state"] == "FAILED_FINAL"
+    assert queue.get(job_id=record["_id"], workspace_id=record["workspace_id"])["progress"] == {"step": "FAILED_FINAL"}
     assert queue.start(job_id=record["_id"], owner="w",
                        revision=first["revision"], now=BASE + timedelta(seconds=6)) is None
     cancellable = enqueue(queue, key="two")
@@ -122,3 +123,29 @@ def test_queue_rejects_content_payload_and_unbounded_settings(queue):
         )
     with pytest.raises(ValueError, match="retry limit"):
         enqueue(queue, key="oversized", max_attempts=100)
+
+
+@pytest.mark.parametrize("version", [True, False, 0, -1, 1.2, "1"])
+def test_config_version_matches_bson_validator(queue, version):
+    with pytest.raises(ValueError, match="config_ref"):
+        queue.enqueue(
+            workspace_id=ObjectId(), job_type="PARSE",
+            resource_ref={"type": "DOCUMENT", "id": ObjectId(), "version_id": ObjectId()},
+            config_ref={"id": ObjectId(), "version": version},
+            idempotency_scope="x", idempotency_key="x", correlation_id="x",
+        )
+
+
+@pytest.mark.parametrize("options", [{"max_attempts": True}, {"priority": False},
+                                     {"max_attempts": 1.5}, {"priority": 0.5}])
+def test_queue_integer_settings_exclude_bool_and_float(queue, options):
+    with pytest.raises(ValueError, match="retry limit"):
+        enqueue(queue, **options)
+
+
+@pytest.mark.parametrize("options", [{"owner": 12}, {"owner": None},
+                                     {"owner": "w", "lease_seconds": True},
+                                     {"owner": "w", "lease_seconds": 2.5}])
+def test_claim_rejects_malformed_lease_settings(queue, options):
+    with pytest.raises(ValueError):
+        queue.claim(**options)

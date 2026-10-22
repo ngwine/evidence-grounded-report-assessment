@@ -76,10 +76,11 @@ class MongoJobQueue:
         if config_ref is not None and (
             set(config_ref) != {"id", "version"}
             or not isinstance(config_ref["id"], ObjectId)
-            or not isinstance(config_ref["version"], int)
+            or type(config_ref["version"]) is not int or config_ref["version"] < 1
         ):
             raise ValueError("config_ref needs id and integer version")
-        if not 1 <= max_attempts <= 10 or not -10 <= priority <= 10:
+        if (type(max_attempts) is not int or type(priority) is not int
+                or not 1 <= max_attempts <= 10 or not -10 <= priority <= 10):
             raise ValueError("Invalid retry limit or priority")
         if not all(isinstance(value, str) and 1 <= len(value) <= 128 for value in
                    (idempotency_scope, idempotency_key, correlation_id)):
@@ -120,7 +121,8 @@ class MongoJobQueue:
     def claim(
         self, *, owner: str, lease_seconds: int = 120, now: datetime | None = None,
     ) -> dict[str, Any] | None:
-        if not owner or len(owner) > 128 or not 1 <= lease_seconds <= 3600:
+        if (not isinstance(owner, str) or not owner or len(owner) > 128
+                or type(lease_seconds) is not int or not 1 <= lease_seconds <= 3600):
             raise ValueError("Invalid lease owner or duration")
         instant = _utc(now)
         candidates = self.collection.find({"$or": [
@@ -138,6 +140,7 @@ class MongoJobQueue:
             if candidate["attempt"] >= candidate["max_attempts"]:
                 self.collection.update_one(expected, {"$set": {
                     "state": "FAILED_FINAL", "error_code": "LEASE_EXHAUSTED",
+                    "progress": {"step": "FAILED_FINAL"},
                     "lease_owner": None, "lease_expires_at": None,
                     "updated_at": instant, "finished_at": instant,
                 }, "$inc": {"revision": 1}})
@@ -172,7 +175,7 @@ class MongoJobQueue:
     def heartbeat(self, *, job_id: ObjectId, owner: str, revision: int,
                   lease_seconds: int = 120,
                   now: datetime | None = None) -> dict[str, Any] | None:
-        if not 1 <= lease_seconds <= 3600:
+        if type(lease_seconds) is not int or not 1 <= lease_seconds <= 3600:
             raise ValueError("Invalid lease duration")
         instant = _utc(now)
         return self.collection.find_one_and_update(
