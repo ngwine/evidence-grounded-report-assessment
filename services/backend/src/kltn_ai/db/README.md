@@ -3,8 +3,10 @@
 Executable schema/roles baseline ở
 [`mongodb-executable-baseline.md`](../../../../../docs/architecture/mongodb-executable-baseline.md).
 Migration cài job indexes; runtime API/worker không có quyền `createIndex`,
-nên không gọi `ensure_indexes()` bằng runtime credential. Queue adapter vẫn
-chưa nối app local; database role không thay thế actor/workspace authorization.
+nên không gọi `ensure_indexes()` bằng runtime credential.
+[Authenticated app](../../../../../docs/architecture/authenticated-mongo-app.md)
+đã nối upload → PARSE worker → MongoDB, tách biệt demo local cũ;
+database role không thay thế actor/workspace authorization.
 
 `mongo_jobs.py` implements the `jobs` state transitions from ADR-001: unique
 idempotency key, atomic claim with a bounded lease, revision-guarded heartbeat
@@ -13,12 +15,12 @@ operations. It writes only immutable resource/config references and safe error
 codes. An expired worker cannot publish a terminal result after another worker
 reclaims the job.
 
-The adapter is independent of the local file-backed demo. A production worker
-must still reload and authorize workspace, document version, current governance
-decision and requested purpose **after claim**; it must stop processing after
-a failed heartbeat or a cancellation. Upload transaction, checkpoint artifact
-commit, MongoDB deployment, API authentication/RBAC, index rebuild and retention
-are separate work packages and are not implied by this module.
+The adapter is independent of the local file-backed demo. `MongoParseWorker`
+now reloads workspace, ownership, document/version and current/pinned governance
+after claim and before its transaction-fenced generation commit. Auth/session,
+rubric and document catalogs are additive migrations 002/003; migration 001's
+checksum stays fixed. INDEX/ANALYZE jobs, index rebuild, retention/purge and
+backup/restore remain separate work packages.
 
 `ensure_indexes()` belongs in a migration/setup command using migration
 credentials; do not call it per request. The tests use `mongomock` to exercise
