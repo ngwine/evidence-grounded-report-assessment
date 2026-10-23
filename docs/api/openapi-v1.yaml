@@ -4,9 +4,10 @@ info:
   version: 0.1.0-draft
   description: >-
     Review-candidate contract for the full target API. The authenticated local
-    Mongo app implements auth/workspaces, rubrics and upload/PARSE/provenance;
-    analysis/index/review/publication/graph/lifecycle endpoints remain intended
-    behavior. See docs/architecture/authenticated-mongo-app.md for actual scope.
+    Mongo app implements auth/workspaces, rubrics, upload/PARSE, index generations,
+    version-locked analysis results/evidence/export and run-scoped lecturer reviews.
+    Legacy proposal/publication, graph and lifecycle endpoints remain intended
+    behavior. The local two-pipeline demo is a separate API.
 servers:
   - url: /api/v1
 tags:
@@ -239,6 +240,20 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [Reports]
+      operationId: listReportVersions
+      summary: List authorized immutable report versions
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Version page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionPage'
     post:
       tags: [Reports]
       operationId: createReportVersion
@@ -371,6 +386,20 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/SourceId'
+    get:
+      tags: [Sources]
+      operationId: listSourceVersions
+      summary: List authorized immutable source versions
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Version page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionPage'
     post:
       tags: [Sources]
       operationId: createSourceVersion
@@ -434,6 +463,79 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /workspaces/{workspace_id}/document-versions/{version_id}/file:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Reports, Sources]
+      operationId: getDocumentVersionFile
+      summary: Read approved, hash-verified bytes with current ownership/governance checks
+      responses:
+        '200':
+          description: PDF inline or other format attachment; private storage key never exposed
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/document-versions/{version_id}/index-generations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Analysis]
+      operationId: requestIndexGeneration
+      summary: Queue an immutable index generation for a parsed version
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [config_id]
+              properties:
+                config_id:
+                  $ref: '#/components/schemas/RuntimeConfigId'
+                rebuild:
+                  type: boolean
+                  default: false
+      responses:
+        '202':
+          description: Generation queued or existing identical generation returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexGeneration'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/index-generations/{generation_id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - in: path
+        name: generation_id
+        required: true
+        schema:
+          $ref: '#/components/schemas/OpaqueId'
+    get:
+      tags: [Analysis]
+      operationId: getIndexGeneration
+      summary: Read generation state under current authorization and governance
+      responses:
+        '200':
+          description: Generation state; artifact storage path is private
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexGeneration'
   /workspaces/{workspace_id}/document-versions/{version_id}/chunks:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
@@ -804,6 +906,20 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [Analysis]
+      operationId: listReportAnalysisRuns
+      summary: Recover visible runs without browser-local content storage
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Authorized analysis run page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunPage'
     post:
       tags: [Analysis]
       operationId: createAnalysisRun
@@ -864,6 +980,108 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/results:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Analysis]
+      operationId: getAnalysisResults
+      summary: Read integrity-checked persisted similarity and assessment proposals
+      responses:
+        '200':
+          description: Only selected pipelines are non-null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeResults'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/export:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Analysis]
+      operationId: exportAnalysisResults
+      summary: Export authorized versioned proposal and manifest as JSON attachment
+      responses:
+        '200':
+          description: JSON attachment; no automatic academic publication
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, run, results, interpretation]
+                properties:
+                  schema_version:
+                    const: 1
+                  run:
+                    $ref: '#/components/schemas/AnalysisRun'
+                  results:
+                    $ref: '#/components/schemas/RuntimeResults'
+                  interpretation:
+                    type: string
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/reviews:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: listAnalysisReviews
+      summary: List immutable run-scoped lecturer reviews
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Run review page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RunReview'
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+    post:
+      tags: [Review]
+      operationId: reviewAnalysisRun
+      summary: Record authenticated review with revision CAS; does not publish a grade
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision, reason_code]
+              properties:
+                decision:
+                  type: string
+                  enum: [ACCEPT, REJECT]
+                reason_code:
+                  type: string
+                  pattern: '^[A-Z][A-Z0-9_]{0,63}$'
+                reason_text:
+                  type: [string, 'null']
+                  maxLength: 4000
+      responses:
+        '201':
+          description: Review created or identical revision retry replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunReview'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /workspaces/{workspace_id}/analysis-runs/{run_id}/evidence:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
@@ -871,7 +1089,7 @@ paths:
     get:
       tags: [Analysis]
       operationId: listRunEvidence
-      summary: List verified evidence for a run
+      summary: List persisted evidence including unverified retrieval candidates, with explicit verification state
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/Cursor'
@@ -885,7 +1103,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EvidencePage'
+                $ref: '#/components/schemas/RuntimeEvidencePage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1976,9 +2194,134 @@ components:
           $ref: '#/components/schemas/Sha256'
         revision:
           $ref: '#/components/schemas/Revision'
+    RuntimeConfigId:
+      type: string
+      enum: [bm25-smoke, research-v0]
+      description: Server-locked config; no client-selected model/path/prompt is accepted.
+    IndexGeneration:
+      type: object
+      additionalProperties: false
+      required: [id, document_version_id, job_id, state, config_id, revision, generation_no, chunk_count, failure_code]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        document_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        job_id:
+          $ref: '#/components/schemas/OpaqueId'
+        state:
+          type: string
+          enum: [QUEUED, BUILDING, ACTIVE, SUPERSEDED, FAILED, REVOKED]
+        config_id:
+          $ref: '#/components/schemas/RuntimeConfigId'
+        revision:
+          $ref: '#/components/schemas/Revision'
+        generation_no:
+          type: integer
+          minimum: 1
+        chunk_count:
+          type: integer
+          minimum: 0
+        failure_code:
+          type: [string, 'null']
+    DocumentVersionPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentVersion'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    AnalysisRunPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisRun'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    RuntimeResults:
+      type: object
+      additionalProperties: false
+      required: [similarity, assessment, manifest]
+      properties:
+        similarity:
+          type: [object, 'null']
+          description: Validated by research/schemas/similarity-report-v1.schema.json
+        assessment:
+          type: [object, 'null']
+          description: Validated by research/schemas/assessment-report-v1.schema.json
+        manifest:
+          type: object
+    RuntimeEvidence:
+      type: object
+      additionalProperties: false
+      required: [id, analysis_run_id, report_version_id, source_version_id, pipeline, report_chunk_id, source_chunk_id, checklist_id, evidence]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        analysis_run_id:
+          $ref: '#/components/schemas/OpaqueId'
+        report_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        source_version_id:
+          type: [string, 'null']
+        pipeline:
+          type: string
+          enum: [SIMILARITY, ASSESSMENT]
+        report_chunk_id:
+          type: string
+        source_chunk_id:
+          type: [string, 'null']
+        checklist_id:
+          type: [string, 'null']
+        evidence:
+          type: object
+          required: [evidence_key, source_document_version_id, chunk_ids, locator, quote_text, quote_sha256, verification_state, verification_reason_code, details]
+          properties:
+            verification_state:
+              $ref: '#/components/schemas/EvidenceRelation'
+            details:
+              type: object
+    RuntimeEvidencePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeEvidence'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    RunReview:
+      type: object
+      additionalProperties: false
+      required: [id, analysis_run_id, reviewer_id, decision, reason_code, reason_text, based_on_revision, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        analysis_run_id:
+          $ref: '#/components/schemas/OpaqueId'
+        reviewer_id:
+          $ref: '#/components/schemas/OpaqueId'
+        decision:
+          type: string
+          enum: [ACCEPT, REJECT]
+        reason_code:
+          type: string
+        reason_text:
+          type: [string, 'null']
+        based_on_revision:
+          $ref: '#/components/schemas/Revision'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
     RunType:
       type: string
-      enum: [SIMILARITY, ASSESSMENT, EXPERIMENT]
+      enum: [SIMILARITY, ASSESSMENT, BOTH]
     CreateAnalysisRunRequest:
       type: object
       additionalProperties: false
@@ -1987,8 +2330,8 @@ components:
         run_type:
           $ref: '#/components/schemas/RunType'
         mode:
-          type: [string, 'null']
-          enum: [LOCAL, GRAPH, SELECTIVE, null]
+          type: 'null'
+          description: Evidence modes come from the published rubric; per-run overrides are not executable.
         report_version_id:
           $ref: '#/components/schemas/OpaqueId'
         source_scope:
@@ -1999,19 +2342,15 @@ components:
             source_version_ids:
               type: array
               uniqueItems: true
-              maxItems: 10000
+              maxItems: 20
               items:
                 $ref: '#/components/schemas/OpaqueId'
-            dataset_manifest_id:
-              oneOf:
-                - $ref: '#/components/schemas/OpaqueId'
-                - type: 'null'
         rubric_version_id:
           oneOf:
             - $ref: '#/components/schemas/OpaqueId'
             - type: 'null'
         config_id:
-          $ref: '#/components/schemas/OpaqueId'
+          $ref: '#/components/schemas/RuntimeConfigId'
     AnalysisRun:
       type: object
       additionalProperties: false
@@ -2023,6 +2362,17 @@ components:
           $ref: '#/components/schemas/RunType'
         mode:
           type: [string, 'null']
+        config_id:
+          $ref: '#/components/schemas/RuntimeConfigId'
+        job_id:
+          $ref: '#/components/schemas/OpaqueId'
+        review_state:
+          type: string
+          enum: [UNREVIEWED, REVIEWED]
+        source_version_ids:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpaqueId'
         report_version_id:
           $ref: '#/components/schemas/OpaqueId'
         source_scope_sha256:
