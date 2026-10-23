@@ -395,7 +395,7 @@ def test_pipeline_selection_idempotency_and_student_denial(context):
     )
     sign_in(context, "lecturer")
     assessment = create(
-        context, prepared, token="assessment-operation-0002", body=changed
+        context, prepared, token="assessment-00000002", body=changed
     )
     assert MongoAnalysisWorker(
         context["db"], context["private"], transactional=False
