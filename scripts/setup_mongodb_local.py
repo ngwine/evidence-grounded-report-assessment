@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SECRET_ROOT = ROOT / "var/infra/mongodb"
 sys.path.insert(0, str(ROOT))
 from services.backend.src.kltn_ai.db.migrations import MigrationError, apply_schema_v1  # noqa: E402
+from services.backend.src.kltn_ai.db.application_schema import apply_schema_v2  # noqa: E402
+from services.backend.src.kltn_ai.db.document_schema import apply_schema_v3  # noqa: E402
 from services.backend.src.kltn_ai.db.roles import provision_roles  # noqa: E402
 
 
@@ -91,7 +93,9 @@ def setup(*, database_name: str, operator: str) -> None:
     with MongoClient(connection_uris["migration_app"], serverSelectionTimeoutMS=5000,
                      timeoutMS=30000, tz_aware=True) as migrator:
         outcome = apply_schema_v1(migrator[database_name], code_commit=commit, applied_by=operator)
-    print(f"Applied {outcome['migration_id']} to {database_name}; validator/index read-back passed.")
+        apply_schema_v2(migrator[database_name], code_commit=commit, applied_by=operator)
+        latest = apply_schema_v3(migrator[database_name], code_commit=commit, applied_by=operator)
+    print(f"Verified {outcome['migration_id']} through {latest['migration_id']} in {database_name}; validator/index read-back passed.")
     print("API/worker/migration URI files are private under ignored var/infra/mongodb; credentials not displayed.")
 
 

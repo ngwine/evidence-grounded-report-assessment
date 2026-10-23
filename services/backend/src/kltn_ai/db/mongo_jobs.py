@@ -120,16 +120,22 @@ class MongoJobQueue:
 
     def claim(
         self, *, owner: str, lease_seconds: int = 120, now: datetime | None = None,
+        job_type: str | None = None,
     ) -> dict[str, Any] | None:
         if (not isinstance(owner, str) or not owner or len(owner) > 128
                 or type(lease_seconds) is not int or not 1 <= lease_seconds <= 3600):
             raise ValueError("Invalid lease owner or duration")
+        if job_type is not None and job_type not in JOB_TYPES:
+            raise ValueError("Invalid job type")
         instant = _utc(now)
-        candidates = self.collection.find({"$or": [
+        query: dict[str, Any] = {"$or": [
             {"state": "QUEUED", "available_at": {"$lte": instant}},
             {"state": {"$in": ["CLAIMED", "RUNNING"]},
              "lease_expires_at": {"$lte": instant}},
-        ]}).sort([("priority", DESCENDING), ("created_at", ASCENDING), ("_id", ASCENDING)])
+        ]}
+        if job_type is not None:
+            query["job_type"] = job_type
+        candidates = self.collection.find(query).sort([("priority", DESCENDING), ("created_at", ASCENDING), ("_id", ASCENDING)])
         for candidate in candidates:
             expected = {"_id": candidate["_id"], "revision": candidate["revision"],
                         "state": candidate["state"], "attempt": candidate["attempt"]}

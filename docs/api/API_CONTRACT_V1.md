@@ -22,9 +22,12 @@ Contract này khóa boundary HTTP cho luồng P0:
 - rubric version, analysis proposal, lecturer review và publication;
 - error envelope, cursor pagination, idempotency và optimistic concurrency.
 
-Đây là design contract, chưa chứng minh API đã được hiện thực. MongoDB
-validator/index/Compose thuộc `W3.1`; parser/worker vertical slice thuộc
-`W3.4–W4.4`.
+Đây là contract toàn phạm vi, không phải danh sách mọi route đã hiện thực.
+[Authenticated Mongo app](../architecture/authenticated-mongo-app.md) đã có
+session/workspace, rubric lifecycle, report/source upload/version, PARSE job
+và chunk routes. INDEX/ANALYZE, review/publication/lifecycle/graph API vẫn chưa
+nối vào app này. Report và source upload đều cần governance_record_id hợp lệ
+trước khi parse; không có bypass quyền bằng chế độ demo.
 
 ## 2. Quyết định protocol
 

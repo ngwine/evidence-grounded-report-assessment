@@ -31,14 +31,19 @@ class MigrationError(RuntimeError):
     """Safe migration failure; never includes documents or credentials."""
 
 
-def schema_checksum() -> str:
-    payload = json.dumps({"validators": VALIDATORS, "indexes": INDEXES}, sort_keys=True, separators=(",", ":"))
+def schema_checksum(
+    validators: dict[str, Any] | None = None, indexes: dict[str, Any] | None = None,
+) -> str:
+    payload = json.dumps({"validators": VALIDATORS if validators is None else validators,
+                          "indexes": INDEXES if indexes is None else indexes},
+                         sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def _check_indexes(database: Database[dict[str, Any]], name: str, *, require_all: bool) -> None:
+def _check_indexes(database: Database[dict[str, Any]], name: str, *, require_all: bool,
+                   indexes: dict[str, Any] | None = None) -> None:
     present = {item["name"]: item for item in database[name].list_indexes()}
-    for expected in INDEXES[name]:
+    for expected in (INDEXES if indexes is None else indexes)[name]:
         actual = present.get(expected["name"])
         if actual is None:
             if require_all:
@@ -56,6 +61,15 @@ def _check_indexes(database: Database[dict[str, Any]], name: str, *, require_all
 def apply_schema_v1(
     database: Database[dict[str, Any]], *, code_commit: str, applied_by: str,
 ) -> dict[str, str]:
+    return apply_migration(database, code_commit=code_commit, applied_by=applied_by,
+                           migration_id=MIGRATION_ID, validators=VALIDATORS, indexes=INDEXES,
+                           description="Identity and queue shape/index baseline; four collections only")
+
+
+def apply_migration(
+    database: Database[dict[str, Any]], *, code_commit: str, applied_by: str,
+    migration_id: str, validators: dict[str, Any], indexes: dict[str, Any], description: str,
+) -> dict[str, str]:
     """Run against a maintenance database using migration/admin credentials.
 
     A five-minute renewable lease coordinates maintenance clients. DDL commands
@@ -70,6 +84,9 @@ def apply_schema_v1(
     if (not re.fullmatch(r"[0-9a-f]{40,64}", code_commit)
             or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", applied_by)):
         raise ValueError("Explicit code commit and safe operator identifier are required")
+    if (not re.fullmatch(r"[0-9]{3}-[a-z0-9-]{1,100}", migration_id)
+            or not validators or set(validators) != set(indexes)):
+        raise ValueError("Versioned migration with matching validator/index catalog is required")
     started = time.monotonic()
     database = database.with_options(write_concern=WriteConcern(w="majority", wtimeout=30000))
     ledger = database.schema_migrations
@@ -100,21 +117,21 @@ def apply_schema_v1(
         if result.matched_count != 1:
             raise MigrationError("Migration lease lost; retry from a fresh process")
 
-    checksum = schema_checksum()
+    checksum = schema_checksum(validators, indexes)
     try:
-        existing = ledger.find_one({"_id": MIGRATION_ID})
+        existing = ledger.find_one({"_id": migration_id})
         if existing is not None and existing.get("checksum") != checksum:
             raise MigrationError("Migration checksum mismatch; add a new migration version")
         names = set(database.list_collection_names())
-        for name, validator in VALIDATORS.items():
+        for name, validator in validators.items():
             renew()
             if name in names and database[name].find_one(
                 {"$nor": [validator]}, projection={"_id": 1}, max_time_ms=30000,
             ) is not None:
                 raise MigrationError(f"Existing documents fail validator in {name}; no automatic repair")
             if name in names:
-                _check_indexes(database, name, require_all=False)
-                for index in INDEXES[name]:
+                _check_indexes(database, name, require_all=False, indexes=indexes)
+                for index in indexes[name]:
                     if not index.get("unique"):
                         continue
                     pipeline = []
@@ -128,7 +145,7 @@ def apply_schema_v1(
                     ])
                     if next(database[name].aggregate(pipeline, maxTimeMS=30000), None) is not None:
                         raise MigrationError(f"Duplicate values block a unique index in {name}; no automatic repair")
-        for name, validator in VALIDATORS.items():
+        for name, validator in validators.items():
             renew()
             if name not in names:
                 try:
@@ -143,30 +160,31 @@ def apply_schema_v1(
                               "validationLevel": "strict", "validationAction": "error",
                               "maxTimeMS": 30000})
             renew()
-            database.command({"createIndexes": name, "indexes": INDEXES[name], "maxTimeMS": 30000})
+            if indexes[name]:
+                database.command({"createIndexes": name, "indexes": indexes[name], "maxTimeMS": 30000})
             renew()
             options = database[name].options()
             if (options.get("validator") != validator or options.get("validationLevel") != "strict"
                     or options.get("validationAction") != "error"):
                 raise MigrationError(f"Validator read-back failed in {name}")
-            _check_indexes(database, name, require_all=True)
+            _check_indexes(database, name, require_all=True, indexes=indexes)
         renew()
         applied = datetime.now(timezone.utc)
         duration = round((time.monotonic() - started) * 1000)
         ledger.update_one(
-            {"_id": MIGRATION_ID},
+            {"_id": migration_id},
             {"$setOnInsert": {"created_at": now, "kind": "ENTRY",
                        "checksum": checksum, "status": "APPLIED", "applied_at": applied,
-                       "description": "Identity and queue shape/index baseline; four collections only",
+                       "description": description,
                        "applied_by": applied_by, "code_commit": code_commit,
                        "duration_ms": duration,
-                       "verification_summary": {"validated_collections": sorted(VALIDATORS),
+                       "verification_summary": {"validated_collections": sorted(validators),
                                                 "validator_and_index_readback": True}},
              "$set": {"last_verified_at": applied, "last_verified_by": applied_by,
                       "last_verified_code_commit": code_commit,
                       "last_verification_duration_ms": duration}}, upsert=True,
         )
-        return {"migration_id": MIGRATION_ID, "checksum": checksum, "status": "APPLIED"}
+        return {"migration_id": migration_id, "checksum": checksum, "status": "APPLIED"}
     finally:
         ledger.update_one(
             {"_id": LOCK_ID, "lease_owner": owner, "revision": lock["revision"]},
