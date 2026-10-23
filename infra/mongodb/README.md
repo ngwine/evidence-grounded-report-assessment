@@ -4,10 +4,12 @@ W3.1 baseline dùng MongoDB Community 8.0.34, pin image digest, một replica-se
 member, xác thực SCRAM/keyfile và volume riêng `kltn-evidence-db_*`. Host chỉ
 mở `127.0.0.1:27188`. Bộ này phục vụ phát triển và integration test;
 [authenticated app](../../docs/architecture/authenticated-mongo-app.md) đã dùng
-Mongo cho auth/rubric/upload/PARSE. Demo hai pipeline cũ vẫn dùng local store.
+Mongo cho auth/rubric/upload/PARSE và
+[index/analysis/hai kết quả/evidence/review](../../docs/architecture/version-locked-analysis-app.md).
+Demo hai pipeline cũ vẫn dùng local store.
 
 [Executable baseline](../../docs/architecture/mongodb-executable-baseline.md)
-có migrations 001–003 và ba database identities tách quyền.
+có migrations 001–004 và ba database identities tách quyền.
 Sau khi commit source và dừng writer, chạy
 `.venv-research/bin/python scripts/setup_mongodb_local.py --operator ngwine`;
 không đưa URI/password private vào cấu hình public hoặc Git.
@@ -23,7 +25,8 @@ Secret ngẫu nhiên nằm dưới `var/infra/mongodb/`, không có trong Git. S
 nguyên secret đã tạo để lần khởi động sau dùng được volume cũ. URI admin dùng
 cho setup/test ở file `admin-uri`; không dùng tài khoản admin cho API/worker.
 Custom roles migration/API/worker có auth/rubric/ingestion repositories;
-index/analysis/lifecycle và toàn bộ collection catalog vẫn chưa xong.
+index/analysis/result repositories đã nối; graph/lifecycle và toàn bộ collection
+catalog vẫn chưa xong.
 Không công khai port/chia sẻ URI.
 `prepare` kiểm lại mode/nội dung URI và từ chối port/credential drift, không
 ghi đè secret để ép volume cũ khởi động. Bootstrap runtime URI hiện quản lý một

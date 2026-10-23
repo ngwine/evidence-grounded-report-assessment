@@ -19,7 +19,8 @@ API không chạy parse/AI dài trong request. Worker không có quyền tự c�
 [Hướng dẫn chạy và phạm vi](../../docs/architecture/authenticated-mongo-app.md):
 `api.runtime:create_runtime_app` dùng session/workspace RBAC, rubric lifecycle,
 immutable upload/version và Mongo PARSE worker. Endpoint `/api/v1` đã có cho
-các phần này; INDEX/ANALYZE/result/review vẫn chưa nối vào slice mới. Không
+các phần này; [index/analysis/results/review](../../docs/architecture/version-locked-analysis-app.md)
+đã được nối tiếp bằng worker Mongo với immutable provenance. Không
 dùng admin URI cho API/worker. Demo hai pipeline dưới đây vẫn giữ riêng.
 
 HTTP boundary dự kiến được mô tả tại
