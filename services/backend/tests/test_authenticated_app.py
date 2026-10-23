@@ -91,7 +91,7 @@ def sign_in(context):
     return response
 
 
-def headers(context, *, key="synthetic-operation-0001", revision=None):
+def headers(context, *, key="operation-00000001", revision=None):
     result = {"Origin": ORIGIN, "X-CSRF-Token": context["csrf"], "Idempotency-Key": key}
     if revision is not None:
         result["If-Match"] = revision
@@ -303,7 +303,7 @@ def test_create_publish_immutable_revision_idempotency_and_current_scope(context
                                   headers=headers(context, revision='"rev-1"'))
     assert_error(stale, 409, "REVISION_CONFLICT")
     published = context["client"].post(version_path + ":publish",
-                                      headers=headers(context, key="publish-operation-0001", revision='"rev-2"'))
+                                      headers=headers(context, key="publish-00000001", revision='"rev-2"'))
     assert published.status_code == 200 and published.json()["status"] == "PUBLISHED"
     assert published.headers["etag"] == '"rev-3"'
     assert "compiled" not in published.json()

@@ -20,6 +20,15 @@ Hướng dẫn và phạm vi: [authenticated Mongo app](../architecture/authenti
 | Bandit medium/high | **PASS** | Backend source |
 | `git diff --check` | **PASS** | Không có lỗi whitespace |
 
+Bootstrap từ source đã commit cũng đã chạy thành công migrations 001–003;
+worker CLI `--once` kết nối đúng worker identity và thoát khi queue rỗng.
+Runtime factory kết nối bằng API identity, từ chối request chưa đăng nhập
+bằng 401, không fallback thành local Lecturer. Không tạo account mặc định.
+
+Secret scan lịch sử nhận nhầm hai idempotency keys tổng hợp trong HTTP tests
+là generic API keys. Đây không phải credential; fixture đã đổi sang ID dễ
+nhận biết hơn, không thêm allowlist hoặc giảm rule của scanner.
+
 MongoDB test dùng image 8.0.34 đã pin trong Compose, single-node replica set
 `kltn-rs`, project riêng `kltn-auth-app-check`, port loopback 27188. Không dùng
 MongoDB của project khác. Test tạo database/user/role tên ngẫu nhiên và chỉ
