@@ -55,6 +55,7 @@ class ParseLimits:
 def parse_document_bounded(
     path: str | Path, *, role: str, max_tokens: int = 220, min_tokens: int = 30,
     limits: ParseLimits | None = None,
+    document_id: str | None = None, document_version_id: str | None = None,
 ) -> ParsedDocument:
     limits = ParseLimits.from_config(asdict(limits)) if limits is not None else ParseLimits()
     source = Path(path).expanduser().resolve(strict=True)
@@ -64,6 +65,7 @@ def parse_document_bounded(
     request = {
         "path": str(source), "role": role,
         "max_tokens": max_tokens, "min_tokens": min_tokens, "limits": asdict(limits),
+        "document_id": document_id, "document_version_id": document_version_id,
     }
     # Temporary content stays private and is removed on success or failure.
     with tempfile.TemporaryDirectory(prefix="kltn-parse-") as temporary:
@@ -112,6 +114,8 @@ def _child(destination: Path, request: Mapping[str, Any]) -> int:
     parsed = parse_document(
         request["path"], role=request["role"],
         max_tokens=request["max_tokens"], min_tokens=request["min_tokens"],
+        document_id=request.get("document_id"),
+        document_version_id=request.get("document_version_id"),
     )
     if (len(parsed.chunks) > limits.max_chunks
             or sum(len(item.get("raw_text", "")) for item in parsed.elements) > limits.max_text_chars):

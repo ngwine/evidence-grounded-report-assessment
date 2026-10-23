@@ -20,12 +20,14 @@ COLLECTIONS = frozenset({
     "jobs", "index_generations", "graph_nodes", "graph_edges", "analysis_runs",
     "evidence_items", "assessment_proposals", "reviews", "publications",
     "deletion_requests", "tombstones", "audit_events", "schema_migrations",
+    "auth_credentials", "auth_sessions", "auth_throttles", "rubric_operations", "document_operations",
 })
 API_WRITES = frozenset({
     "users", "workspaces", "memberships", "documents", "document_versions",
     "file_objects", "governance_records", "dataset_manifests", "dataset_memberships",
     "rubrics", "rubric_versions", "jobs", "analysis_runs", "reviews", "publications",
     "deletion_requests", "tombstones",
+    "auth_credentials", "auth_sessions", "auth_throttles", "rubric_operations", "document_operations",
 })
 WORKER_WRITES = frozenset({
     "documents", "document_versions", "file_objects", "document_elements", "chunks",

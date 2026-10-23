@@ -1,5 +1,11 @@
 # Web local demo
 
+Có thêm chế độ `VITE_APP_MODE=authenticated` cho login/workspace/rubric authoring
+qua `/api/v1`, cookie session và CSRF trong bộ nhớ. Xem
+[authenticated Mongo app](../../docs/architecture/authenticated-mongo-app.md).
+Chế độ mặc định bên dưới vẫn chạy demo hai pipeline `/api/local/v1`; không
+trộn kết quả/review local thành kết quả đã xác thực của app mới.
+
 Giao diện React/Vite/TypeScript cho luồng chạy thử hai pipeline. Frontend chỉ gọi
 `/api/local/v1`; API lưu input và giao job cho worker riêng. Không có xử lý
 parser/model trong trình duyệt, không kết nối MongoDB, và không phải giao diện
@@ -69,3 +75,9 @@ Workflow CI có job `browser-e2e` tạo môi trường Python riêng và tải C
 chạy lại phép kiểm này trên fixture. Một lần chạy thành công trên máy phát triển
 không đồng nghĩa job GitHub Actions đã xanh; cần kiểm tra kết quả của chính
 workflow trên commit/PR tương ứng.
+
+Auth UI contract tests chạy riêng bằng
+`npx playwright test --config playwright.auth.config.ts`: login, CSRF reload,
+workspace capability, rubric draft/edit/publish/clone/version history và 409.
+Bộ này dùng mock API; real-Mongo HTTP/worker tests nằm ở backend. Chưa coi
+mock browser test là browser→Mongo E2E.

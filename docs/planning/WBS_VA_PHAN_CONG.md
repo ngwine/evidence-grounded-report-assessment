@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.10 |
+| Phiên bản | 1.11 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật tiến độ/reforecast | 23/10/2026 |
 | Thời gian dự án | 08/08/2026–22/01/2027 (24 tuần) |
@@ -222,15 +222,15 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W2.4` | IN PROGRESS | 75% | [UX P0](../ux/p0-local-flow.md) có navigation, wireframe, state và ma trận quyền; app local hiện thực luồng chính | Y/Q review; auth/permission runtime thuộc W3.2/W3.4 |
 | `W2.5` | IN PROGRESS | 75% | [Rubric v1](../rubric/rubric-v1.md) đã merge PR #16; authored atomic checklist, LOCAL/GRAPH và three-state có | Review cuối; chốt example thật và rule/levels có thể thực thi, không coi levels trong tài liệu đã được compiler hỗ trợ |
 | `W2.6` | CARRY-OVER | 75% | [Registry/pack gate](../../research/governance/README.md), PAN split và MMDocIR gate kiểm exact inputs/split có; template report có consent và PII-review fields | Rights/access/retention/approver; approved DEV1; sửa HoVer wiki lệch checksum; không tự ký consent/PII |
-| `W3.1` | CARRY-OVER | 75% | [CI 37c6277](https://github.com/ngwine/evidence-grounded-report-assessment/actions/runs/39834435765) đạt Python/quality/security/web/browser/Mongo gates; Mongo 8.0.34 pin digest, bốn validator/ba DB identities, sáu live tests và restart/reapply đạt | Review/merge; validator/index catalog còn lại, repositories, backup/restore; app vẫn dùng local store, chưa có application RBAC |
-| `W3.2` | CARRY-OVER | 0% | Chưa có auth/session/RBAC production | Identity provider, tenant/ownership enforcement, audit và negative auth tests |
+| `W3.1` | CARRY-OVER | 75% | Baseline [CI 37c6277](https://github.com/ngwine/evidence-grounded-report-assessment/actions/runs/39834435765) đạt năm jobs; [authenticated Mongo slice](../architecture/authenticated-mongo-app.md) bổ sung migrations 002/003, repositories và live runtime-role tests | Review/merge và CI commit mới; catalog index/analysis/graph còn lại; backup/restore; deployment security |
+| `W3.2` | CARRY-OVER | 75% | Local scrypt account/session, CSRF/throttling, current workspace RBAC/ownership, audit và HTTP negative tests; actual Mongo API identity chạy auth/rubric/upload | Review/merge; account disable/reset/revoke tooling; security/deployment review; chưa production-ready |
 | `W3.3` | IN PROGRESS | 75% | Fixture PDF/DOCX an toàn; duplicate/self/invalid PDF-DOCX/NUL/rubric/config validation tests đã có | Rights metadata và malicious-content corpus mở rộng; review chéo |
-| `W3.4` | IN PROGRESS | 50% | React/Vite app hiển thị local workflow và states | Routing/auth/forbidden state và frontend test suite |
-| `W3.5` | IN PROGRESS | 50% | Upload report/source/rubric, job status và result review chạy local | Report/source lifecycle, immutable version list và API production |
-| `W3.6` | IN PROGRESS | 75% | Local API/worker có correlation log an toàn; Mongo queue adapter có idempotency/lease/retry và real-DB concurrent/restart tests | Nối upload/worker vào Mongo queue, current authorization/governance sau claim và artifact checkpoint commit |
+| `W3.4` | IN PROGRESS | 75% | Authenticated web có login/logout/workspace/capability states và rubric UI; ba Chromium tests mock API; demo hai pipeline vẫn giữ riêng | Live browser→Mongo E2E, report/result routes sau auth, review/merge |
+| `W3.5` | IN PROGRESS | 75% | HTTP report/source upload/list/detail/version/CAS/PARSE job/chunk routes đã nối Mongo; demo cũ vẫn chạy hai báo cáo | Web authenticated chưa có report/source library/upload; lifecycle/version history đầy đủ và review/merge |
+| `W3.6` | IN PROGRESS | 75% | Authenticated upload commit private file metadata/version/job/audit; durable PARSE worker kiểm current/pinned governance và transaction lease fence, real-role HTTP tests | Nối INDEX/ANALYZE/run/result; operational orphan reconciliation; review/merge |
 | `W4.1` | IN PROGRESS | 75% | Parser baseline/ADR-002; runner gọi parser subprocess với wall/CPU/input/output/text/chunk budget; Linux có address-space cap, macOS ghi rõ không enforce RAM cap | Review/merge parser boundary; benchmark corpus thật và resource envelope trên máy Y |
-| `W4.2` | IN PROGRESS | 50% | Normalized element/chunk schema và provenance mapping đã có | MongoDB persistence/idempotency test; không còn block bởi `W2.2` |
-| `W4.3` | IN PROGRESS | 50% | Worker local có job state/failure output | Checkpoint, bounded retry và idempotent recovery |
+| `W4.2` | IN PROGRESS | 75% | Migration 003 + Mongo elements/chunks/canonical BSON refs; actual bounded TXT/PDF/DOCX parser qua API/worker identities; exact-span persistence tests | Corpus đại diện và review/merge; không mở lại design W2.2 |
+| `W4.3` | IN PROGRESS | 75% | PARSE job có bounded retry, stale/cancel fence, rollback toàn generation và exhaustion reconciliation; lỗi có safe code | Review/merge; operational restart/cancel/load trên app đầy đủ; INDEX/ANALYZE checkpoint riêng |
 | `W4.4` | DONE | 100% | PR #9 đã được Y (`mEEEe4`) approve ngày 01/10 và merge 04/10; code chunker/provenance hiện đúng commit đã duyệt; stable ID/raw–normalized/exact span/long-element/determinism tests đạt | DoD chunker đã đạt; persistence/worker/representative-corpus benchmark là `W4.2/W4.3/W4.6` |
 | `W4.5` | IN PROGRESS | 50% | Numeric/author-year marker và bibliography candidate có exact raw/normalized/span locator; citation-context được runner lưu kèm manifest | Review grammar/ambiguity và corpus thật; chưa xác minh tính đúng của nguồn/trích dẫn; GROBID conditional |
 | `W4.6` | IN PROGRESS | 75% | Golden manifest/test/report đã merge PR #10, synthetic coverage/timing/determinism có | Corpus layout phức tạp/report thật được phép và acceptance cuối |
@@ -246,10 +246,10 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W8.4` | IN PROGRESS | 25% | Có guideline và blinded annotation workflow; chưa tự gán PARAPHRASE/SUMMARY | Hai người gán nhãn, adjudicate, train/calibrate/evaluate classifier |
 | `W8.5` | IN PROGRESS | 50% | Synthetic quote/generic/no-source/hard-negative fixtures và regression có | Chốt citation policy và expected output qua review chéo |
 | `W8.6` | IN PROGRESS | 50% | App local có hai evidence views và Chromium E2E qua upload/hai pipeline/review/source gate/stale revision | User/workspace forbidden flow, PDF locator highlight và review/merge; browser test synthetic không đo chất lượng mô hình |
-| `W9.1` | IN PROGRESS | 25% | Rubric JSON được upload/lưu trong local job | Draft/clone/publish/immutable version lifecycle và RBAC |
-| `W9.2–W9.3` | IN PROGRESS | 50% | Compiler deterministic/hash/field validation và explicit API→compiler adapter có tám contract tests; từ chối legacy free text/unsupported levels | Rule-conflict/HTTP lifecycle tests, persistence và review; contract adapter chưa thay rubric management API |
+| `W9.1` | IN PROGRESS | 75% | Mongo rubric draft/edit/CAS/version list/clone/publish, idempotency, RBAC và immutable publication có HTTP/live transaction tests | Review/merge; domain acceptance trên rubric môn học thật; published rubric chưa nối authenticated assessment run |
+| `W9.2–W9.3` | IN PROGRESS | 75% | Compiler nối publication/persistence; compile/hash recheck chống tamper, lifecycle/rule/revision/rollback tests; fail closed unsupported levels | Review/merge; lỗi field UX và rubric thật; không coi custom levels đã hỗ trợ |
 | `W9.4–W9.5` | IN PROGRESS | 75% | Rubric domain/template, authored atomic checklist, LOCAL/GRAPH mode và decision rules đã có | Review trên rubric môn học thật được phép |
-| `W9.6` | CONDITIONAL | 0% | Chưa có rubric management UI | Làm sau core pipeline nếu capacity cho phép |
+| `W9.6` | CONDITIONAL | 75% | Có implementation candidate web create/import/edit/publish/clone/version selector, conflict giữ nội dung chưa lưu; ba Chromium mock tests | Không tự mở capacity/cam kết; chờ review và live browser E2E; core pipeline integration vẫn ưu tiên |
 | `W10.1–W10.2` | IN PROGRESS | 75% | LOCAL assessment, Evidence Pack và scope/version/source-span validators chạy offline/app local | Mongo persistence, immutable run linking và API production |
 | `W10.3` | IN PROGRESS | 50% | Có no-evidence, negation, conflicting evidence, dangling/cross-report/version tests | Auth isolation, timeout/retry và prompt-injection integration tests |
 | `W10.4–W10.5` | IN PROGRESS | 75% | Checklist query→BM25/Dense/RRF/rerank và SUPPORTED/CONTRADICTED/INSUFFICIENT→MET/UNMET/CANNOT_ASSESS chạy | Gold validation, semantic NLI/contradiction study và review |
@@ -359,7 +359,7 @@ W02.
 | Child ID | Parent | Dependency | Đầu ra | Status cập nhật | Evidence/điều kiện đóng |
 |---|---|---|---|---|---|
 | `W4.1.1` | `W4.1` | Fixture subset đã có | PyMuPDF/python-docx parsing prototype và fixture tests | DONE | Commit `3c1c133`; PDF/DOCX smoke test pass |
-| `W4.1.2` | `W4.1` | `W3.6`, `W4.1.1` | Worker adapter, timeout/resource limit và failure contract | IN PROGRESS | Worker/runner gọi parser subprocess có wall/CPU/file/text budgets; còn retry/checkpoint và hardware review |
+| `W4.1.2` | `W4.1` | `W3.6`, `W4.1.1` | Worker adapter, timeout/resource limit và failure contract | IN PROGRESS | Worker/runner có parser subprocess budgets; Mongo PARSE worker thêm retry/transaction fence/rollback; còn review, hardware envelope và representative corpus |
 | `W4.1.3` | `W4.1` | `W4.6.2` | Benchmark baseline với Docling và Parser ADR | IN PROGRESS | ADR-002 đã khóa PyMuPDF/python-docx làm baseline; Docling chỉ benchmark khi fixture cho thấy cần |
 | `W4.4.1` | `W4.4` | `W4.1.1` | Section-aware chunker prototype | DONE | Commit `3c1c133`; chunk JSON và test schema cơ bản |
 | `W4.4.2` | `W4.4` | `W4.2`, `W4.4.1` | Stable provenance và hardening chunk | DONE | PR #9: document/version/span/raw-normalized/stable ID và long-element split; regression mở rộng nằm ở `W4.6` |
@@ -881,6 +881,7 @@ hoặc hạn nộp 23/01/2027.
 | 1.8 | 22/10/2026 | Audit đủ 66 task W1–W11 của Q/Y: 4 DONE, 54 PARTIAL và 8 chưa triển khai/chờ điều kiện; kiểm chứng GitHub approvals và chốt W4.4 theo PR #9; sửa evidence PR đã merge; bổ sung parser resource boundary, citation context, exact-vector adapter, Mongo replica-set/transaction/restart evidence, runtime JSON Schema, correlation log và RRF/coverage/gold fixes. Cập nhật khảo sát/Chương 1; giữ approval/gold/production gates OPEN, hạ W9.2–3 khi phát hiện API–compiler mismatch |
 | 1.9 | 22/10/2026 | Thêm explicit rubric API→compiler mapping/tám contract tests; Mongo migration/validator bốn collection và ba DB identities qua sáu live tests; queue validation/progress regressions; Chromium E2E local và CI quality/security/browser jobs. App vẫn local store, auth/persistence/gold/review chưa đủ để đóng task; tổng 4 DONE/54 PARTIAL/8 chờ điều kiện giữ nguyên |
 | 1.10 | 23/10/2026 | Kiểm chứng CI đủ 5/5 trên code commit37c6277; pin Mongo8.0.34 digest và khai báo targetUbuntu22.04, không bypass kernel guard; sửa secret permission/config drift và audit503 retry fail-closed. Local343 pass/7 skip, sáu liveMongo + restart/reapply, Chromium đạt; giữ DoD chưa đủ ở PARTIAL và bàn giao PR#19 review |
+| 1.11 | 23/10/2026 | Bổ sung authenticated Mongo app trên branch feat/w3-mongo-auth-app: current RBAC/session, rubric lifecycle/UI, migrations002–003, upload/PARSE worker và exact provenance persistence. Kiểm tra thực tế phát hiện/sửa legacy source_refs PDF/DOCX sai BSON shape. Demo hai pipeline cũ vẫn riêng; INDEX/ANALYZE/result/review chưa nối app mới. Giữ review/merge, governance, gold và deployment gates mở |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|

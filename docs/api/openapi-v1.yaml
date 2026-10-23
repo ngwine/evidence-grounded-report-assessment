@@ -3,8 +3,10 @@ info:
   title: Evidence-Grounded Report Assessment API
   version: 0.1.0-draft
   description: >-
-    Review-candidate contract for W2.3. It describes intended behavior and does
-    not claim that the API has been implemented.
+    Review-candidate contract for the full target API. The authenticated local
+    Mongo app implements auth/workspaces, rubrics and upload/PARSE/provenance;
+    analysis/index/review/publication/graph/lifecycle endpoints remain intended
+    behavior. See docs/architecture/authenticated-mongo-app.md for actual scope.
 servers:
   - url: /api/v1
 tags:
@@ -69,6 +71,40 @@ paths:
                 $ref: '#/components/schemas/Actor'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /auth/csrf:
+    get:
+      tags: [Auth]
+      operationId: refreshCsrfToken
+      summary: Recover an in-memory CSRF token after same-origin reload
+      description: >-
+        Requires X-CSRF-Refresh to prevent cross-origin simple requests from
+        rotating the token. Rotation invalidates tokens in other tabs; reload
+        that tab on CSRF_INVALID. No CORS access is enabled.
+      parameters:
+        - in: header
+          name: X-CSRF-Refresh
+          required: true
+          schema:
+            type: string
+            const: '1'
+      responses:
+        '200':
+          description: Fresh CSRF token; session cookie remains HttpOnly
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [csrf_token]
+                properties:
+                  csrf_token:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /auth/session:
     delete:
       tags: [Auth]
@@ -285,7 +321,7 @@ paths:
               $ref: '#/components/schemas/SourceUpload'
       responses:
         '202':
-          description: Source accepted into quarantine
+          description: Approved source accepted for bounded parsing
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -352,7 +388,7 @@ paths:
               $ref: '#/components/schemas/SourceVersionUpload'
       responses:
         '202':
-          description: Source version accepted into quarantine
+          description: Approved source version accepted for bounded parsing
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -605,6 +641,35 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/RubricId'
+    get:
+      tags: [Rubrics]
+      operationId: listRubricVersions
+      summary: List draft and published versions visible to the rubric manager
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Version page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RubricVersion'
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags: [Rubrics]
       operationId: createRubricVersion
@@ -646,6 +711,26 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Rubrics]
+      operationId: getRubricVersion
+      summary: Read an authorized draft or immutable published version
+      responses:
+        '200':
+          description: Rubric version
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RubricVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     put:
       tags: [Rubrics]
       operationId: replaceRubricDraft
@@ -1302,7 +1387,7 @@ components:
           $ref: '#/components/schemas/OpaqueId'
         role:
           type: string
-          enum: [STUDENT, LECTURER, ADMIN]
+          enum: [STUDENT, LECTURER, OPERATOR, DATA_APPROVER, ADMIN]
         capabilities:
           type: array
           uniqueItems: true
@@ -1349,7 +1434,7 @@ components:
     DocumentUpload:
       type: object
       additionalProperties: false
-      required: [file, document_key, title]
+      required: [file, document_key, title, governance_record_id]
       properties:
         file:
           type: string
@@ -1361,15 +1446,19 @@ components:
         title:
           type: string
           minLength: 1
-          maxLength: 500
+          maxLength: 256
+        governance_record_id:
+          $ref: '#/components/schemas/OpaqueId'
     VersionUpload:
       type: object
       additionalProperties: false
-      required: [file]
+      required: [file, governance_record_id]
       properties:
         file:
           type: string
           format: binary
+        governance_record_id:
+          $ref: '#/components/schemas/OpaqueId'
     SourceUpload:
       type: object
       additionalProperties: false
@@ -1385,7 +1474,7 @@ components:
         title:
           type: string
           minLength: 1
-          maxLength: 500
+          maxLength: 256
         governance_record_id:
           $ref: '#/components/schemas/OpaqueId'
     SourceVersionUpload:
@@ -1575,6 +1664,37 @@ components:
           $ref: '#/components/schemas/Sha256'
         locator:
           $ref: '#/components/schemas/Locator'
+        raw_text:
+          type: string
+        normalization_map:
+          type: object
+          description: Versioned half-open Unicode code-point raw-to-normalized map
+        source_spans:
+          type: array
+          description: Exact per-element coordinates; use these for multi-page highlight
+          items:
+            type: object
+            additionalProperties: false
+            required: [element_id, stable_element_key, element_raw_char_start, element_raw_char_end, chunk_raw_char_start, chunk_raw_char_end, locator]
+            properties:
+              element_id:
+                $ref: '#/components/schemas/OpaqueId'
+              stable_element_key:
+                type: string
+              element_raw_char_start:
+                type: integer
+                minimum: 0
+              element_raw_char_end:
+                type: integer
+                minimum: 0
+              chunk_raw_char_start:
+                type: integer
+                minimum: 0
+              chunk_raw_char_end:
+                type: integer
+                minimum: 0
+              locator:
+                $ref: '#/components/schemas/Locator'
     ChunkPage:
       type: object
       additionalProperties: false

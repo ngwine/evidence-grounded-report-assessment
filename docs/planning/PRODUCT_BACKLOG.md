@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.9 |
+| Phiên bản | 1.10 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật | 23/10/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
@@ -14,13 +14,13 @@
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | Hai technical slice/app local chạy; audit đủ 66 task W1–W11 ở [snapshot và bổ sung 23/10](./W1-W11_STATUS_2026-10-22.md); code commit37c6277 đạt cả năm CI jobs. Quyền dữ liệu, gold evaluation và production integration/security vẫn mở; actual/evidence theo WBS v1.10 |
+| Trạng thái baseline | Hai pipeline chạy app local; [authenticated Mongo slice](../architecture/authenticated-mongo-app.md) có auth/rubric/upload/PARSE, chưa nối INDEX/ANALYZE/result/review. [Audit W1–W11](./W1-W11_STATUS_2026-10-22.md) giữ lịch sử; CI commit37c6277 chỉ là baseline trước lượt mới. Quyền dữ liệu, gold, review/merge và deployment vẫn mở; actual/evidence theo WBS v1.11 |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.10; không đổi target backlog để che độ trễ.
+phiên bản 1.11; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
@@ -104,7 +104,7 @@ Một item chỉ được kéo lên `Ready` khi:
 |---|---|---:|---:|---|---|---|---|---|---|
 | `EP-02-S01` | Repo, dependency manifest, Compose, CI và môi trường tái lập | P0 | 5 | Q | Y | W01–W03 | `EP-01-S04` | FE/BE/worker/DB chạy healthcheck; lint/type/test, SAST, secret và dependency scan chạy trong CI từ W03; High/Critical làm fail gate hoặc có waiver owner/expiry; README chạy trên môi trường sạch | IN PROGRESS |
 | `EP-02-S02` | Thiết kế MongoDB collection, index, invariant và data dictionary | P0 | 8 | Q | Y | W02–W03 | `EP-02-S05` | [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](../architecture/data-dictionary.md) mô tả schema/version/reference/index/migration/rebuild; source of truth và derived index tách rõ | DONE |
-| `EP-02-S03` | Authentication, session, RBAC và user management tối thiểu | P0 | 8 | Q | Y | W03 | `EP-02-S02/06/07` | Student/Lecturer/Admin đúng ma trận; cross-user access bị chặn; authorization test đạt | PLANNED |
+| `EP-02-S03` | Authentication, session, RBAC và user management tối thiểu | P0 | 8 | Q | Y | W03 | `EP-02-S02/06/07` | Student/Lecturer/Admin đúng ma trận; cross-user access bị chặn; authorization test đạt; local Mongo account/session/RBAC có, còn account lifecycle và review/deployment | IN PROGRESS |
 | `EP-02-S04` | Threat model và adversarial test plan | P0 | 5 | Q | Y | W02, cập nhật W16/W21 | `EP-02-S05` | [Threat model v1](../threat-model/threat-model-v1.md) có asset/trust boundary/risk→mitigation→test traceability cho upload/parser, queue, DB, tenant retrieval, prompt injection, output sanitization và log privacy | DONE |
 | `EP-02-S05` | Thiết kế C4 Context/Container/Deployment và trust boundary | P0 | 5 | Q | Y | W02 | `EP-01-S01` | [C4](../architecture/c4.md) phản ánh React–FastAPI–worker–MongoDB–storage–local AI; [data flow](../architecture/data-flow.md) làm rõ ranh giới đồng bộ/bất đồng bộ | DONE |
 | `EP-02-S06` | Viết API contract v1 và error format chung | P0 | 8 | Q | Y | W02–W03 | `EP-02-S02/05` | Contract bao phủ auth, report/source, upload, job/run, chunks, rubric, result/review; có lỗi và pagination | IN PROGRESS |

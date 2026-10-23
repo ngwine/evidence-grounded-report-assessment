@@ -11,8 +11,11 @@ quán `kltn-rs`; không tự đổi tên replica set trên volume đang có dữ
 
 - Migration `001-identity-and-job-validators-v1`: validator strict/error cho
   `users`, `workspaces`, `memberships`, `jobs`; unique identity/membership/job
-  keys và job claim indexes. Những collection khác trong data dictionary **chưa
-  có executable validator**.
+  keys và job claim indexes; checksum giữ nguyên khi bổ sung migration mới.
+- Migration 002 thêm auth credentials/sessions/throttles, audit, rubric/version
+  và operation idempotency. Migration 003 thêm documents/versions/files,
+  governance, elements/chunks và upload operations. Còn index/analysis/graph/
+  review/publication/lifecycle catalog; chưa coi đây là toàn bộ data dictionary.
 - Preflight hình dạng document, trùng giá trị unique và index options drift;
   không sửa/xóa dữ liệu để lách lỗi. Áp dụng additive và đọc lại validator,
   field order/unique/partial/TTL options trước khi ghi ledger.
@@ -47,7 +50,8 @@ docker compose -f infra/mongodb/compose.yaml up -d --wait
 Bootstrap chỉ kết nối loopback từ file admin URI private đã có, tạo/đồng bộ
 role đúng database và ghi URI runtime ở `var/infra/mongodb/*_app-uri` (0600).
 Không copy URI, password, replica key vào Git, report hoặc command line.
-Không dùng admin URI cho API/worker. App local hiện chưa đọc các URI này.
+Không dùng admin URI cho API/worker. [Authenticated app](./authenticated-mongo-app.md)
+đọc đúng URI của từng role; demo local cũ không tự chuyển database.
 
 Entrypoint copy secret từ read-only Compose mount sang tmpfs, owner `mongodb`,
 mode `0400` trước khi official entrypoint drop root. Host secret vẫn `0600`;
@@ -68,8 +72,11 @@ mọi index bổ sung do operator tạo đều hợp lệ hoặc tối ưu. Khô
 Integration tests dùng database/user/role test tên ngẫu nhiên, sau đó chỉ xóa
 state do chính test tạo. Chúng kiểm tra reapply/checksum drift/preflight,
 validator từ chối malformed document, unique key, queue lifecycle sau validator,
-quyền đọc/ghi hợp lệ và thao tác vượt quyền bị từ chối. Đây không phải test
-multi-tenant HTTP authorization, upload saga hoặc full collection catalog.
+quyền đọc/ghi hợp lệ và thao tác vượt quyền bị từ chối. Suite mở rộng còn kiểm
+HTTP session/current RBAC, rubric transaction và upload → bounded parser →
+chunks bằng API/worker identities riêng trên TXT/PDF/DOCX tổng hợp. Có fault
+injection rollback giữa elements/chunks. Chưa có full analysis/index/lifecycle
+integration, backup/restore hoặc chất lượng mô hình trên gold data.
 
 Tài liệu tham chiếu: [MongoDB schema validation](https://www.mongodb.com/docs/manual/core/schema-validation/update-schema-validation/),
 [collection-level access control](https://www.mongodb.com/docs/manual/core/collection-level-access-control/),

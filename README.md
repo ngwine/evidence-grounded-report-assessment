@@ -26,25 +26,27 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
 
 Đã có [bản app chạy local](apps/web/README.md) nối web → API → worker →
 [core MVP hai pipeline](research/core_mvp/README.md). Đây là một luồng tích hợp
-để kiểm tra tính khả thi, **chưa** phải ứng dụng production: chưa có tài khoản,
-MongoDB, RBAC hay công bố kết quả. Chất lượng của hai pipeline cũng chưa được
-xác nhận đủ để chấm điểm hoặc kết luận đạo văn.
+để kiểm tra tính khả thi. Có thêm [authenticated MongoDB slice](docs/architecture/authenticated-mongo-app.md)
+cho session/RBAC, rubric lifecycle và upload → durable PARSE worker → chunks.
+Slice mới chưa nối INDEX/ANALYZE/result/review của hai pipeline; không phải
+production release. Chất lượng hai pipeline chưa được xác nhận đủ để chấm
+điểm hoặc kết luận đạo văn.
 
 | Hạng mục                                  | Trạng thái                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
 | SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
-| Product Backlog/WBS                         | WBS v1.10 có [audit đủ 66 task W1–W11 và bổ sung CI23/10](docs/planning/W1-W11_STATUS_2026-10-22.md); chờ Q/Y review/ký baseline |
+| Product Backlog/WBS                         | WBS v1.11 có [audit W1–W11](docs/planning/W1-W11_STATUS_2026-10-22.md) và [bổ sung app Mongo/auth](docs/architecture/authenticated-mongo-app.md); chờ Q/Y review/ký baseline |
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
 | API contract (`W2.3`) | Có [API Contract v1](docs/api/API_CONTRACT_V1.md) và [OpenAPI draft](docs/api/openapi-v1.yaml); YAML/$ref đã kiểm tra, chờ Yến review |
 | Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
-| Frontend, API, worker                       | Đã có bản demo local: upload → job worker → hai báo cáo evidence → ghi nhận review; chưa có auth/MongoDB/publish |
+| Frontend, API, worker                       | Demo local chạy hai pipeline; chế độ authenticated có login/workspace/rubric UI và API upload/version/chunk với worker Mongo. Hai chế độ chưa nối thành một luồng end-to-end |
 | Parser và chunking | Worker/runner gọi parser process riêng có wall/CPU/input/output budgets; stable provenance và synthetic golden có; vẫn cần corpus đủ đại diện |
 | Citation context | Runner lưu marker/bibliography candidates với exact span và unknown/ambiguous status; không tự xác minh nguồn hay trừ similarity |
-| MongoDB runtime/index | Có [Compose replica set](infra/mongodb/README.md), migration bốn collection/ba DB identities, queue và exact-vector adapter đã test; API/worker demo chưa nối MongoDB |
-| Quality/browser tests | Unit/synthetic, sáu live Mongo tests, Chromium local E2E và scoped quality/security gates có [bằng chứng](docs/benchmarks/w1-w11-hardening-2026-10-22.md); chưa thay thế gold evaluation hoặc auth/RBAC tests |
+| MongoDB runtime/index | Có [Compose replica set](infra/mongodb/README.md), migrations 001–003, DB identities tách quyền; authenticated upload/PARSE/rubric đã dùng Mongo. Product index/analysis/lifecycle còn mở |
+| Quality/browser tests | Unit, HTTP authorization, real-Mongo auth/rubric/PDF-DOCX provenance và Chromium local/mock-auth tests; [baseline CI](docs/benchmarks/w1-w11-hardening-2026-10-22.md) không thay thế CI của commit mới hoặc gold evaluation |
 | Model local | `research-v0` chạy E5 và mMARCO revision đã khóa từ cache local; hiệu quả tổng quát vẫn cần đánh giá trên tập nhãn độc lập |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
@@ -149,8 +151,9 @@ flowchart LR
 
 ## Thiết lập
 
-Có [Compose MongoDB phát triển riêng](infra/mongodb/README.md), hiện chưa nối
-vào app demo. Để chạy bản demo local, cài dependency Python và web từ thư mục repo:
+Có [Compose MongoDB phát triển riêng](infra/mongodb/README.md). Cách chạy chế
+độ mới ở [authenticated MongoDB app](docs/architecture/authenticated-mongo-app.md);
+demo hai pipeline cũ vẫn độc lập. Cài dependency từ thư mục repo:
 
 ```bash
 python3.12 -m venv .venv-research
