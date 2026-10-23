@@ -112,6 +112,17 @@ jobs:
         run: |
           .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
           .venv-research/bin/python scripts/setup_mongodb_local.py --operator github-ci
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Real authenticated browser to Mongo and both workers (synthetic BM25)
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test --config playwright.mongo.config.ts
       - name: Summarize failure without exposing MongoDB logs or credentials
         if: failure()
         run: .venv-research/bin/python scripts/diagnose_mongodb_local.py

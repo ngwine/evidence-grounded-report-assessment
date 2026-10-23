@@ -16,6 +16,49 @@ export type RubricVersion = {
   id: string; rubric_id: string; version_no: number; status: 'DRAFT' | 'PUBLISHED' | 'RETIRED';
   definition: RubricDefinition; rubric_sha256: string; revision: number;
 };
+export type DocumentKind = 'REPORT' | 'CORPUS_SOURCE';
+export type DocumentRecord = {
+  id: string; workspace_id: string; document_key: string; title: string;
+  current_version_id: string; lifecycle_state: string; revision: number;
+  owner_user_id?: string; governance_state?: string;
+};
+export type DocumentVersion = {
+  id: string; document_id: string; version_no: number; content_sha256: string;
+  processing_state: string; governance_state: string; lifecycle_state: string;
+  element_count: number; chunk_count: number; failure_code: string | null; revision: number;
+};
+export type AsyncDocumentUpload = {
+  document_id: string; document_version_id: string; job_id: string; state: string;
+};
+export type JobRecord = {
+  id: string; job_type: string; state: string; attempt: number; max_attempts: number;
+  progress: { step: string; completed: number; total: number }; error_code: string | null;
+};
+export type AnalysisConfigId = 'bm25-smoke' | 'research-v0';
+export type IndexGeneration = {
+  id: string; document_version_id: string; state: string; config_id: AnalysisConfigId;
+  job_id: string; revision: number; failure_code?: string | null;
+};
+export type AnalysisRun = {
+  id: string; state: string; run_type: 'BOTH' | 'SIMILARITY' | 'ASSESSMENT';
+  report_version_id: string; source_version_ids: string[]; index_generation_ids: string[];
+  rubric_version_id: string | null; config_id: AnalysisConfigId; job_id: string; revision: number;
+  created_at: string; completed_at: string | null; failure_code: string | null; review_state: string;
+};
+export type AnalysisResults = {
+  similarity: import('./types').SimilarityReport | null;
+  assessment: import('./types').AssessmentReport | null;
+  manifest?: Record<string, unknown>;
+};
+export type RunEvidence = {
+  id: string; analysis_run_id: string; pipeline: string; report_version_id: string; source_version_id: string | null;
+  report_chunk_id: string | null; source_chunk_id: string | null; checklist_id: string | null;
+  evidence: Record<string, unknown>;
+};
+export type AnalysisReview = {
+  id: string; analysis_run_id: string; reviewer_id: string; decision: 'ACCEPT' | 'REJECT';
+  reason_code: string; reason_text: string | null; based_on_revision: number; created_at: string;
+};
 export class AuthenticatedApiError extends Error {
   constructor(public status: number, public code: string, public requestId: string | null, message: string) {
     super(message);
@@ -27,7 +70,7 @@ const prefix = '/api/v1';
 let bootstrapPending: Promise<Actor> | null = null;
 
 async function request<T>(path: string, options: {
-  method?: string; body?: unknown; revision?: number; operationKey?: string; csrfRefresh?: boolean;
+  method?: string; body?: unknown; form?: FormData; revision?: number; operationKey?: string; csrfRefresh?: boolean;
 } = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -38,7 +81,8 @@ async function request<T>(path: string, options: {
   if (options.csrfRefresh) headers['X-CSRF-Refresh'] = '1';
   const response = await fetch(prefix + path, {
     method, headers, credentials: 'same-origin', cache: 'no-store',
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    // The browser supplies the multipart boundary; never set it manually.
+    body: options.form ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
   });
   if (!response.ok) {
     let code = 'REQUEST_FAILED';
@@ -114,3 +158,52 @@ export const cloneRubricVersion = (workspaceId: string, rubric: Rubric, version:
   request<RubricVersion>(scope(workspaceId) + '/rubrics/' + encodeURIComponent(rubric.id) + '/versions', {
     method: 'POST', body: { clone_from_version_id: version.id }, revision: rubric.revision, operationKey: key,
   });
+
+const collection = (kind: DocumentKind) => kind === 'REPORT' ? '/reports' : '/sources';
+export const listDocuments = (workspaceId: string, kind: DocumentKind, cursor?: string | null) =>
+  request<Page<DocumentRecord>>(scope(workspaceId) + collection(kind) + pageQuery(cursor));
+export const getDocumentVersion = (workspaceId: string, versionId: string) =>
+  request<DocumentVersion>(scope(workspaceId) + '/document-versions/' + encodeURIComponent(versionId));
+export const listDocumentVersions = (workspaceId: string, kind: DocumentKind, documentId: string, cursor?: string | null) =>
+  request<Page<DocumentVersion>>(scope(workspaceId) + collection(kind) + '/' + encodeURIComponent(documentId) + '/versions' + pageQuery(cursor));
+export const uploadDocument = (workspaceId: string, kind: DocumentKind, form: FormData, key: string, existing?: DocumentRecord) =>
+  request<AsyncDocumentUpload>(scope(workspaceId) + collection(kind) + (existing ? '/' + encodeURIComponent(existing.id) + '/versions' : ''), {
+    method: 'POST', form, operationKey: key, revision: existing?.revision,
+  });
+export const getJob = (workspaceId: string, jobId: string) =>
+  request<JobRecord>(scope(workspaceId) + '/jobs/' + encodeURIComponent(jobId));
+export const createIndexGeneration = (workspaceId: string, versionId: string, configId: AnalysisConfigId, key: string) =>
+  request<IndexGeneration>(scope(workspaceId) + '/document-versions/' + encodeURIComponent(versionId) + '/index-generations', {
+    method: 'POST', body: { config_id: configId }, operationKey: key,
+  });
+export const getIndexGeneration = (workspaceId: string, generationId: string) =>
+  request<IndexGeneration>(scope(workspaceId) + '/index-generations/' + encodeURIComponent(generationId));
+export const createAnalysisRun = async (workspaceId: string, reportId: string, body: {
+  run_type: AnalysisRun['run_type']; report_version_id: string;
+  source_scope: { source_version_ids: string[] }; rubric_version_id: string | null; config_id: AnalysisConfigId;
+}, key: string): Promise<AnalysisRun> => {
+  const operation = await request<{ run_id: string; job_id: string; state: string }>(scope(workspaceId) + '/reports/' + encodeURIComponent(reportId) + '/analysis-runs', {
+    method: 'POST', body, operationKey: key,
+  });
+  return getAnalysisRun(workspaceId, operation.run_id);
+};
+export const getAnalysisRun = (workspaceId: string, runId: string) =>
+  request<AnalysisRun>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId));
+export const getAnalysisResults = (workspaceId: string, runId: string) =>
+  request<AnalysisResults>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId) + '/results');
+export const getAnalysisEvidence = (workspaceId: string, runId: string, cursor?: string | null) =>
+  request<Page<RunEvidence>>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId) + '/evidence' + pageQuery(cursor));
+export const exportAnalysisRun = (workspaceId: string, runId: string) =>
+  request<Record<string, unknown>>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId) + '/export');
+export const listAnalysisRuns = (workspaceId: string, reportId: string, cursor?: string | null) =>
+  request<Page<AnalysisRun>>(scope(workspaceId) + '/reports/' + encodeURIComponent(reportId) + '/analysis-runs' + pageQuery(cursor));
+export const listAnalysisReviews = (workspaceId: string, runId: string, cursor?: string | null) =>
+  request<Page<AnalysisReview>>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId) + '/reviews' + pageQuery(cursor));
+export const createAnalysisReview = (workspaceId: string, run: AnalysisRun, body: {
+  decision: 'ACCEPT' | 'REJECT'; reason_code: string; reason_text: string | null;
+}) => request<AnalysisReview>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(run.id) + '/reviews', {
+  method: 'POST', body, revision: run.revision,
+});
+export const documentFileUrl = (workspaceId: string, versionId: string, pageIndex?: number | null): string =>
+  prefix + scope(workspaceId) + '/document-versions/' + encodeURIComponent(versionId) + '/file'
+  + (typeof pageIndex === 'number' && Number.isInteger(pageIndex) && pageIndex >= 0 ? `#page=${pageIndex + 1}` : '');
