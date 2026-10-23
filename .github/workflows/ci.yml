@@ -152,6 +152,9 @@ jobs:
       - name: Run synthetic localhost API, worker and browser flow
         working-directory: apps/web
         run: npm run test:e2e
+      - name: Check authenticated UI interactions against mocked API contract
+        working-directory: apps/web
+        run: npx playwright test --config playwright.auth.config.ts
 
   secret-scan:
     runs-on: ubuntu-latest
