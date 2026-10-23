@@ -1,5 +1,9 @@
 # Authenticated MongoDB app — local integration
 
+> Bổ sung: [index → hai pipeline → result/evidence/review](./version-locked-analysis-app.md)
+> đã được nối tiếp. Các đoạn mô tả "chưa nối" bên dưới là ranh giới của slice
+> auth/ingestion ban đầu; phạm vi hiện hành và phần còn thiếu ở tài liệu mới.
+
 Luồng mới dùng `/api/v1`, MongoDB replica set và hai database identities tách
 quyền. Nó không âm thầm chuyển demo `/api/local/v1` sang MongoDB. Hai chế độ
 hiện cùng tồn tại để giữ được luồng hai pipeline đã chạy trước đó.

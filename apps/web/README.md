@@ -1,6 +1,9 @@
 # Web local demo
 
-Có thêm chế độ `VITE_APP_MODE=authenticated` cho login/workspace/rubric authoring
+Chế độ `VITE_APP_MODE=authenticated` có login/workspace/rubric authoring,
+report/source upload/version, index, hai pipeline, evidence/review và JSON export;
+xem [version-locked analysis app](../../docs/architecture/version-locked-analysis-app.md).
+Auth
 qua `/api/v1`, cookie session và CSRF trong bộ nhớ. Xem
 [authenticated Mongo app](../../docs/architecture/authenticated-mongo-app.md).
 Chế độ mặc định bên dưới vẫn chạy demo hai pipeline `/api/local/v1`; không
@@ -81,3 +84,8 @@ Auth UI contract tests chạy riêng bằng
 workspace capability, rubric draft/edit/publish/clone/version history và 409.
 Bộ này dùng mock API; real-Mongo HTTP/worker tests nằm ở backend. Chưa coi
 mock browser test là browser→Mongo E2E.
+
+`npx playwright test --config playwright.mongo.config.ts` là bộ E2E Mongo thật
+riêng: tự tạo database/users/rights cho fixture tổng hợp, chạy upload → ba
+workers → BOTH results → review/export/reload, rồi dọn đúng state đã tạo.
+Cần Compose test loopback riêng chạy sẵn; không dùng dataset/report thật.

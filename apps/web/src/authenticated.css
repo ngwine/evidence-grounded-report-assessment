@@ -20,3 +20,12 @@
 .auth-editor-tools input { max-width: 270px; }
 .authenticated-shell .field-help code { font-size: 10px; }
 @media (max-width: 800px) { .auth-rubric-grid { grid-template-columns: 1fr; } .authenticated-shell .site-header { flex-wrap: wrap; } .auth-login { margin-top: 36px; } }
+.auth-analysis-results details { margin: .8rem 0; padding: .8rem; border: 1px solid var(--line, #d7dee7); border-radius: .6rem; }
+.auth-evidence-json { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .78rem; }
+.auth-document-list { padding: 0; list-style: none; display: grid; gap: .8rem; }
+.auth-document-list li { border-bottom: 1px solid #d7dee7; padding: .8rem 0; }
+.auth-resource-id { display: block; overflow-wrap: anywhere; }
+.auth-reports { display: grid; gap: 1rem; }
+.auth-run-provenance { display: grid; grid-template-columns: minmax(8rem, 1fr) 3fr; gap: .5rem; overflow-wrap: anywhere; }
+.auth-source-choices label { display: flex; align-items: flex-start; gap: .6rem; margin: .5rem 0; }
+.auth-source-choices small { display: block; }

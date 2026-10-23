@@ -28,24 +28,25 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
 [core MVP hai pipeline](research/core_mvp/README.md). Đây là một luồng tích hợp
 để kiểm tra tính khả thi. Có thêm [authenticated MongoDB slice](docs/architecture/authenticated-mongo-app.md)
 cho session/RBAC, rubric lifecycle và upload → durable PARSE worker → chunks.
-Slice mới chưa nối INDEX/ANALYZE/result/review của hai pipeline; không phải
-production release. Chất lượng hai pipeline chưa được xác nhận đủ để chấm
+Đã nối tiếp [INDEX/ANALYZE/result/evidence/review](docs/architecture/version-locked-analysis-app.md)
+cho cả hai pipeline, có real-Mongo/browser E2E; chưa phải production release.
+Chất lượng hai pipeline chưa được xác nhận đủ để chấm
 điểm hoặc kết luận đạo văn.
 
 | Hạng mục                                  | Trạng thái                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
 | SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
-| Product Backlog/WBS                         | WBS v1.11 có [audit W1–W11](docs/planning/W1-W11_STATUS_2026-10-22.md) và [bổ sung app Mongo/auth](docs/architecture/authenticated-mongo-app.md); chờ Q/Y review/ký baseline |
+| Product Backlog/WBS                         | WBS v1.12 có [audit W1–W11](docs/planning/W1-W11_STATUS_2026-10-22.md) và [app Mongo hai pipeline](docs/architecture/version-locked-analysis-app.md); chờ review/ký baseline |
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
 | API contract (`W2.3`) | Có [API Contract v1](docs/api/API_CONTRACT_V1.md) và [OpenAPI draft](docs/api/openapi-v1.yaml); YAML/$ref đã kiểm tra, chờ Yến review |
 | Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
-| Frontend, API, worker                       | Demo local chạy hai pipeline; chế độ authenticated có login/workspace/rubric UI và API upload/version/chunk với worker Mongo. Hai chế độ chưa nối thành một luồng end-to-end |
+| Frontend, API, worker                       | Authenticated web → upload/PARSE/INDEX/ANALYZE workers → hai báo cáo/evidence → review/export đã chạy Mongo thật; demo local cũ vẫn riêng |
 | Parser và chunking | Worker/runner gọi parser process riêng có wall/CPU/input/output budgets; stable provenance và synthetic golden có; vẫn cần corpus đủ đại diện |
 | Citation context | Runner lưu marker/bibliography candidates với exact span và unknown/ambiguous status; không tự xác minh nguồn hay trừ similarity |
-| MongoDB runtime/index | Có [Compose replica set](infra/mongodb/README.md), migrations 001–003, DB identities tách quyền; authenticated upload/PARSE/rubric đã dùng Mongo. Product index/analysis/lifecycle còn mở |
+| MongoDB runtime/index | Migrations 001–004; private BM25/E5 generation artifacts và Mongo activation/head; run/results/evidence version-locked. Graph/lifecycle/backup còn mở |
 | Quality/browser tests | Unit, HTTP authorization, real-Mongo auth/rubric/PDF-DOCX provenance và Chromium local/mock-auth tests; [baseline CI](docs/benchmarks/w1-w11-hardening-2026-10-22.md) không thay thế CI của commit mới hoặc gold evaluation |
 | Model local | `research-v0` chạy E5 và mMARCO revision đã khóa từ cache local; hiệu quả tổng quát vẫn cần đánh giá trên tập nhãn độc lập |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |

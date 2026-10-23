@@ -8,6 +8,12 @@ nên không gọi `ensure_indexes()` bằng runtime credential.
 đã nối upload → PARSE worker → MongoDB, tách biệt demo local cũ;
 database role không thay thế actor/workspace authorization.
 
+[Index và analysis](../../../../../docs/architecture/version-locked-analysis-app.md)
+đã nối tiếp bằng migration004: index_generations/heads/operations,
+analysis_runs/results/operations, evidence_items và reviews. Worker lưu AI
+outputs; API chỉ đọc và ghi review/command, không ghi analysis_results/evidence.
+Immutable payload và current scope được service kiểm, không chỉ dựa validator.
+
 `mongo_jobs.py` implements the `jobs` state transitions from ADR-001: unique
 idempotency key, atomic claim with a bounded lease, revision-guarded heartbeat
 and completion, finite retry, cancellation and the indexes used by those
@@ -19,7 +25,8 @@ The adapter is independent of the local file-backed demo. `MongoParseWorker`
 now reloads workspace, ownership, document/version and current/pinned governance
 after claim and before its transaction-fenced generation commit. Auth/session,
 rubric and document catalogs are additive migrations 002/003; migration 001's
-checksum stays fixed. INDEX/ANALYZE jobs, index rebuild, retention/purge and
+checksum stays fixed. INDEX/ANALYZE now have durable type-scoped handlers and
+transaction-fenced index/result commits. Graph, full retention/purge and
 backup/restore remain separate work packages.
 
 `ensure_indexes()` belongs in a migration/setup command using migration

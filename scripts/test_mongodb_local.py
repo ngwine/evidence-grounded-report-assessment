@@ -74,7 +74,9 @@ def main() -> int:
          "services/backend/tests/test_mongo_schema_integration.py",
          "services/backend/tests/test_authenticated_mongo_integration.py",
          "services/backend/tests/test_rubric_lifecycle.py",
-         "services/backend/tests/test_mongo_document_flow.py"],
+         "services/backend/tests/test_mongo_document_flow.py",
+         "services/backend/tests/test_mongo_analysis_flow.py",
+         "services/backend/tests/test_mongo_index_flow.py"],
         cwd=ROOT, env=environment, check=False,
     )
     if result.returncode == 0 and args.restart:

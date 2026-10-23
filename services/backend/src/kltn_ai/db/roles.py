@@ -21,6 +21,7 @@ COLLECTIONS = frozenset({
     "evidence_items", "assessment_proposals", "reviews", "publications",
     "deletion_requests", "tombstones", "audit_events", "schema_migrations",
     "auth_credentials", "auth_sessions", "auth_throttles", "rubric_operations", "document_operations",
+    "index_heads", "index_operations", "analysis_results", "analysis_operations",
 })
 API_WRITES = frozenset({
     "users", "workspaces", "memberships", "documents", "document_versions",
@@ -28,19 +29,22 @@ API_WRITES = frozenset({
     "rubrics", "rubric_versions", "jobs", "analysis_runs", "reviews", "publications",
     "deletion_requests", "tombstones",
     "auth_credentials", "auth_sessions", "auth_throttles", "rubric_operations", "document_operations",
+    "index_generations", "index_heads", "index_operations", "analysis_operations",
 })
 WORKER_WRITES = frozenset({
     "documents", "document_versions", "file_objects", "document_elements", "chunks",
     "jobs", "index_generations", "graph_nodes", "graph_edges", "analysis_runs",
     "evidence_items", "assessment_proposals", "deletion_requests", "tombstones",
+    "index_heads", "analysis_results",
 })
 API_READS = COLLECTIONS - {"schema_migrations"}
 WORKER_READS = frozenset({
     "users", "workspaces", "memberships", "documents", "document_versions",
     "file_objects", "document_elements", "chunks", "governance_records",
-    "dataset_manifests", "dataset_memberships", "rubric_versions", "jobs",
+    "dataset_manifests", "dataset_memberships", "rubrics", "rubric_versions", "jobs",
     "index_generations", "graph_nodes", "graph_edges", "analysis_runs",
     "evidence_items", "assessment_proposals", "deletion_requests", "tombstones",
+    "index_heads", "analysis_results",
 })
 
 

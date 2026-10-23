@@ -8,6 +8,7 @@ addition to the compact locator; a multi-page chunk has no single fake page.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
 from pathlib import Path
 from typing import Any, Callable
 
@@ -168,6 +169,37 @@ def document_router(database, private_root: Path, *, transaction_mode: bool, pre
     async def report_version(workspace_id: str, report_id: str, request: Request):
         return await upload(request, workspace_id, "REPORT", report_id)
 
+    def list_versions(request: Request, workspace_id: str, document_id: str, kind: str,
+                      limit: int, cursor: str | None):
+        _pagination(limit, cursor)
+        document = get_document(request, workspace_id, document_id, kind)
+        query: dict[str, Any] = {"workspace_id": document["workspace_id"],
+            "document_id": document["_id"], "lifecycle_state": "ACTIVE"}
+        if cursor is not None:
+            query["_id"] = {"$gt": object_id(cursor)}
+        documents = service()
+        output = []
+        for row in database.document_versions.find(query).sort("_id", 1):
+            try:
+                visible = documents.get_version(request.state.actor_id, workspace_id, document_id, row["_id"])
+                output.append(version_dto(visible))
+            except DomainError as error:
+                if error.status != 404:
+                    raise
+            if len(output) > limit:
+                break
+        return _page(output, limit, lambda item: item["id"])
+
+    @router.get("/workspaces/{workspace_id}/reports/{report_id}/versions")
+    def report_versions(workspace_id: str, report_id: str, request: Request,
+                        limit: int = 25, cursor: str | None = None):
+        return list_versions(request, workspace_id, report_id, "REPORT", limit, cursor)
+
+    @router.get("/workspaces/{workspace_id}/sources/{source_id}/versions")
+    def source_versions(workspace_id: str, source_id: str, request: Request,
+                        limit: int = 25, cursor: str | None = None):
+        return list_versions(request, workspace_id, source_id, "CORPUS_SOURCE", limit, cursor)
+
     @router.post("/workspaces/{workspace_id}/sources/{source_id}/versions", status_code=202)
     async def source_version(workspace_id: str, source_id: str, request: Request):
         return await upload(request, workspace_id, "CORPUS_SOURCE", source_id)
@@ -185,6 +217,30 @@ def document_router(database, private_root: Path, *, transaction_mode: bool, pre
         row = visible_version(request, workspace_id, version_id)
         response.headers["ETag"] = f'"rev-{row["revision"]}"'
         return version_dto(row)
+
+    @router.get("/workspaces/{workspace_id}/document-versions/{version_id}/file")
+    def original_file(workspace_id: str, version_id: str, request: Request):
+        row = visible_version(request, workspace_id, version_id)
+        documents = service()
+        workspace, document = documents._document(request.state.actor_id, workspace_id, row["document_id"])
+        documents.require_governance(workspace, document)
+        documents.require_governance(workspace, {**document, "current_governance_record_id": row["governance_record_id"]})
+        file = database.file_objects.find_one({"_id": row["file_object_id"],
+            "workspace_id": row["workspace_id"], "storage_state": "COMMITTED"})
+        if file is None or database.tombstones.find_one({"resource_type": "FILE_OBJECT", "resource_id": row["file_object_id"]}):
+            raise DomainError(404, "RESOURCE_NOT_FOUND", "Resource not found")
+        path = documents.storage_path(file)
+        if path.stat().st_size > MAX_DOCUMENT_BYTES:
+            raise DomainError(409, "FILE_INTEGRITY_FAILED", "Stored file integrity failed")
+        payload = path.read_bytes()
+        if len(payload) != file["size_bytes"] or hashlib.sha256(payload).hexdigest() != row["content_sha256"]:
+            raise DomainError(409, "FILE_INTEGRITY_FAILED", "Stored file integrity failed")
+        # No user filename is reflected as a header; downloads are version-addressed.
+        disposition = "inline" if file["media_type"] == "application/pdf" else "attachment"
+        return Response(payload, media_type=file["media_type"], headers={
+            "Content-Disposition": f'{disposition}; filename="document-{row["_id"]}{path.suffix}"',
+            "Content-Security-Policy": "sandbox; default-src 'none'; frame-ancestors 'self'",
+            "X-Frame-Options": "SAMEORIGIN", "X-Content-Type-Options": "nosniff"})
 
     @router.get("/workspaces/{workspace_id}/document-versions/{version_id}/chunks")
     def chunks(workspace_id: str, version_id: str, request: Request, limit: int = 25, cursor: str | None = None):
@@ -206,9 +262,20 @@ def document_router(database, private_root: Path, *, transaction_mode: bool, pre
         workspace = object_id(workspace_id)
         policy.require(request.state.actor_id, workspace, "workspace.read")
         row = database.jobs.find_one({"_id": object_id(job_id), "workspace_id": workspace})
-        if row is None or row["job_type"] != "PARSE":
+        if row is None:
             raise DomainError(404, "RESOURCE_NOT_FOUND", "Resource not found")
-        service().get_version(request.state.actor_id, workspace, row["resource_ref"]["id"], row["resource_ref"]["version_id"])
+        if row["job_type"] == "PARSE":
+            service().get_version(request.state.actor_id, workspace, row["resource_ref"]["id"], row["resource_ref"]["version_id"])
+        elif row["job_type"] == "INDEX":
+            from ..domain.indexes import IndexService
+            IndexService(database, private_root, transactional=transaction_mode).get(
+                request.state.actor_id, workspace, row["resource_ref"]["id"])
+        elif row["job_type"] == "ANALYZE":
+            from ..domain.analysis import AnalysisService
+            AnalysisService(database, private_root, transactional=transaction_mode).get(
+                request.state.actor_id, workspace, row["resource_ref"]["id"])
+        else:
+            raise DomainError(404, "RESOURCE_NOT_FOUND", "Resource not found")
         response.headers["ETag"] = f'"rev-{row["revision"]}"'
         return {"id": str(row["_id"]), "job_type": row["job_type"], "resource_id": str(row["resource_ref"]["id"]),
                 "state": row["state"], "attempt": row["attempt"], "max_attempts": row["max_attempts"],

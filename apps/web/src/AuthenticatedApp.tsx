@@ -7,6 +7,7 @@ import {
 } from './authenticatedApi';
 import type { Actor, Page, Rubric, RubricDefinition, RubricVersion, Workspace } from './authenticatedApi';
 import './authenticated.css';
+import AuthenticatedReports from './AuthenticatedReports';
 
 const TEMPLATE: RubricDefinition = {
   max_score: 10,
@@ -337,7 +338,9 @@ export default function AuthenticatedApp() {
             </>}
           </section>
         </div>}
-        <p className="safe-note">Giao diện này dùng MongoDB, session và quyền workspace thật cho auth/rubric. Luồng phân tích hai pipeline của local demo là chế độ riêng; không được xem là đã có authenticated orchestration.</p>
+        {workspaceId && <AuthenticatedReports key={workspaceId} actor={actor} workspaceId={workspaceId}
+          rubricRefreshKey={`${version?.id ?? ''}:${version?.revision ?? ''}`} onAuthenticationError={fail} />}
+        <p className="safe-note">Phân tích tạo proposal có version và evidence để review; không tự công bố điểm chính thức hoặc kết luận đạo văn.</p>
       </>}
     </main>
   </div>;

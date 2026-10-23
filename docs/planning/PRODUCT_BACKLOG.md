@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.10 |
+| Phiên bản | 1.11 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật | 23/10/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
@@ -14,13 +14,13 @@
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | Hai pipeline chạy app local; [authenticated Mongo slice](../architecture/authenticated-mongo-app.md) có auth/rubric/upload/PARSE, chưa nối INDEX/ANALYZE/result/review. [Audit W1–W11](./W1-W11_STATUS_2026-10-22.md) giữ lịch sử; CI commit37c6277 chỉ là baseline trước lượt mới. Quyền dữ liệu, gold, review/merge và deployment vẫn mở; actual/evidence theo WBS v1.11 |
+| Trạng thái baseline | [Authenticated Mongo app](../architecture/version-locked-analysis-app.md) chạy upload/PARSE/INDEX/ANALYZE→hai kết quả/evidence→review/export; actual theo WBS v1.12. [Audit W1–W11](./W1-W11_STATUS_2026-10-22.md) giữ lịch sử; semantic/gold, graph extraction, backup/lifecycle, quyền dữ liệu và review/merge/deployment vẫn mở |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.11; không đổi target backlog để che độ trễ.
+phiên bản 1.12; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
