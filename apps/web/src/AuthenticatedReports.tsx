@@ -11,6 +11,7 @@ import type {
   DocumentVersion, IndexGeneration, JobRecord, Page, Rubric, RubricVersion, RunEvidence,
 } from './authenticatedApi';
 import AuthenticatedResults from './AuthenticatedResults';
+import AuthenticatedItemAnnotations from './AuthenticatedItemAnnotations';
 
 const TERMINAL = new Set(['SUCCEEDED', 'FAILED', 'FAILED_FINAL', 'CANCELLED', 'READY', 'ACTIVE', 'SUPERSEDED', 'REVOKED', 'INVALIDATED', 'TOMBSTONED']);
 const PARSED = new Set(['PARSED', 'INDEXING', 'READY']);
@@ -97,7 +98,7 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
     setRequestId(cause instanceof AuthenticatedApiError ? cause.requestId : null);
     if (cause instanceof AuthenticatedApiError && cause.status === 401) onAuthenticationError(cause);
     if (cause instanceof AuthenticatedApiError && ([401, 403, 404].includes(cause.status)
-        || ['GOVERNANCE_NOT_APPROVED', 'RESULT_INTEGRITY_FAILED', 'ANALYSIS_INPUT_CHANGED', 'PROVENANCE_INVALID', 'INDEX_INTEGRITY_FAILED'].includes(cause.code))) {
+        || ['GOVERNANCE_NOT_APPROVED', 'RESULT_INTEGRITY_FAILED', 'ANALYSIS_INPUT_CHANGED', 'PROVENANCE_INVALID', 'INDEX_INTEGRITY_FAILED', 'ANNOTATION_INTEGRITY_FAILED'].includes(cause.code))) {
       // Revoked/expired access must not leave an earlier result on screen.
       setRun(null); setResults(null); setEvidence(null);
       runSelection.current += 1;
@@ -424,6 +425,9 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
           if (!evidence?.page.has_more) return; const selection = runSelection.current; setBusy(true);
           try { const page = await getAnalysisEvidence(workspaceId, run.id, evidence.page.next_cursor); if (active.current && selection === runSelection.current) setEvidence({ ...page, items: [...evidence.items, ...page.items] }); } catch (cause) { fail(cause); } finally { if (active.current) setBusy(false); }
         }} busy={busy} />}
+        {run.state === 'SUCCEEDED' && results && capabilities.includes('review.create') && <AuthenticatedItemAnnotations
+          key={`${actor.id}:${workspaceId}:${run.id}`} actorId={actor.id} workspaceId={workspaceId} runId={run.id}
+          runRevision={run.revision} canReview={true} onRunChanged={setRun} onAccessError={fail} />}
         {run.state === 'SUCCEEDED' && results && capabilities.includes('review.create') && <section aria-label="Review kết quả đề xuất">
           <h4>Giảng viên review · {run.review_state}</h4>
           <label className="field-label" htmlFor="analysis-review-reason">Nhận xét review</label>

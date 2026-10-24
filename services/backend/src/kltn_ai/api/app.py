@@ -30,6 +30,7 @@ from ..domain.rubrics import RubricService
 from ..domain.documents import MAX_DOCUMENT_BYTES
 from .document_routes import document_router
 from .analysis_routes import analysis_router
+from .item_annotation_routes import item_annotation_router
 
 
 PREFIX = "/api/v1"
@@ -269,5 +270,7 @@ def create_app(database: Database[dict[str, Any]], *, allow_test_client: bool = 
         database, storage_root,
         transaction_mode=transaction_mode, prefix=PREFIX, key_reader=_key, revision_reader=_revision))
     app.include_router(analysis_router(database, storage_root, transaction_mode=transaction_mode,
+        prefix=PREFIX, json_reader=json_body, key_reader=_key, revision_reader=_revision))
+    app.include_router(item_annotation_router(database, storage_root, transaction_mode=transaction_mode,
         prefix=PREFIX, json_reader=json_body, key_reader=_key, revision_reader=_revision))
     return app

@@ -1,5 +1,6 @@
 /** Real browser -> cookie-auth API -> scoped Mongo -> workers; synthetic only. */
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
 test('real Mongo: upload report/source → parse → BM25 index → BOTH results/export', async ({ page }) => {
   await page.goto('/');
@@ -31,6 +32,34 @@ test('real Mongo: upload report/source → parse → BM25 index → BOTH results
   await expect(page.getByRole('region', { name: 'Pipeline 1 kết quả' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Pipeline 2 kết quả' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Evidence đã lưu' })).toBeVisible();
+  const itemReview = page.getByRole('region', { name: 'Review từng mục', exact: true });
+  await expect(itemReview).toBeVisible();
+  const pair = itemReview.getByRole('article').filter({ hasText: 'Pipeline 1 · Cặp báo cáo–nguồn' }).first();
+  await pair.getByRole('combobox', { name: /^Nhãn review / }).selectOption('VERBATIM');
+  await pair.getByRole('combobox', { name: /^Trích dẫn hoặc citation / }).selectOption('NO');
+  await pair.getByRole('textbox', { name: /^Lý do review / }).fill('Synthetic reviewer checked exact raw evidence on both sides.');
+  await expect(pair.getByRole('button', { name: 'Lưu phiên bản review', exact: true })).toBeDisabled();
+  await pair.getByRole('checkbox', { name: /^REPORT/ }).first().check();
+  await pair.getByRole('checkbox', { name: /^SOURCE/ }).first().check();
+  await pair.getByRole('button', { name: 'Lưu phiên bản review', exact: true }).click();
+  await expect(pair.getByText('Review đã lưu · phiên bản 1 · VERBATIM', { exact: true })).toBeVisible();
+  const checklist = itemReview.getByRole('article').filter({ hasText: 'Pipeline 2 · C1.1' }).first();
+  await checklist.getByRole('combobox', { name: /^Nhãn review / }).selectOption('MET');
+  await checklist.getByRole('checkbox', { name: /^REPORT/ }).first().check();
+  await checklist.getByRole('textbox', { name: /^Lý do review / }).fill('Synthetic checklist evidence inspected independently of its numeric score.');
+  await checklist.getByRole('button', { name: 'Lưu phiên bản review', exact: true }).click();
+  await expect(checklist.getByText('Review đã lưu · phiên bản 1 · MET', { exact: true })).toBeVisible();
+  await itemReview.getByRole('button', { name: 'Xem lịch sử review', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Lịch sử review của bạn' }).getByRole('listitem')).toHaveCount(2);
+  const reviewDownload = page.waitForEvent('download');
+  await itemReview.getByRole('button', { name: 'Export JSON review', exact: true }).click();
+  const reviewFile = await reviewDownload;
+  expect(reviewFile.suggestedFilename()).toMatch(/^item-reviews-[0-9a-f]{24}\.json$/);
+  const exportedReviews = JSON.parse(await readFile((await reviewFile.path())!, 'utf8'));
+  expect(exportedReviews.annotations).toHaveLength(2);
+  expect(exportedReviews.independent_gold).toBe(false);
+  expect(exportedReviews.predictions_visible).toBe(true);
+  expect(exportedReviews.official_grade).toBe(false);
   await page.getByLabel('Nhận xét review', { exact: true }).fill('Synthetic manual review checked evidence.');
   await page.getByRole('button', { name: 'Chấp nhận đề xuất', exact: true }).click();
   await expect(page.getByText('Giảng viên review · REVIEWED', { exact: true })).toBeVisible();
@@ -44,4 +73,5 @@ test('real Mongo: upload report/source → parse → BM25 index → BOTH results
   await page.getByLabel('Mở lượt chạy theo ID').fill(runId);
   await page.getByRole('button', { name: 'Mở lượt chạy', exact: true }).click();
   await expect(page.getByText('ANALYZE SUCCEEDED', { exact: true })).toBeVisible();
+  await expect(page.getByText('Review đã lưu · phiên bản 1 · VERBATIM', { exact: true })).toBeVisible();
 });

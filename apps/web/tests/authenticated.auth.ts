@@ -147,3 +147,169 @@ test('mocked API: revision conflict preserves authored draft instead of claiming
   expect(JSON.parse(await editor.inputValue()).criteria[0].title).toBe('Nội dung chưa được lưu');
   await expect(page.getByRole('button', { name: 'Kiểm tra & publish' })).toBeDisabled();
 });
+
+const REVIEW_RUN = '000000000000000000000010';
+const REVIEW_ITEM = '1'.repeat(64);
+const CHECKLIST_ITEM = '2'.repeat(64);
+const REPORT_SPAN = 'a'.repeat(64);
+const SOURCE_SPAN = 'b'.repeat(64);
+
+async function mockItemReviewApi(page: Page, options: { holdItems?: boolean; failFirstSave?: boolean } = {}) {
+  const calls: Array<{ path: string; method: string; headers: Record<string, string>; body: Record<string, unknown> | null }> = [];
+  const annotations: Array<Record<string, unknown>> = [];
+  let revision = 1;
+  let conflictNext = false;
+  let failSave = options.failFirstSave ?? false;
+  let releaseItems: () => void = () => {};
+  const heldItems = new Promise<void>((resolve) => { releaseItems = resolve; });
+  const makePage = (items: unknown[]) => ({ items, page: { limit: 25, has_more: false, next_cursor: null }, run_revision: revision });
+  const actor = { id: '000000000000000000000005', display_name: 'Reviewer thử nghiệm', memberships: [
+    { workspace_id: WORKSPACE, role: 'LECTURER', capabilities: ['workspace.read', 'run.read', 'review.create'] },
+  ] };
+  const span = (side: 'REPORT' | 'SOURCE', id: string) => ({ span_id: id, side, document_version_id: VERSION,
+    chunk_id: side.toLowerCase() + '-chunk', raw_start: 0, raw_end: 15,
+    quote_text: side === 'REPORT' ? '<script>window.reviewXss = true</script>' : 'Synthetic source evidence.', locator: { page_index: 0 } });
+  const items = [
+    { item_id: REVIEW_ITEM, pipeline: 'SIMILARITY', report_version_id: VERSION, report_chunk_id: 'report-chunk',
+      source_version_id: VERSION, source_chunk_id: 'source-chunk', checklist_id: null, statement: null,
+      report_text: '<script>window.reviewXss = true</script>', source_text: 'Synthetic source evidence.',
+      span_options: [span('REPORT', REPORT_SPAN), span('SOURCE', SOURCE_SPAN)] },
+    { item_id: CHECKLIST_ITEM, pipeline: 'ASSESSMENT', report_version_id: VERSION, report_chunk_id: null,
+      source_version_id: null, source_chunk_id: null, checklist_id: 'C1.1', statement: 'Synthetic checklist without retrieved machine evidence.',
+      report_text: 'Report text remains available for manual evidence selection.', source_text: null,
+      span_options: [span('REPORT', REPORT_SPAN)] },
+  ];
+  await page.route('**/api/v1/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const method = request.method();
+    const headers = request.headers();
+    const body = method === 'POST' ? request.postDataJSON() : null;
+    calls.push({ path, method, headers, body });
+    const reply = (value: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(value) });
+    const deny = (status: number, code: string) => reply({ error: { code, message: 'Synthetic review error', request_id: 'req-item-review' } }, status);
+    if (path.endsWith('/auth/me')) return reply(actor);
+    if (path.endsWith('/auth/csrf')) return reply({ csrf_token: REFRESHED_CSRF });
+    if (path === '/api/v1/workspaces') return reply(makePage([{ id: WORKSPACE, key: 'review', name: 'Review workspace', status: 'ACTIVE' }]));
+    if (path.endsWith('/analysis-runs/' + REVIEW_RUN)) return reply({ id: REVIEW_RUN, state: 'SUCCEEDED', run_type: 'BOTH',
+      report_version_id: VERSION, source_version_ids: [VERSION], index_generation_ids: [], rubric_version_id: VERSION,
+      config_id: 'bm25-smoke', job_id: 'synthetic-job', revision, created_at: '2026-10-24T00:00:00Z',
+      completed_at: '2026-10-24T00:00:01Z', failure_code: null, review_state: 'UNREVIEWED' });
+    if (path.endsWith('/results')) return reply({ similarity: null, assessment: null });
+    if (path.endsWith('/evidence')) return reply(makePage([]));
+    if (path.endsWith('/annotation-items')) {
+      if (options.holdItems) await heldItems;
+      return reply(makePage(items.map((item) => ({ ...item,
+        latest_annotation: [...annotations].reverse().find((annotation) => annotation.item_id === item.item_id) ?? null }))));
+    }
+    if (path.endsWith('/item-annotations/export')) return reply({ analysis_run_id: REVIEW_RUN, annotation_mode: 'MODEL_VISIBLE_REVIEW',
+      predictions_visible: true, independent_gold: false, items, annotations });
+    if (path.endsWith('/item-annotations') && method === 'GET') return reply(makePage(annotations));
+    if (path.endsWith('/item-annotations') && method === 'POST') {
+      expect(headers['x-csrf-token']).toBe(REFRESHED_CSRF);
+      expect(headers['idempotency-key'].length).toBeGreaterThanOrEqual(16);
+      if (failSave) { failSave = false; return deny(503, 'DATASTORE_UNAVAILABLE'); }
+      if (conflictNext) { conflictNext = false; revision += 1; return deny(409, 'REVISION_CONFLICT'); }
+      expect(headers['if-match']).toBe(`"rev-${revision}"`);
+      revision += 1;
+      const annotation = { ...body, id: `review-${annotations.length + 1}`, pipeline: body.item_id === REVIEW_ITEM ? 'SIMILARITY' : 'ASSESSMENT',
+        annotator_id: actor.id, quote_or_citation: body.quote_or_citation ?? null,
+        annotation_revision: annotations.filter((entry) => entry.item_id === body.item_id).length + 1,
+        created_at: '2026-10-24T00:00:02Z', annotation_mode: 'MODEL_VISIBLE_REVIEW', run_revision: revision };
+      annotations.push(annotation);
+      return reply(annotation, 201);
+    }
+    if (path.endsWith('/reviews') && method === 'POST') {
+      expect(headers['if-match']).toBe(`"rev-${revision}"`);
+      revision += 1;
+      return reply({ id: 'whole-review', ...body }, 201);
+    }
+    return deny(404, 'RESOURCE_NOT_FOUND');
+  });
+  return { calls, annotations, releaseItems, conflictNextSave: () => { conflictNext = true; } };
+}
+
+async function openReviewRun(page: Page) {
+  await page.goto('/');
+  await page.getByLabel('Workspace', { exact: true }).selectOption(WORKSPACE);
+  await page.getByLabel('Mở lượt chạy theo ID', { exact: true }).fill(REVIEW_RUN);
+  await page.getByRole('button', { name: 'Mở lượt chạy', exact: true }).click();
+}
+
+test('mocked API: item review loading, retry, immutable correction and conflict preserve draft and CAS', async ({ page }) => {
+  const api = await mockItemReviewApi(page, { holdItems: true, failFirstSave: true });
+  await openReviewRun(page);
+  await expect(page.getByText('Đang tải các mục review…', { exact: true })).toBeVisible();
+  api.releaseItems();
+  const item = page.getByRole('article', { name: `Mục review ${REVIEW_ITEM}`, exact: true });
+  await item.getByLabel(`Nhãn review ${REVIEW_ITEM}`, { exact: true }).selectOption('VERBATIM');
+  await item.getByLabel(`Trích dẫn hoặc citation ${REVIEW_ITEM}`, { exact: true }).selectOption('NO');
+  await item.getByRole('checkbox', { name: /^REPORT/ }).check();
+  await item.getByRole('checkbox', { name: /^SOURCE/ }).check();
+  const rationale = item.getByLabel(`Lý do review ${REVIEW_ITEM}`, { exact: true });
+  await rationale.fill('Synthetic reviewer checked both pinned spans.');
+  const save = item.getByRole('button', { name: 'Lưu phiên bản review', exact: true });
+  await save.click();
+  await expect(page.getByRole('alert')).toContainText('Chưa thực hiện được yêu cầu review');
+  await save.click();
+  await expect(item.getByText('Review đã lưu · phiên bản 1 · VERBATIM', { exact: true })).toBeVisible();
+  await expect(save).toBeDisabled();
+  const writes = () => api.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/item-annotations'));
+  expect(writes()[0].headers['idempotency-key']).toBe(writes()[1].headers['idempotency-key']);
+  const first = { ...api.annotations[0] };
+  await rationale.fill('Synthetic correction retains the first immutable review.');
+  api.conflictNextSave();
+  await save.click();
+  await expect(page.getByRole('alert')).toContainText('Bản nháp được giữ lại');
+  await expect(rationale).toHaveValue('Synthetic correction retains the first immutable review.');
+  await expect(item.getByRole('checkbox', { name: /^SOURCE/ })).toBeChecked();
+  await page.getByRole('button', { name: 'Tải revision mới, giữ bản nháp', exact: true }).click();
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(item.getByText('Review đã lưu · phiên bản 2 · VERBATIM', { exact: true })).toBeVisible();
+  expect(writes()[2].headers['idempotency-key']).not.toBe(writes()[1].headers['idempotency-key']);
+  expect(writes()[3].headers['idempotency-key']).toBe(writes()[2].headers['idempotency-key']);
+  expect(api.annotations[0]).toEqual(first);
+  await page.getByRole('button', { name: 'Xem lịch sử review', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Lịch sử review của bạn' }).getByRole('listitem')).toHaveCount(2);
+  await page.getByLabel('Nhận xét review', { exact: true }).fill('Whole-run review uses refreshed item-annotation revision.');
+  await page.getByRole('button', { name: 'Chấp nhận đề xuất', exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export JSON review', exact: true }).click();
+  expect((await downloaded).suggestedFilename()).toBe(`item-reviews-${REVIEW_RUN}.json`);
+  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+});
+
+test('mocked API: per-pipeline evidence and rationale validation blocks invalid saves and renders source text safely', async ({ page }) => {
+  const api = await mockItemReviewApi(page);
+  await openReviewRun(page);
+  const section = page.getByRole('region', { name: 'Review từng mục', exact: true });
+  await expect(section).toContainText('không phải gold độc lập được gán nhãn mù');
+  const item = page.getByRole('article', { name: `Mục review ${REVIEW_ITEM}`, exact: true });
+  const save = item.getByRole('button', { name: 'Lưu phiên bản review', exact: true });
+  await item.getByLabel(`Nhãn review ${REVIEW_ITEM}`, { exact: true }).selectOption('PARAPHRASE');
+  await item.getByLabel(`Lý do review ${REVIEW_ITEM}`, { exact: true }).fill('Evidence must support this positive relationship.');
+  await expect(save).toBeDisabled();
+  await item.getByLabel(`Trích dẫn hoặc citation ${REVIEW_ITEM}`, { exact: true }).selectOption('UNSURE');
+  await item.getByRole('checkbox', { name: /^REPORT/ }).check();
+  await expect(save).toBeDisabled();
+  await item.getByRole('checkbox', { name: /^SOURCE/ }).check();
+  await expect(save).toBeEnabled();
+  await item.getByLabel(`Lý do review ${REVIEW_ITEM}`, { exact: true }).fill('   ');
+  await expect(save).toBeDisabled();
+  expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).reviewXss)).toBeUndefined();
+  await expect(item.locator('script')).toHaveCount(0);
+  const checklist = page.getByRole('article', { name: `Mục review ${CHECKLIST_ITEM}`, exact: true });
+  const checklistSave = checklist.getByRole('button', { name: 'Lưu phiên bản review', exact: true });
+  await checklist.getByLabel(`Nhãn review ${CHECKLIST_ITEM}`, { exact: true }).selectOption('UNMET');
+  await checklist.getByLabel(`Lý do review ${CHECKLIST_ITEM}`, { exact: true }).fill('Reviewer inspected report despite no retrieved machine evidence.');
+  await expect(checklistSave).toBeDisabled();
+  await checklist.getByRole('checkbox', { name: /^REPORT/ }).check();
+  await expect(checklistSave).toBeEnabled();
+  await checklistSave.click();
+  await expect(checklist.getByText('Review đã lưu · phiên bản 1 · UNMET', { exact: true })).toBeVisible();
+  const writes = api.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/item-annotations'));
+  expect(writes).toHaveLength(1);
+  expect(writes[0].body).toEqual({ item_id: CHECKLIST_ITEM, label: 'UNMET', evidence_span_ids: [REPORT_SPAN],
+    rationale: 'Reviewer inspected report despite no retrieved machine evidence.' });
+});

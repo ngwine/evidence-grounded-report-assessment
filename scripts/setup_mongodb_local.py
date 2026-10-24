@@ -26,6 +26,7 @@ from services.backend.src.kltn_ai.db.migrations import MigrationError, apply_sch
 from services.backend.src.kltn_ai.db.application_schema import apply_schema_v2  # noqa: E402
 from services.backend.src.kltn_ai.db.document_schema import apply_schema_v3  # noqa: E402
 from services.backend.src.kltn_ai.db.analysis_schema import apply_schema_v4  # noqa: E402
+from services.backend.src.kltn_ai.db.annotation_schema import apply_schema_v5  # noqa: E402
 from services.backend.src.kltn_ai.db.roles import provision_roles  # noqa: E402
 
 
@@ -97,6 +98,7 @@ def setup(*, database_name: str, operator: str) -> None:
         apply_schema_v2(migrator[database_name], code_commit=commit, applied_by=operator)
         latest = apply_schema_v3(migrator[database_name], code_commit=commit, applied_by=operator)
         latest = apply_schema_v4(migrator[database_name], code_commit=commit, applied_by=operator)
+        latest = apply_schema_v5(migrator[database_name], code_commit=commit, applied_by=operator)
     print(f"Verified {outcome['migration_id']} through {latest['migration_id']} in {database_name}; validator/index read-back passed.")
     print("API/worker/migration URI files are private under ignored var/infra/mongodb; credentials not displayed.")
 

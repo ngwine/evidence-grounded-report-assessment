@@ -5,7 +5,8 @@ info:
   description: >-
     Review-candidate contract for the full target API. The authenticated local
     Mongo app implements auth/workspaces, rubrics, upload/PARSE, index generations,
-    version-locked analysis results/evidence/export and run-scoped lecturer reviews.
+    version-locked analysis results/evidence/export, run-scoped lecturer reviews
+    and versioned model-visible item annotations. Item annotations are not blinded gold.
     Legacy proposal/publication, graph and lifecycle endpoints remain intended
     behavior. The local two-pipeline demo is a separate API.
 servers:
@@ -1082,6 +1083,95 @@ paths:
                 $ref: '#/components/schemas/RunReview'
         '409':
           $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/annotation-items:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: listAnalysisAnnotationItems
+      summary: List pinned pair/checklist items and exact raw parser spans for model-visible review
+      description: Does not conceal model predictions or create independently annotated gold.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Items with the current actor's latest annotation and the run revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnotationItemPage'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/item-annotations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: listOwnItemAnnotations
+      summary: List the current actor's immutable item-review history
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Own annotation history, not independent blinded gold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemAnnotationPage'
+    post:
+      tags: [Review]
+      operationId: createItemAnnotation
+      summary: Append a human item annotation without modifying machine output
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemAnnotationRequest'
+      responses:
+        '201':
+          description: Annotation appended or an identical idempotent retry replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemAnnotation'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/item-annotations/export:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: exportOwnItemAnnotations
+      summary: Export private model-visible review history; not gold or official grades
+      responses:
+        '200':
+          description: JSON attachment with explicit predictions-visible and independent-gold flags
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [annotation_mode, predictions_visible, independent_gold, official_grade]
+                properties:
+                  annotation_mode:
+                    const: MODEL_VISIBLE_REVIEW
+                  predictions_visible:
+                    const: true
+                  independent_gold:
+                    const: false
+                  official_grade:
+                    const: false
   /workspaces/{workspace_id}/analysis-runs/{run_id}/evidence:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
@@ -2319,6 +2409,147 @@ components:
           $ref: '#/components/schemas/Revision'
         created_at:
           $ref: '#/components/schemas/Timestamp'
+    AnnotationSpan:
+      type: object
+      additionalProperties: false
+      required: [span_id, side, document_version_id, chunk_id, raw_start, raw_end, quote_text, locator]
+      properties:
+        span_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        side:
+          enum: [REPORT, SOURCE]
+        document_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        chunk_id:
+          type: string
+        raw_start:
+          type: integer
+          minimum: 0
+        raw_end:
+          type: integer
+          minimum: 1
+        quote_text:
+          type: string
+        locator:
+          type: object
+    ItemAnnotationRequest:
+      type: object
+      additionalProperties: false
+      required: [item_id, label, evidence_span_ids, rationale]
+      properties:
+        item_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        label:
+          enum: [VERBATIM, PARAPHRASE, SUMMARY, NONE, MET, UNMET, CANNOT_ASSESS, UNSURE]
+        evidence_span_ids:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[a-f0-9]{64}$'
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        quote_or_citation:
+          type: [string, 'null']
+          enum: ['YES', 'NO', UNSURE, null]
+    ItemAnnotation:
+      type: object
+      required: [id, item_id, pipeline, annotator_id, label, evidence_span_ids, rationale, quote_or_citation, annotation_revision, created_at, annotation_mode, run_revision]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        item_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        pipeline:
+          enum: [SIMILARITY, ASSESSMENT]
+        annotator_id:
+          $ref: '#/components/schemas/OpaqueId'
+        label:
+          type: string
+        evidence_span_ids:
+          type: array
+          items:
+            type: string
+        rationale:
+          type: string
+        quote_or_citation:
+          type: [string, 'null']
+        annotation_revision:
+          $ref: '#/components/schemas/Revision'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        annotation_mode:
+          const: MODEL_VISIBLE_REVIEW
+        run_revision:
+          $ref: '#/components/schemas/Revision'
+    AnnotationItem:
+      type: object
+      required: [item_id, pipeline, report_version_id, report_chunk_id, source_version_id, source_chunk_id, checklist_id, statement, report_text, source_text, span_options, latest_annotation]
+      properties:
+        item_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        pipeline:
+          enum: [SIMILARITY, ASSESSMENT]
+        report_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        report_chunk_id:
+          type: [string, 'null']
+        source_version_id:
+          type: [string, 'null']
+        source_chunk_id:
+          type: [string, 'null']
+        checklist_id:
+          type: [string, 'null']
+        statement:
+          type: [string, 'null']
+        report_text:
+          type: string
+        source_text:
+          type: [string, 'null']
+        span_options:
+          type: array
+          maxItems: 512
+          items:
+            $ref: '#/components/schemas/AnnotationSpan'
+        latest_annotation:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ItemAnnotation'
+    AnnotationItemPage:
+      type: object
+      required: [items, page, run_revision]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotationItem'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        run_revision:
+          $ref: '#/components/schemas/Revision'
+    ItemAnnotationPage:
+      type: object
+      required: [items, page, run_revision, annotation_mode, predictions_visible]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemAnnotation'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        run_revision:
+          $ref: '#/components/schemas/Revision'
+        annotation_mode:
+          const: MODEL_VISIBLE_REVIEW
+        predictions_visible:
+          const: true
     RunType:
       type: string
       enum: [SIMILARITY, ASSESSMENT, BOTH]
