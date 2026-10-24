@@ -14,6 +14,11 @@ analysis_runs/results/operations, evidence_items và reviews. Worker lưu AI
 outputs; API chỉ đọc và ghi review/command, không ghi analysis_results/evidence.
 Immutable payload và current scope được service kiểm, không chỉ dựa validator.
 
+[Item review](../../../../../docs/architecture/item-review-and-gold-evaluation.md)
+dùng migration005: `item_annotations` chỉ cho API find/insert, worker không có
+quyền đọc/ghi. Chỉnh nhãn tạo một bản ghi mới; kết quả máy giữ nguyên. Đây là
+model-visible review, không phải gold gán nhãn độc lập.
+
 `mongo_jobs.py` implements the `jobs` state transitions from ADR-001: unique
 idempotency key, atomic claim with a bounded lease, revision-guarded heartbeat
 and completion, finite retry, cancellation and the indexes used by those

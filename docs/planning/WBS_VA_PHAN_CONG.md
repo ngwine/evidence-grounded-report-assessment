@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.12 |
+| Phiên bản | 1.13 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật tiến độ/reforecast | 23/10/2026 |
 | Thời gian dự án | 08/08/2026–22/01/2027 (24 tuần) |
@@ -243,9 +243,9 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W6.4`, `W7.4` | TODO | 0% | PAN qrels mới cung cấp source positives; chưa phải bộ bốn nhãn/hard negatives của hệ thống | Tạo positive/negative, VERBATIM/PARAPHRASE/SUMMARY/NONE, citation và no-source cases có review |
 | `W6.6`, `W7.1–W7.3`, `W7.5–W7.6` | IN PROGRESS | 75% | DEV0 A1–A5/CE/error analysis đã tích hợp qua PR #13/#18; RRF mới sửa duplicate per-method và thêm configurable weights có regression | Review/merge RRF fix; product timeout/fallback; validation trên approved DEV1; không tune tiếp trên DEV0 |
 | `W8.1–W8.3` | IN PROGRESS | 75% | Similarity core nối authenticated Mongo ANALYZE, immutable result/evidence/manifest, versioned read/JSON export và review revision; token-union coverage vẫn dùng core đã test | Classifier semantic/gold evaluation, aggregation acceptance và review/merge |
-| `W8.4` | IN PROGRESS | 25% | Có guideline và blinded annotation workflow; chưa tự gán PARAPHRASE/SUMMARY | Hai người gán nhãn, adjudicate, train/calibrate/evaluate classifier |
+| `W8.4` | IN PROGRESS | 25% | Có guideline, blinded annotation workflow; thêm [item review và gold evaluation](../architecture/item-review-and-gold-evaluation.md) trên branch `feat/w8-w10-item-review-evaluation`, có HTTP/Mongo/browser và metric-formula tests; review nhìn predictions không được tính là gold | Review/merge phần mới; hai người gán nhãn độc lập, adjudicate và đo metric thật; train/calibrate classifier chưa có |
 | `W8.5` | IN PROGRESS | 50% | Synthetic quote/generic/no-source/hard-negative fixtures và regression có | Chốt citation policy và expected output qua review chéo |
-| `W8.6` | IN PROGRESS | 75% | Authenticated web có hai result views/evidence/export/review; real-browser→Mongo→workers E2E; file endpoint kiểm quyền/hash, PDF page link có locator | Geometric PDF highlight chưa có; UI/forbidden/error acceptance rộng hơn và review/merge; E2E không đo model quality |
+| `W8.6` | IN PROGRESS | 75% | Authenticated web có hai result views/evidence/export/review; item-level review/lịch sử/export và raw parser spans đã qua browser→Mongo E2E; model output giữ nguyên | Review/merge phần mới; geometric PDF highlight và UX acceptance rộng hơn; không coi model-visible review là blinded gold |
 | `W9.1` | IN PROGRESS | 75% | Mongo rubric lifecycle/RBAC và immutable publication có HTTP/live tests; published version/compiled hash đã khóa vào authenticated assessment run | Review/merge; domain acceptance trên rubric môn học thật |
 | `W9.2–W9.3` | IN PROGRESS | 75% | Compiler nối publication/persistence; compile/hash recheck chống tamper, lifecycle/rule/revision/rollback tests; fail closed unsupported levels | Review/merge; lỗi field UX và rubric thật; không coi custom levels đã hỗ trợ |
 | `W9.4–W9.5` | IN PROGRESS | 75% | Rubric domain/template, authored atomic checklist, LOCAL/GRAPH mode và decision rules đã có | Review trên rubric môn học thật được phép |
@@ -253,7 +253,7 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W10.1–W10.2` | IN PROGRESS | 75% | Assessment core nối Mongo ANALYZE, khóa report/rubric/source generations, lưu immutable result/evidence; current quyền, input/result/evidence tamper guards và JSON export | Semantic/cross-source verification chưa có; gold evaluation, domain acceptance và review/merge |
 | `W10.3` | IN PROGRESS | 75% | No-evidence/negation/conflict/provenance tests; thêm auth isolation, revocation before/during/after run, stale worker, transaction retry/rollback, model budget và browser Mongo E2E | Adversarial/model prompt-injection corpus và failure/load/restart acceptance rộng hơn |
 | `W10.4–W10.5` | IN PROGRESS | 75% | Checklist query→BM25/Dense/RRF/rerank và SUPPORTED/CONTRADICTED/INSUFFICIENT→MET/UNMET/CANNOT_ASSESS chạy | Gold validation, semantic NLI/contradiction study và review |
-| `W10.6` | IN PROGRESS | 50% | Private 26-case pack có một lượt nhãn; gold tool kiểm hai phiếu, agreement/kappa, final evidence và bất đồng cùng nhãn/khác span | Consent/PII/retention/checksum; Q gán độc lập, adjudicate, đối chiếu span và tính metric thật |
+| `W10.6` | IN PROGRESS | 50% | Gold workflow có agreement/kappa/adjudication; freeze/evaluation runner khóa approved pack + context + predictions, metric phân lớp/abstention/evidence và manifest; 54 runner tests kiểm công thức và fail-closed; chưa có metric trên gold thật | Review/merge runner; consent/PII/retention/checksum; Q/Y gán độc lập, adjudicate, khóa gold và chạy metric thật |
 | `W11.1–W11.2` | IN PROGRESS | 50% | [Evidence Graph contract/store](../../research/evidence_graph/README.md) có local SQLite version/index/rebuild/tombstone/scoped provenance query; parser→graph projection test có | Mongo/authenticated HTTP API/build-worker integration; scope parameter không phải user authorization |
 | `W11.3` | TODO | 0% | Chưa có graph-build worker | Queue/checkpoint/re-extraction và extraction pipeline |
 | `W11.4` | IN PROGRESS | 75% | Ontology v0 và versioned graph JSON contract có node/edge/source span/model/rule/confidence, relation endpoint validation | Y/Q review và khóa mapping với extraction thực tế |
@@ -883,6 +883,7 @@ hoặc hạn nộp 23/01/2027.
 | 1.10 | 23/10/2026 | Kiểm chứng CI đủ 5/5 trên code commit37c6277; pin Mongo8.0.34 digest và khai báo targetUbuntu22.04, không bypass kernel guard; sửa secret permission/config drift và audit503 retry fail-closed. Local343 pass/7 skip, sáu liveMongo + restart/reapply, Chromium đạt; giữ DoD chưa đủ ở PARTIAL và bàn giao PR#19 review |
 | 1.11 | 23/10/2026 | Bổ sung authenticated Mongo app trên branch feat/w3-mongo-auth-app: current RBAC/session, rubric lifecycle/UI, migrations002–003, upload/PARSE worker và exact provenance persistence. Kiểm tra thực tế phát hiện/sửa legacy source_refs PDF/DOCX sai BSON shape. Demo hai pipeline cũ vẫn riêng; INDEX/ANALYZE/result/review chưa nối app mới. Giữ review/merge, governance, gold và deployment gates mở |
 | 1.12 | 23/10/2026 | Nối INDEX/ANALYZE/result/evidence/review vào authenticated app, migration004 và source vector cache. Real Mongo/scoped runtime roles/transaction rollback, Chromium upload→hai pipeline→review/export/reload và cached E5/CE smoke đã chạy. Không đóng semantic classifier/verifier, graph extraction, backup/lifecycle hoặc gold/approval bằng integration tests |
+| 1.13 | 24/10/2026 | Bổ sung item-level human review append-only, raw parser span selection, history/export và migration005; thêm approved-gold freeze/evaluation runner. Có real Mongo role/rollback tests, Chromium item review/history/export/reload và 54 runner tests; tách model-visible review khỏi blinded independent gold. Không tự gán nhãn, phê duyệt dữ liệu hoặc đóng classifier/verifier/gold gates |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|

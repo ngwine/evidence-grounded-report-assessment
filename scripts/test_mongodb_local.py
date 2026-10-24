@@ -76,6 +76,8 @@ def main() -> int:
          "services/backend/tests/test_rubric_lifecycle.py",
          "services/backend/tests/test_mongo_document_flow.py",
          "services/backend/tests/test_mongo_analysis_flow.py",
+         "services/backend/tests/test_item_annotations.py",
+         "services/backend/tests/test_mongo_item_annotations_flow.py",
          "services/backend/tests/test_mongo_index_flow.py"],
         cwd=ROOT, env=environment, check=False,
     )

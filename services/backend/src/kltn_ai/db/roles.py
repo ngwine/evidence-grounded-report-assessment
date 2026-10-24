@@ -21,7 +21,7 @@ COLLECTIONS = frozenset({
     "evidence_items", "assessment_proposals", "reviews", "publications",
     "deletion_requests", "tombstones", "audit_events", "schema_migrations",
     "auth_credentials", "auth_sessions", "auth_throttles", "rubric_operations", "document_operations",
-    "index_heads", "index_operations", "analysis_results", "analysis_operations",
+    "index_heads", "index_operations", "analysis_results", "analysis_operations", "item_annotations",
 })
 API_WRITES = frozenset({
     "users", "workspaces", "memberships", "documents", "document_versions",
@@ -29,7 +29,7 @@ API_WRITES = frozenset({
     "rubrics", "rubric_versions", "jobs", "analysis_runs", "reviews", "publications",
     "deletion_requests", "tombstones",
     "auth_credentials", "auth_sessions", "auth_throttles", "rubric_operations", "document_operations",
-    "index_generations", "index_heads", "index_operations", "analysis_operations",
+    "index_generations", "index_heads", "index_operations", "analysis_operations", "item_annotations",
 })
 WORKER_WRITES = frozenset({
     "documents", "document_versions", "file_objects", "document_elements", "chunks",
@@ -58,8 +58,9 @@ def role_specifications(database_name: str) -> dict[str, list[dict[str, Any]]]:
             actions = ["find"] if name in reads else []
             if name in writes:
                 actions.extend(["insert", "update"])
-            if name == "audit_events":
-                # Append-only to both principals; neither may mutate or remove.
+            if name in {"audit_events", "item_annotations"}:
+                # Authorized principals may append but never mutate or remove.
+                # Workers have no item-annotation collection privileges.
                 actions = ["find", "insert"] if name in reads else ["insert"]
             privileges.append({"resource": {"db": database_name, "collection": name}, "actions": actions})
         return privileges

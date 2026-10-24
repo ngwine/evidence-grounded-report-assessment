@@ -28,6 +28,7 @@ from services.backend.src.kltn_ai.db.migrations import apply_schema_v1  # noqa: 
 from services.backend.src.kltn_ai.db.application_schema import apply_schema_v2  # noqa: E402
 from services.backend.src.kltn_ai.db.document_schema import apply_schema_v3  # noqa: E402
 from services.backend.src.kltn_ai.db.analysis_schema import apply_schema_v4  # noqa: E402
+from services.backend.src.kltn_ai.db.annotation_schema import apply_schema_v5  # noqa: E402
 from services.backend.src.kltn_ai.db.roles import provision_roles  # noqa: E402
 from services.backend.src.kltn_ai.domain.documents import _common  # noqa: E402
 from services.backend.src.kltn_ai.domain.rubrics import RubricService  # noqa: E402
@@ -60,6 +61,7 @@ def main():
             apply_schema_v2,
             apply_schema_v3,
             apply_schema_v4,
+            apply_schema_v5,
         ):
             migrate(db, code_commit="0" * 40, applied_by="synthetic-browser-fixture")
         now = datetime.now(UTC)

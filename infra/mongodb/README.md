@@ -9,7 +9,8 @@ Mongo cho auth/rubric/upload/PARSE và
 Demo hai pipeline cũ vẫn dùng local store.
 
 [Executable baseline](../../docs/architecture/mongodb-executable-baseline.md)
-có migrations 001–004 và ba database identities tách quyền.
+có migrations 001–005 và ba database identities tách quyền. Migration005 thêm
+item review append-only; worker không đọc/ghi review của con người.
 Sau khi commit source và dừng writer, chạy
 `.venv-research/bin/python scripts/setup_mongodb_local.py --operator ngwine`;
 không đưa URI/password private vào cấu hình public hoặc Git.

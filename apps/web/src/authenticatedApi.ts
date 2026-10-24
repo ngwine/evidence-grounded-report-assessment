@@ -59,6 +59,28 @@ export type AnalysisReview = {
   id: string; analysis_run_id: string; reviewer_id: string; decision: 'ACCEPT' | 'REJECT';
   reason_code: string; reason_text: string | null; based_on_revision: number; created_at: string;
 };
+export type ItemAnnotationLabel = 'VERBATIM' | 'PARAPHRASE' | 'SUMMARY' | 'NONE' | 'UNSURE' | 'MET' | 'UNMET' | 'CANNOT_ASSESS';
+export type ItemAnnotation = {
+  id: string; item_id: string; pipeline: 'SIMILARITY' | 'ASSESSMENT'; annotator_id: string;
+  label: ItemAnnotationLabel; evidence_span_ids: string[]; rationale: string;
+  quote_or_citation: 'YES' | 'NO' | 'UNSURE' | null; annotation_revision: number;
+  created_at: string; annotation_mode: 'MODEL_VISIBLE_REVIEW'; run_revision: number;
+};
+export type AnnotationSpan = {
+  span_id: string; side: 'REPORT' | 'SOURCE'; document_version_id: string; chunk_id: string;
+  raw_start: number; raw_end: number; quote_text: string; locator: Record<string, unknown>;
+};
+export type AnnotationItem = {
+  item_id: string; pipeline: ItemAnnotation['pipeline']; report_version_id: string;
+  report_chunk_id: string | null; source_version_id: string | null; source_chunk_id: string | null;
+  checklist_id: string | null; statement: string | null; report_text: string; source_text: string | null;
+  span_options: AnnotationSpan[]; latest_annotation: ItemAnnotation | null;
+};
+export type ItemAnnotationBody = {
+  item_id: string; label: ItemAnnotationLabel; evidence_span_ids: string[]; rationale: string;
+  quote_or_citation?: 'YES' | 'NO' | 'UNSURE';
+};
+export type AnnotationPage<T> = Page<T> & { run_revision: number };
 export class AuthenticatedApiError extends Error {
   constructor(public status: number, public code: string, public requestId: string | null, message: string) {
     super(message);
@@ -71,6 +93,7 @@ let bootstrapPending: Promise<Actor> | null = null;
 
 async function request<T>(path: string, options: {
   method?: string; body?: unknown; form?: FormData; revision?: number; operationKey?: string; csrfRefresh?: boolean;
+  signal?: AbortSignal;
 } = {}): Promise<T> {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = { Accept: 'application/json' };
@@ -80,7 +103,7 @@ async function request<T>(path: string, options: {
   if (options.operationKey) headers['Idempotency-Key'] = options.operationKey;
   if (options.csrfRefresh) headers['X-CSRF-Refresh'] = '1';
   const response = await fetch(prefix + path, {
-    method, headers, credentials: 'same-origin', cache: 'no-store',
+    method, headers, credentials: 'same-origin', cache: 'no-store', signal: options.signal,
     // The browser supplies the multipart boundary; never set it manually.
     body: options.form ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
   });
@@ -187,8 +210,8 @@ export const createAnalysisRun = async (workspaceId: string, reportId: string, b
   });
   return getAnalysisRun(workspaceId, operation.run_id);
 };
-export const getAnalysisRun = (workspaceId: string, runId: string) =>
-  request<AnalysisRun>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId));
+export const getAnalysisRun = (workspaceId: string, runId: string, signal?: AbortSignal) =>
+  request<AnalysisRun>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId), { signal });
 export const getAnalysisResults = (workspaceId: string, runId: string) =>
   request<AnalysisResults>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId) + '/results');
 export const getAnalysisEvidence = (workspaceId: string, runId: string, cursor?: string | null) =>
@@ -204,6 +227,18 @@ export const createAnalysisReview = (workspaceId: string, run: AnalysisRun, body
 }) => request<AnalysisReview>(scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(run.id) + '/reviews', {
   method: 'POST', body, revision: run.revision,
 });
+const annotationScope = (workspaceId: string, runId: string) =>
+  scope(workspaceId) + '/analysis-runs/' + encodeURIComponent(runId);
+export const listAnnotationItems = (workspaceId: string, runId: string, cursor?: string | null, signal?: AbortSignal) =>
+  request<AnnotationPage<AnnotationItem>>(annotationScope(workspaceId, runId) + '/annotation-items' + pageQuery(cursor), { signal });
+export const listItemAnnotations = (workspaceId: string, runId: string, cursor?: string | null, signal?: AbortSignal) =>
+  request<AnnotationPage<ItemAnnotation>>(annotationScope(workspaceId, runId) + '/item-annotations' + pageQuery(cursor), { signal });
+export const createItemAnnotation = (workspaceId: string, runId: string, body: ItemAnnotationBody, revision: number, key: string, signal?: AbortSignal) =>
+  request<ItemAnnotation>(annotationScope(workspaceId, runId) + '/item-annotations', {
+    method: 'POST', body, revision, operationKey: key, signal,
+  });
+export const exportItemAnnotations = (workspaceId: string, runId: string, signal?: AbortSignal) =>
+  request<Record<string, unknown>>(annotationScope(workspaceId, runId) + '/item-annotations/export', { signal });
 export const documentFileUrl = (workspaceId: string, versionId: string, pageIndex?: number | null): string =>
   prefix + scope(workspaceId) + '/document-versions/' + encodeURIComponent(versionId) + '/file'
   + (typeof pageIndex === 'number' && Number.isInteger(pageIndex) && pageIndex >= 0 ? `#page=${pageIndex + 1}` : '');

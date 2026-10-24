@@ -57,7 +57,8 @@ Report version + explicit source versions + published rubric version + config
 ## Chạy
 
 Commit source migration trước, dừng writers rồi bootstrap như hướng dẫn auth.
-Bootstrap hiện apply migrations 001–004. Không đổi checksum migration 001–003.
+Bootstrap hiện apply migrations 001–005, gồm [item-level review](./item-review-and-gold-evaluation.md).
+Không đổi checksum migrations 001–004.
 
 ```bash
 .venv-research/bin/python scripts/setup_mongodb_local.py --operator ngwine
