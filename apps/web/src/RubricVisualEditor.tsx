@@ -4,6 +4,20 @@ import './rubric-editor.css';
 
 type JsonObject = Record<string, unknown>;
 
+/** Blank form fields, not a pre-authored academic rubric or inferred requirements. */
+export function blankRubricDefinition() {
+  return {
+    max_score: 10,
+    criteria: [{
+      criterion_key: 'C1', title: '', weight: 10, scoring_mode: 'PROPORTIONAL_CHECKLIST_V0',
+      checklists: [{
+        checklist_key: 'C1.1', statement: '', evidence_mode: 'LOCAL', importance: 'REQUIRED',
+        requirements: [{ requirement_id: 'R1', any_of: [''] }],
+      }],
+    }],
+  };
+}
+
 export type RubricVisualEditorProps = {
   value: string;
   onChange: (value: string) => void;
@@ -61,6 +75,16 @@ export function RubricVisualEditor({ value, onChange, disabled, readOnly }: Rubr
   const maxScore = typeof definition?.max_score === 'number' ? definition.max_score : 0;
   const weightsMatch = Math.abs(totalWeight - maxScore) < 0.000001;
   const locked = disabled || readOnly;
+  const incompleteCriteria = criteria.filter((criterion) => !isObject(criterion)
+    || !text(criterion.title).trim() || !text(criterion.criterion_key).trim()
+    || typeof criterion.weight !== 'number' || criterion.weight <= 0 || list(criterion.checklists).length === 0).length;
+  const incompleteChecklists = allChecklists.filter((checklist) => !isObject(checklist)
+    || !text(checklist.statement).trim() || !text(checklist.checklist_key).trim()
+    || list(checklist.requirements).length < (checklist.evidence_mode === 'GRAPH' ? 2 : 1)
+    || list(checklist.contradiction_patterns).some((pattern) => !text(pattern).trim())).length;
+  const incompleteRequirements = allRequirements.filter((requirement) => !isObject(requirement)
+    || !text(requirement.requirement_id).trim() || list(requirement.any_of).length === 0
+    || list(requirement.any_of).some((alternative) => !text(alternative).trim())).length;
 
   function updateDefinition(patch: JsonObject) {
     if (definition === null || locked) return;
@@ -125,7 +149,30 @@ export function RubricVisualEditor({ value, onChange, disabled, readOnly }: Rubr
       <div><span className="rubric-eyebrow">Cấu trúc rubric</span><h3 id={`${editorId}-heading`}>Tiêu chí & bằng chứng</h3></div>
       <span className="rubric-scoring-pill">Tỷ lệ checklist · v0</span>
     </div>
-    <p className="rubric-intro">Mỗi tiêu chí gồm các phát biểu cần kiểm chứng và yêu cầu bằng chứng cụ thể.</p>
+    <p className="rubric-intro">Nhập tiêu chí, điểm và từng điều cần kiểm tra trong report. Không cần viết JSON.</p>
+    {!readOnly && <div className="rubric-authoring-guide" aria-label="Cách nhập rubric">
+      <ol>
+        <li><strong>Tiêu chí</strong><span>Phần cần chấm và số điểm, ví dụ “Phương pháp · 4 điểm”.</span></li>
+        <li><strong>Checklist</strong><span>Một phát biểu cụ thể, ví dụ “Báo cáo nêu metric đánh giá”.</span></li>
+        <li><strong>Bằng chứng</strong><span>Cụm từ chấp nhận trong report, ví dụ “macro F1” hoặc “F1-score”.</span></li>
+      </ol>
+      <p>Ví dụ chỉ để hướng dẫn; hệ thống không tự điền yêu cầu hay chọn cụm từ thay bạn.</p>
+    </div>}
+    <details className="rubric-baseline-note">
+      <summary>Cách hệ thống kiểm tra rubric ở phiên bản hiện tại</summary>
+      <p>Baseline tìm bằng chứng trong chính report bằng các cụm từ bạn khai báo, có kiểm tra dấu hiệu phủ định và cụm mâu thuẫn đã soạn. Nó chưa tự hiểu rubric viết tự do, chưa xác minh ý nghĩa bằng mô hình suy luận và chưa đối chiếu tính đúng sai với source bên ngoài.</p>
+      <p>Mọi yêu cầu trong một checklist đều cần bằng chứng; các cách diễn đạt trong cùng yêu cầu được nối bằng “hoặc”. Thiếu bằng chứng có thể trả CANNOT_ASSESS, không tự xem là UNMET. Giảng viên vẫn cần review kết quả.</p>
+      <p>LOCAL kiểm tra một vùng nội dung; GRAPH hỗ trợ tập hợp nhiều vùng bằng evidence graph cấu trúc, không đồng nghĩa với suy luận quan hệ ngữ nghĩa tự động.</p>
+    </details>
+    {!readOnly && (criteria.length === 0 || incompleteCriteria + incompleteChecklists + incompleteRequirements > 0 || !weightsMatch || maxScore <= 0) &&
+      <div className="rubric-validation-summary" role="status">
+        <strong>Điền các mục còn thiếu trước khi lưu</strong>
+        <p>{criteria.length === 0 ? 'Thêm ít nhất một tiêu chí. ' : ''}
+          {incompleteCriteria > 0 ? `${incompleteCriteria} tiêu chí chưa đủ tên, mã, điểm hoặc checklist. ` : ''}
+          {incompleteChecklists > 0 ? `${incompleteChecklists} checklist chưa đủ phát biểu, yêu cầu hoặc còn cụm không đáp ứng để trống. ` : ''}
+          {incompleteRequirements > 0 ? `${incompleteRequirements} yêu cầu chưa có cụm từ đầy đủ. ` : ''}
+          {!weightsMatch || maxScore <= 0 ? 'Tổng trọng số phải bằng điểm tối đa và mọi mức điểm phải lớn hơn 0.' : ''}</p>
+      </div>}
 
     <div className="rubric-score-overview">
       {readOnly ? <div className="rubric-score-readonly"><span>Điểm tối đa</span><strong>{maxScore}<small>điểm</small></strong></div>
@@ -189,9 +236,12 @@ export function RubricVisualEditor({ value, onChange, disabled, readOnly }: Rubr
               {checklists.map((checklist, checklistIndex) => {
                 if (!isObject(checklist)) return <p className="rubric-warning" key={checklistIndex}>Checklist {checklistIndex + 1} có cấu trúc chưa được hỗ trợ. Xem JSON nâng cao để kiểm tra.</p>;
                 const requirements = list(checklist.requirements);
+                const contradictions = list(checklist.contradiction_patterns);
                 const unsupportedChecklist = !Array.isArray(checklist.requirements)
                   || typeof checklist.statement !== 'string' || typeof checklist.checklist_key !== 'string'
                   || !['LOCAL', 'GRAPH'].includes(text(checklist.evidence_mode))
+                  || (checklist.contradiction_patterns !== undefined && (!Array.isArray(checklist.contradiction_patterns)
+                    || !contradictions.every((pattern) => typeof pattern === 'string')))
                   || (checklist.importance !== undefined && !['CORE', 'REQUIRED', 'OPTIONAL'].includes(text(checklist.importance)));
                 const checklistReadOnly = criterionReadOnly || unsupportedChecklist;
                 const checklistLabel = `${criterionIndex + 1}.${checklistIndex + 1}`;
@@ -225,7 +275,7 @@ export function RubricVisualEditor({ value, onChange, disabled, readOnly }: Rubr
                   {!checklistReadOnly && !text(checklist.checklist_key).trim() && <p className="rubric-inline-warning">Mã checklist không được để trống.</p>}
                   <div className="rubric-requirements">
                     <div className="rubric-requirements-heading"><h6>Yêu cầu bằng chứng</h6><span>{requirements.length} yêu cầu</span></div>
-                    <p className="rubric-help">Mỗi yêu cầu là một phần bằng chứng cần tìm. Các cách diễn đạt thay thế trong cùng yêu cầu được nối bằng “hoặc”.</p>
+                    <p className="rubric-help">Mỗi yêu cầu là một ý bắt buộc cần bằng chứng. Nhập cụm từ thực sự có thể xuất hiện trong report, cùng ngôn ngữ với report; không chỉ nhập lại tên tiêu chí. Mỗi yêu cầu khớp ít nhất một cách diễn đạt.</p>
                     {requirements.length === 0 && <p className="rubric-inline-warning">Cần ít nhất {checklist.evidence_mode === 'GRAPH' ? 'hai yêu cầu cho GRAPH' : 'một yêu cầu bằng chứng'}. Bạn cần tự nhập nội dung và cách diễn đạt cần tìm.</p>}
                     {checklist.evidence_mode === 'GRAPH' && requirements.length === 1 && <p className="rubric-inline-warning">GRAPH cần ít nhất hai yêu cầu bằng chứng được soạn rõ ràng.</p>}
                     {requirements.map((requirement, requirementIndex) => {
@@ -252,7 +302,7 @@ export function RubricVisualEditor({ value, onChange, disabled, readOnly }: Rubr
                               <label className="rubric-field"><span>Mã yêu cầu</span><input type="text" value={text(requirement.requirement_id)} disabled={disabled} maxLength={128}
                                 onChange={(event) => updateRequirement(criterionIndex, checklistIndex, requirementIndex, { requirement_id: event.target.value })} /></label>
                             </div>
-                            <span className="rubric-alternatives-label">Cách diễn đạt cần tìm <small>Khớp ít nhất một cách diễn đạt</small></span>
+                            <span className="rubric-alternatives-label">Cách diễn đạt cần tìm <small>Cụm từ được tìm trong nội dung; không phải câu lệnh cho AI</small></span>
                             {alternatives.map((alternative, alternativeIndex) => <div className="rubric-alternative-row" key={alternativeIndex}>
                               <span aria-hidden="true">{alternativeIndex === 0 ? 'Tìm' : 'hoặc'}</span>
                               <input type="text" aria-label={`Cách diễn đạt ${alternativeIndex + 1} của yêu cầu ${requirementLabel}`} value={text(alternative)} disabled={disabled} maxLength={10000}
@@ -277,21 +327,48 @@ export function RubricVisualEditor({ value, onChange, disabled, readOnly }: Rubr
                         requirement_id: nextKey('R', allRequirements, 'requirement_id'), any_of: [''],
                       }] })}><PlusIcon /> Thêm yêu cầu bằng chứng</button>}
                   </div>
+                  <details className="rubric-contradictions">
+                    <summary>Cụm từ thể hiện không đáp ứng <small>Không bắt buộc · {contradictions.length} cụm</small></summary>
+                    <p className="rubric-help">Chỉ khai báo khi cụm từ thể hiện rõ điều ngược lại với checklist. Ví dụ checklist yêu cầu thực nghiệm đã thực hiện, còn report ghi “chưa thực hiện thực nghiệm”. Đây là quy tắc do người soạn nhập, không phải hệ thống tự suy ra mâu thuẫn.</p>
+                    {checklistReadOnly ? <ul className="rubric-alternative-list">
+                      {contradictions.map((pattern, index) => <li key={index}>{display(pattern)}</li>)}
+                    </ul> : <>
+                      {contradictions.map((pattern, patternIndex) => <div className="rubric-alternative-row" key={patternIndex}>
+                        <input aria-label={`Cụm không đáp ứng ${patternIndex + 1} của checklist ${checklistLabel}`} type="text" value={text(pattern)} disabled={disabled} maxLength={10000}
+                          placeholder="Nhập cụm từ thể hiện rõ điều không đáp ứng"
+                          onChange={(event) => updateChecklist(criterionIndex, checklistIndex, {
+                            contradiction_patterns: contradictions.map((item, index) => index === patternIndex ? event.target.value : item),
+                          })} />
+                        <RemoveButton label={`Xóa cụm không đáp ứng ${patternIndex + 1} của checklist ${checklistLabel}`} disabled={disabled}
+                          onClick={() => updateChecklist(criterionIndex, checklistIndex, { contradiction_patterns: contradictions.filter((_, index) => index !== patternIndex) })} />
+                      </div>)}
+                      <button type="button" className="rubric-text-button" disabled={disabled}
+                        onClick={() => updateChecklist(criterionIndex, checklistIndex, { contradiction_patterns: [...contradictions, ''] })}><PlusIcon /> Thêm cụm không đáp ứng</button>
+                    </>}
+                    {contradictions.some((pattern) => typeof pattern === 'string' && !pattern.trim()) &&
+                      <p className="rubric-inline-warning">Điền cụm không đáp ứng còn trống hoặc xóa dòng đó trước khi lưu.</p>}
+                  </details>
                 </section>;
               })}
             </div>
             {!criterionReadOnly && <button type="button" className="rubric-add-checklist" disabled={disabled} onClick={() => updateCriterion(criterionIndex, {
               checklists: [...checklists, { checklist_key: nextKey(`${text(criterion.criterion_key) || 'C'}.`, allChecklists, 'checklist_key'),
-                statement: '', evidence_mode: 'LOCAL', importance: 'REQUIRED', requirements: [] }],
+                statement: '', evidence_mode: 'LOCAL', importance: 'REQUIRED',
+                requirements: [{ requirement_id: nextKey('R', allRequirements, 'requirement_id'), any_of: [''] }] }],
             })}><PlusIcon /> Thêm checklist kiểm chứng</button>}
           </div>
         </article>;
       })}
     </div>
     {criteria.length === 0 && <div className="rubric-empty-state"><strong>Rubric chưa có tiêu chí</strong><p>Thêm tiêu chí đầu tiên, phân bổ điểm và mô tả bằng chứng cần kiểm chứng.</p></div>}
-    {!readOnly && <button type="button" className="rubric-add-criterion" disabled={disabled} onClick={() => updateDefinition({ criteria: [...criteria, {
-      criterion_key: nextKey('C', criteria, 'criterion_key'), title: '', weight: 1, scoring_mode: SCORING_MODE, checklists: [],
-    }] })}><PlusIcon /> Thêm tiêu chí đánh giá</button>}
+    {!readOnly && <button type="button" className="rubric-add-criterion" disabled={disabled} onClick={() => {
+      const key = nextKey('C', criteria, 'criterion_key');
+      updateDefinition({ criteria: [...criteria, {
+        criterion_key: key, title: '', weight: Math.max(maxScore - totalWeight, 1), scoring_mode: SCORING_MODE,
+        checklists: [{ checklist_key: `${key}.1`, statement: '', evidence_mode: 'LOCAL', importance: 'REQUIRED',
+          requirements: [{ requirement_id: nextKey('R', allRequirements, 'requirement_id'), any_of: [''] }] }],
+      }] });
+    }}><PlusIcon /> Thêm tiêu chí đánh giá</button>}
     <p className="rubric-scoring-note">Điểm tiêu chí được tính theo tỷ lệ checklist đáp ứng, trong giới hạn trọng số đã phân bổ. Hệ thống không suy diễn yêu cầu bằng chứng từ tên tiêu chí.</p>
     {advancedJson}
   </section>;

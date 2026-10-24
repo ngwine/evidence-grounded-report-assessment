@@ -4,7 +4,7 @@ import {
   AuthenticatedApiError, createAnalysisRun, createIndexGeneration, exportAnalysisRun,
   getAnalysisEvidence, getAnalysisResults, getAnalysisRun, getDocumentVersion, getIndexGeneration,
   getJob, listDocuments, listDocumentVersions, listRubrics, listRubricVersions, operationKey, uploadDocument,
-  createAnalysisReview, listAnalysisRuns, listUploadAuthorizations, documentFileUrl,
+  createAnalysisReview, listAnalysisRuns, listUploadAuthorizations, createUploadDeclaration, documentFileUrl,
 } from './authenticatedApi';
 import type {
   Actor, AnalysisConfigId, AnalysisResults, AnalysisRun, DocumentKind, DocumentRecord,
@@ -24,6 +24,9 @@ type Props = { actor: Actor; workspaceId: string; rubricRefreshKey: string; onAu
 function errorText(error: unknown): string {
   if (!(error instanceof AuthenticatedApiError)) return 'Chưa kết nối được API. Không có xác nhận lưu thành công; có thể thử lại.';
   if (error.status === 401) return 'Phiên đã hết hạn. Đăng nhập lại để tiếp tục.';
+  if (error.code === 'DECLARATION_SCOPE_NOT_ALLOWED') return 'Khai báo tự tạo chỉ dùng trong workspace demo/kiểm thử nội bộ. Với workspace này, hãy chọn hồ sơ quyền đã được duyệt.';
+  if (error.code === 'INVALID_DECLARATION') return 'Chưa ghi nhận được xác nhận cho file này. Chọn lại file rồi thử tải lên.';
+  if (error.code === 'DECLARATION_FILE_MISMATCH') return 'File hoặc phạm vi không khớp khai báo đã ghi nhận. Chọn lại file và khai báo cho đúng tài liệu trước khi thử lại.';
   if (error.status === 403) return error.code === 'CSRF_INVALID'
     ? 'Phiên bảo vệ đã thay đổi. Tải lại trang trước khi tiếp tục.' : 'Quyền thực hiện thao tác này không còn hiệu lực.';
   if (error.status === 404) return 'Không tìm thấy tài nguyên hoặc quyền truy cập đã thay đổi.';
@@ -65,9 +68,11 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
   const [documentKey, setDocumentKey] = useState('');
   const [title, setTitle] = useState('');
   const [governanceId, setGovernanceId] = useState('');
+  const [authorizationMode, setAuthorizationMode] = useState<'SELF_AUTHORED' | 'PREAPPROVED'>('SELF_AUTHORED');
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const uploadRetry = useRef<{ signature: string; file: File; key: string } | null>(null);
+  const declarationRetry = useRef<{ signature: string; file: File; key: string } | null>(null);
   const indexKeys = useRef(new Map<string, string>());
   const runKey = useRef<{ signature: string; key: string } | null>(null);
   const [parseOperations, setParseOperations] = useState<ParseOperation[]>([]);
@@ -236,23 +241,61 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
     if (!/\.(pdf|docx|txt|md)$/i.test(file.name)) { setError('Chỉ nhận PDF, DOCX, TXT hoặc Markdown.'); return; }
     const existing = (uploadKind === 'REPORT' ? reports : sources)?.items.find((item) => item.id === uploadExistingId);
     if (uploadExistingId && !existing) { setError('Tải lại danh sách tài liệu trước khi tạo version.'); return; }
-    const form = new FormData();
-    form.set('file', file); form.set('governance_record_id', governanceId.trim());
-    if (!existing) { form.set('document_key', documentKey.trim()); form.set('title', title.trim()); }
-    const signature = JSON.stringify([workspaceId, uploadKind, existing?.id, existing?.revision, governanceId.trim(), documentKey.trim(), title.trim()]);
-    // Retain the key only for this exact in-memory File and request. A network retry
-    // replays the operation; a different file never shares an idempotency key.
-    if (uploadRetry.current?.signature !== signature || uploadRetry.current.file !== file) uploadRetry.current = { signature, file, key: operationKey() };
+    if (authorizationMode === 'PREAPPROVED' && !governanceId.trim()) { setError('Chọn hồ sơ quyền sử dụng trước khi tải lên.'); return; }
+    if (authorizationMode === 'SELF_AUTHORED' && !crypto.subtle) { setError('Trình duyệt chưa hỗ trợ kiểm tra SHA-256. Mở ứng dụng bằng localhost hoặc HTTPS rồi thử lại.'); return; }
+    const chosenFile = file;
     setBusy(true); setError(null); setNotice(null); setRequestId(null);
     try {
+      let resolvedGovernanceId = governanceId.trim();
+      if (authorizationMode === 'SELF_AUTHORED') {
+        setNotice('Đang chuẩn bị tài liệu…');
+        // File objects are immutable: the bytes hashed here are the same File
+        // passed to upload below. The API checks this digest again server-side.
+        const digest = await crypto.subtle.digest('SHA-256', await chosenFile.arrayBuffer());
+        if (!active.current) return;
+        const contentSha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+        // Clicking Upload confirms the notice beside the button for this file.
+        const declaration = {
+          kind: uploadKind, filename: chosenFile.name, content_sha256: contentSha256,
+          rights_basis: 'SELF_AUTHORED' as const, attested_authority: true as const,
+          pii_reviewed: true as const, internal_use_only: true as const,
+          ...(existing ? { document_id: existing.id } : {}),
+        };
+        const declarationSignature = JSON.stringify([workspaceId, declaration]);
+        if (declarationRetry.current?.signature !== declarationSignature || declarationRetry.current.file !== chosenFile) {
+          declarationRetry.current = { signature: declarationSignature, file: chosenFile, key: operationKey() };
+        }
+        const authorization = await createUploadDeclaration(workspaceId, declaration, declarationRetry.current.key);
+        if (!active.current) return;
+        resolvedGovernanceId = authorization.id;
+      }
+      const form = new FormData();
+      form.set('file', chosenFile); form.set('governance_record_id', resolvedGovernanceId);
+      if (!existing) { form.set('document_key', documentKey.trim()); form.set('title', title.trim()); }
+      const signature = JSON.stringify([workspaceId, uploadKind, existing?.id, existing?.revision, resolvedGovernanceId, documentKey.trim(), title.trim()]);
+      // A retry reuses the exact request key; changing its file/scope never does.
+      if (uploadRetry.current?.signature !== signature || uploadRetry.current.file !== chosenFile) uploadRetry.current = { signature, file: chosenFile, key: operationKey() };
       const value = await uploadDocument(workspaceId, uploadKind, form, uploadRetry.current.key, existing);
       if (!active.current) return;
+      // A freshly uploaded report is the next analysis input, not a stale
+      // version selected before the upload. Saved runs remain immutable.
+      if (uploadKind === 'REPORT') {
+        setSelectedReportId(value.document_id); setReportVersionId(value.document_version_id);
+      } else {
+        setSourceVersions((current) => current[value.document_id]
+          ? { ...current, [value.document_id]: value.document_version_id } : current);
+      }
       setParseOperations((current) => [{ uploadId: value.job_id, versionId: value.document_version_id, job: null }, ...current.filter((item) => item.uploadId !== value.job_id)].slice(0, 20));
       setNotice('Đã nhận tài liệu. Hệ thống đang đọc nội dung và chuẩn bị các đoạn văn.');
-      uploadRetry.current = null; setFile(null); if (fileInput.current) fileInput.current.value = '';
+      uploadRetry.current = null; resetDeclaration(); setFile(null); if (fileInput.current) fileInput.current.value = '';
+      if (!existing) { setTitle(''); setDocumentKey(''); }
       await refreshDocuments();
-    } catch (cause) { fail(cause); }
+    } catch (cause) { if (active.current) setNotice(null); fail(cause); }
     finally { if (active.current) setBusy(false); }
+  }
+
+  function resetDeclaration() {
+    declarationRetry.current = null;
   }
 
   async function index(version: DocumentVersion) {
@@ -394,22 +437,25 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
     </div>
     {(canUploadReport || canUploadSource) && <section className="panel auth-upload-panel" hidden={view !== 'documents'}>
       <h3>Thêm tài liệu</h3>
-      <p className="section-intro">PDF, DOCX, TXT hoặc Markdown. Chọn hồ sơ quyền sử dụng đã được cấp cho tài liệu trước khi tải lên.</p>
+      <p className="section-intro">Tải báo cáo và nguồn đối chứng lên để phân tích.</p>
       <form onSubmit={submitUpload} className="auth-form-grid">
-        <div><label className="field-label" htmlFor="document-kind">Loại tài liệu</label><select id="document-kind" value={uploadKind} disabled={busy} onChange={(event) => { setUploadKind(event.target.value as DocumentKind); setUploadExistingId(''); }}>
+        <div><label className="field-label" htmlFor="document-kind">Loại tài liệu</label><select id="document-kind" value={uploadKind} disabled={busy} onChange={(event) => { setUploadKind(event.target.value as DocumentKind); setUploadExistingId(''); resetDeclaration(); }}>
           {canUploadReport && <option value="REPORT">Báo cáo sinh viên</option>}{canUploadSource && <option value="CORPUS_SOURCE">Nguồn đối chứng</option>}
         </select></div>
-        <div><label className="field-label" htmlFor="document-existing">Tạo mới hay thêm version</label><select id="document-existing" value={uploadExistingId} disabled={busy} onChange={(event) => setUploadExistingId(event.target.value)}>
+        <div><label className="field-label" htmlFor="document-existing">Tạo mới hay thêm version</label><select id="document-existing" value={uploadExistingId} disabled={busy} onChange={(event) => { setUploadExistingId(event.target.value); resetDeclaration(); }}>
           <option value="">Tài liệu mới</option>{availableUploads.map((item) => <option key={item.id} value={item.id}>Version mới của {item.document_key}</option>)}
         </select></div>
         {!uploadExistingId && <><details className="technical-details"><summary>Mã tài liệu tự tạo · có thể chỉnh</summary><label className="field-label" htmlFor="document-key">Mã tài liệu</label><input id="document-key" required pattern="[A-Za-z0-9][A-Za-z0-9_.:\-]*" maxLength={128} value={documentKey} disabled={busy} onChange={(event) => setDocumentKey(event.target.value)} /></details>
           <div><label className="field-label" htmlFor="document-title">Tên tài liệu</label><input id="document-title" required maxLength={256} value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} /></div></>}
-        <div><label className="field-label" htmlFor="upload-authorization">Quyền sử dụng tài liệu</label><select id="upload-authorization" value={governanceId} disabled={busy || authorizations === null} onChange={(event) => setGovernanceId(event.target.value)}><option value="">{authorizations === null ? 'Đang tải hồ sơ quyền…' : 'Chọn hồ sơ đã được duyệt'}</option>{authorizations?.items.map((item, i) => <option key={item.id} value={item.id}>Hồ sơ {i + 1} · {item.name}</option>)}{governanceId && !authorizations?.items.some((item) => item.id === governanceId) && <option value={governanceId}>Hồ sơ được nhập thủ công</option>}</select>
+        <div><label className="field-label" htmlFor="upload-rights-mode">Cách xác nhận quyền sử dụng</label><select id="upload-rights-mode" value={authorizationMode} disabled={busy} onChange={(event) => { setAuthorizationMode(event.target.value as typeof authorizationMode); resetDeclaration(); }}><option value="SELF_AUTHORED">Khai báo tài liệu của tôi/nhóm</option><option value="PREAPPROVED">Dùng hồ sơ quyền đã có</option></select></div>
+        <div className="upload-file-area"><label className="field-label" htmlFor="document-file">File tài liệu</label><input ref={fileInput} id="document-file" type="file" required accept=".pdf,.docx,.txt,.md" disabled={busy} onChange={(event) => { const chosen = event.target.files?.[0] ?? null; setFile(chosen); resetDeclaration(); if (chosen && !uploadExistingId) { setDocumentKey(`doc-${crypto.randomUUID().slice(0, 12)}`); setTitle((current) => current || chosen.name.replace(/\.[^.]+$/, '')); } }} /><small className="field-help">PDF, DOCX, TXT hoặc Markdown · Tối đa 20 MB. Tài liệu được xử lý trên máy local.</small></div>
+        {authorizationMode === 'PREAPPROVED' && <div className="auth-form-full"><label className="field-label" htmlFor="upload-authorization">Quyền sử dụng tài liệu</label><select id="upload-authorization" value={governanceId} disabled={busy || authorizations === null} onChange={(event) => setGovernanceId(event.target.value)}><option value="">{authorizations === null ? 'Đang tải hồ sơ quyền…' : 'Chọn hồ sơ đã được duyệt'}</option>{authorizations?.items.map((item, i) => <option key={item.id} value={item.id}>Hồ sơ {i + 1} · {item.name}</option>)}{governanceId && !authorizations?.items.some((item) => item.id === governanceId) && <option value={governanceId}>Hồ sơ được nhập thủ công</option>}</select>
           {authorizations?.items.length === 0 && <p className="field-help">Chưa có hồ sơ cho tài liệu mới. Người phụ trách cần xác nhận quyền sử dụng; ứng dụng không tự cấp quyền.</p>}
           {authorizations?.page.has_more && <button type="button" className="subtle-button" onClick={async () => { try { const page = await listUploadAuthorizations(workspaceId, uploadKind, authorizations.page.next_cursor); if (active.current) setAuthorizations({ ...page, items: [...authorizations.items, ...page.items] }); } catch (cause) { fail(cause); } }}>Tải thêm hồ sơ quyền</button>}
-          <details className="technical-details"><summary>Nhập mã hồ sơ được cấp riêng</summary><label className="field-label" htmlFor="document-governance">Governance record ID đã duyệt</label><input id="document-governance" pattern="[0-9a-fA-F]{24}" maxLength={24} value={governanceId} disabled={busy} onChange={(event) => setGovernanceId(event.target.value)} /></details></div>
-        <div className="upload-file-area"><label className="field-label" htmlFor="document-file">File tài liệu</label><input ref={fileInput} id="document-file" type="file" required accept=".pdf,.docx,.txt,.md" disabled={busy} onChange={(event) => { const chosen = event.target.files?.[0] ?? null; setFile(chosen); if (chosen && !uploadExistingId) { setDocumentKey(`doc-${crypto.randomUUID().slice(0, 12)}`); setTitle((current) => current || chosen.name.replace(/\.[^.]+$/, '')); } }} /><small className="field-help">Tối đa 20 MB. Tài liệu được xử lý trên máy local.</small></div>
-        <div className="auth-form-full"><button className="primary-button" disabled={busy || !governanceId}>{busy ? 'Đang tải lên…' : 'Tải lên và xử lý tài liệu'}</button></div>
+          <details className="technical-details"><summary>Nhập mã hồ sơ được cấp riêng</summary><label className="field-label" htmlFor="document-governance">Governance record ID đã duyệt</label><input id="document-governance" pattern="[0-9a-fA-F]{24}" maxLength={24} value={governanceId} disabled={busy} onChange={(event) => setGovernanceId(event.target.value)} /></details></div>}
+        <div className="auth-form-full upload-actions"><button className="primary-button" disabled={busy || !file || (authorizationMode === 'PREAPPROVED' && !governanceId)}>{busy ? 'Đang tải lên…' : 'Tải lên và xử lý tài liệu'}</button>
+          {authorizationMode === 'SELF_AUTHORED' && <p className="upload-consent-note">Khi tải lên, bạn xác nhận có quyền dùng file, đã rà thông tin cá nhân và chỉ sử dụng nội bộ.</p>}
+        </div>
       </form>
       {parseOperations.length > 0 && <ul className="auth-job-list">{parseOperations.map((item) => <li key={item.uploadId}><strong>PARSE {item.job?.state ?? 'QUEUED'}</strong> · version <code>{item.versionId}</code>{item.job && <small>Attempt {item.job.attempt}/{item.job.max_attempts} · {item.job.progress.step}{item.job.error_code ? ` · ${item.job.error_code}` : ''}</small>}</li>)}</ul>}
     </section>}

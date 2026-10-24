@@ -24,18 +24,76 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /workspaces/{workspace_id}/upload-declarations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [Reports, Sources]
+      operationId: declareUploadAuthorConsent
+      summary: Declare limited author consent for an exact private upload
+      description: >-
+        Requires current workspace access and report.upload or source.upload for
+        the declared kind. This is the uploader's consent for their own or
+        co-authored work, not independent DATA_APPROVER approval. All three
+        attestations must be explicitly true. Only workspaces whose default
+        purpose is LOCAL_DEMO or INTERNAL_TEST accept this declaration. It permits
+        internal processing for 30 days, prohibits redistribution, and grants no
+        research, publication or gold-evaluation approval. Expiry blocks further
+        use; it does not schedule automatic physical deletion. The returned
+        governance record is bound to the uploader, exact SHA-256, filename and
+        document kind; upload rechecks these before storing bytes and inside its
+        transaction. For a new version, document_id must identify a currently
+        accessible document of the same kind. Idempotent replay rechecks current
+        access and governance; changed payload under the same key conflicts.
+        Third-party sources and datasets still need separate rights approval.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadAuthorDeclarationRequest'
+      responses:
+        '201':
+          description: Limited author consent recorded, or an identical authorized replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadAuthorDeclaration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            DECLARATION_SCOPE_NOT_ALLOWED, IDEMPOTENCY_CONFLICT,
+            GOVERNANCE_NOT_APPROVED or REVISION_CONFLICT. A subsequent upload
+            returns DECLARATION_FILE_MISMATCH when uploader, file, kind or digest
+            does not match the recorded declaration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
   /workspaces/{workspace_id}/upload-authorizations:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
     get:
       tags: [Reports]
       operationId: listUploadAuthorizations
-      summary: Select a pre-existing, currently usable approval for a new document
+      summary: Select a pre-existing, currently usable rights record for a new document
       description: >-
         Read-only discovery, never approval creation. Requires the corresponding
         upload capability and current workspace access. Excludes bound resources,
         tombstones, revoked or expired approvals, wrong purpose and incomplete
-        anonymization. Only safe enum-derived names and opaque references return.
+        anonymization. Author declarations are visible only to their declaring
+        uploader for the declared kind and are named as self-declarations, not
+        independent approval. Only safe enum-derived names and opaque references return.
         Upload and workers recheck all authority independently.
       parameters:
         - name: kind
@@ -1695,6 +1753,70 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    UploadAuthorDeclarationRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, filename, content_sha256, rights_basis, attested_authority, pii_reviewed, internal_use_only]
+      properties:
+        kind:
+          type: string
+          enum: [REPORT, CORPUS_SOURCE]
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Exact upload filename, with PDF, DOCX, TXT or MD extension and no control characters
+        content_sha256:
+          $ref: '#/components/schemas/Sha256'
+        rights_basis:
+          type: string
+          const: SELF_AUTHORED
+        attested_authority:
+          type: boolean
+          const: true
+          description: Uploader has authority and all co-authors permit this internal use
+        pii_reviewed:
+          type: boolean
+          const: true
+          description: Uploader reviewed the file and removed unnecessary personal information
+        internal_use_only:
+          type: boolean
+          const: true
+          description: No publication, redistribution or gold-data approval is requested
+        document_id:
+          $ref: '#/components/schemas/OpaqueId'
+    UploadAuthorDeclaration:
+      type: object
+      additionalProperties: false
+      required: [id, name, rights_basis, allowed_purposes, valid_until, resource_id, classification, declaration_scope, independent_approval]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        name:
+          type: string
+        rights_basis:
+          type: string
+          const: CONSENT
+        allowed_purposes:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: string
+            enum: [LOCAL_DEMO, INTERNAL_TEST]
+        valid_until:
+          $ref: '#/components/schemas/Timestamp'
+        resource_id:
+          $ref: '#/components/schemas/OpaqueId'
+        classification:
+          type: string
+          const: RESTRICTED
+        declaration_scope:
+          type: string
+          const: INTERNAL_SELF_AUTHORED
+        independent_approval:
+          type: boolean
+          const: false
     OpaqueId:
       type: string
       minLength: 16

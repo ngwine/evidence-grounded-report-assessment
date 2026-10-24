@@ -268,7 +268,7 @@ def create_app(database: Database[dict[str, Any]], *, allow_test_client: bool = 
 
     storage_root = private_root or Path(__file__).resolve().parents[5] / "var/app-mongo"
     app.include_router(governance_router(database, storage_root,
-        transaction_mode=transaction_mode, prefix=PREFIX))
+        transaction_mode=transaction_mode, prefix=PREFIX, json_reader=json_body, key_reader=_key))
     app.include_router(document_router(
         database, storage_root,
         transaction_mode=transaction_mode, prefix=PREFIX, key_reader=_key, revision_reader=_revision))

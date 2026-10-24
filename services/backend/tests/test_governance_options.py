@@ -47,6 +47,7 @@ def test_safe_choices_are_usable_and_consumed_choices_disappear(context):
     {"retention_policy": {"expires_at": datetime.now(UTC) - timedelta(seconds=1)}},
     {"retention_policy": {"expires_at": "invalid"}},
     {"resource_type": "DATASET"}, {"workspace_id": ObjectId()},
+    {"rights_evidence": None}, {"rights_evidence": []},
 ])
 def test_ineligible_governance_never_becomes_a_choice(context, changes):
     approval(context, **changes)

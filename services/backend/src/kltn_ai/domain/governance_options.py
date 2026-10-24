@@ -6,8 +6,8 @@ the authoritative approval again when the selected bytes are uploaded.
 
 from __future__ import annotations
 
-from datetime import datetime
 import re
+from datetime import datetime
 from typing import Any
 
 from bson import ObjectId
@@ -15,7 +15,6 @@ from bson import ObjectId
 from .access import AccessPolicy, object_id
 from .documents import DocumentService
 from .errors import DomainError
-
 
 RIGHTS = {"LICENSE", "CONSENT", "RESEARCH_USE_STATEMENT", "INTERNAL_APPROVAL"}
 CLASSIFICATIONS = {"RESTRICTED", "INTERNAL", "PUBLIC_LICENSED"}
@@ -44,8 +43,9 @@ class GovernanceOptionsService:
             and (row["retention_policy"].get("expires_at") is None
                  or isinstance(row["retention_policy"]["expires_at"], datetime))
             and isinstance(row.get("anonymization"), dict)
+            and isinstance(row.get("rights_evidence"), dict)
             and isinstance(purposes, list) and 0 < len(purposes) <= 100
-            and len(set(item for item in purposes if isinstance(item, str))) == len(purposes)
+            and len({item for item in purposes if isinstance(item, str)}) == len(purposes)
             and all(isinstance(item, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", item)
                     for item in purposes))
 
@@ -55,7 +55,8 @@ class GovernanceOptionsService:
         # contain names, contact details or private references. Names are derived
         # solely from public enum values and an opaque identifier.
         return {"id": str(row["_id"]),
-            "name": f"{row['rights_basis'].replace('_', ' ').title()} · {row['data_class'].replace('_', ' ').title()}",
+            "name": ("Tự khai báo · Dùng nội bộ" if row.get("rights_evidence", {}).get("kind") == "SELF_DECLARATION"
+                else f"{row['rights_basis'].replace('_', ' ').title()} · {row['data_class'].replace('_', ' ').title()}"),
             "rights_basis": row["rights_basis"], "allowed_purposes": row["allowed_purposes"],
             "valid_until": row.get("valid_until"), "resource_id": str(row["resource_id"]),
             "classification": row["data_class"]}
@@ -85,6 +86,10 @@ class GovernanceOptionsService:
         for row in rows[:scan_limit]:
             last_scanned = str(row["_id"])
             if not self._safe_record(row):
+                continue
+            declaration = row.get("rights_evidence", {})
+            if declaration.get("kind") == "SELF_DECLARATION" and (
+                    declaration.get("declared_by") != actor_id or declaration.get("document_kind") != kind):
                 continue
             # A resource already bound to any document is not a new upload
             # choice, including archived/foreign documents and prior approvals.

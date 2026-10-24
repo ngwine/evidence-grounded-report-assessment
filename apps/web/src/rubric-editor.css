@@ -4,6 +4,18 @@
 .rubric-section-heading h3 { margin: 7px 0 0; font-size: 19px; letter-spacing: -.035em; }
 .rubric-scoring-pill { display: inline-flex; flex: none; align-items: center; padding: 6px 9px; border: 1px solid #d2e6e4; border-radius: 5px; background: #eef8f6; color: #18756e; font-size: 10px; font-weight: 650; }
 .rubric-intro { margin: 10px 0 19px; color: var(--rubric-muted); font-size: 12px; line-height: 1.6; }
+.rubric-authoring-guide { margin: 0 0 14px; padding: 17px 19px; border: 1px solid #dce8e7; border-radius: 9px; background: #f4faf8; }
+.rubric-authoring-guide ol { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; margin: 0; padding-left: 18px; }
+.rubric-authoring-guide li { padding-left: 3px; color: #2c766f; font-size: 11px; }
+.rubric-authoring-guide li strong { display: block; margin-bottom: 6px; color: #305d59; font-size: 11px; }
+.rubric-authoring-guide li span { display: block; color: #67827d; font-size: 10px; line-height: 1.6; }
+.rubric-authoring-guide > p { margin: 14px 0 0; color: #6c827c; font-size: 10px; line-height: 1.6; }
+.rubric-baseline-note { margin: 0 0 18px; padding: 12px 15px; border: 1px solid #dfe7ed; border-radius: 7px; background: #fbfcfd; color: #5b7387; }
+.rubric-baseline-note summary { font-size: 11px; font-weight: 650; cursor: pointer; }
+.rubric-baseline-note p { margin: 10px 0 0; font-size: 11px; line-height: 1.7; }
+.rubric-validation-summary { margin-bottom: 18px; padding: 12px 15px; border: 1px solid #eadfc9; border-radius: 7px; background: #fffaf1; color: #8c6a36; }
+.rubric-validation-summary strong { font-size: 11px; font-weight: 650; }
+.rubric-validation-summary p { margin: 6px 0 0; font-size: 10px; line-height: 1.7; }
 .rubric-score-overview { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 1.45fr) auto; gap: 22px; align-items: center; margin-bottom: 24px; padding: 21px; border: 1px solid var(--rubric-line); border-radius: 10px; background: #f7fafc; }
 .rubric-field { display: block; min-width: 0; }
 .rubric-field > span:first-child, .rubric-score-readonly > span { display: block; margin-bottom: 7px; color: #52697c; font-size: 10px; font-weight: 650; line-height: 1.4; }
@@ -51,6 +63,10 @@
 .rubric-checklist-fields { display: grid; grid-template-columns: .8fr 1.3fr 1.2fr; gap: 10px; margin-top: 13px; }
 .rubric-visual-editor .rubric-checklist-fields select { padding-right: 24px; font-size: 10px; }
 .rubric-requirements { min-width: 0; margin-top: 17px; padding-top: 15px; border-top: 1px dashed #dae4eb; }
+.rubric-contradictions { margin-top: 18px; padding-top: 13px; border-top: 1px dashed #dae4eb; }
+.rubric-contradictions > summary { color: #687c8b; font-size: 10px; font-weight: 650; cursor: pointer; }
+.rubric-contradictions > summary small { display: inline-block; margin-left: 6px; color: #8a9ba8; font-size: 9px; font-weight: 400; }
+.rubric-contradictions > .rubric-alternative-row + .rubric-text-button { margin-left: 0; }
 .rubric-requirements-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .rubric-requirements-heading h6 { margin: 0; color: #506b7f; font-size: 10px; font-weight: 700; }
 .rubric-requirements-heading > span { color: #92a1ad; font-size: 9px; }
@@ -99,6 +115,8 @@
 .rubric-alternative-list { display: grid; gap: 7px; margin: 0; padding-left: 17px; color: #71899a; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
 @media (max-width: 1100px) { .rubric-checklist-fields { grid-template-columns: 1fr 1fr; } .rubric-checklist-fields > label:first-child { grid-column: 1 / -1; } }
 @media (max-width: 650px) {
+  .rubric-authoring-guide ol { grid-template-columns: 1fr; gap: 14px; }
+  .rubric-contradictions > summary small { display: block; margin: 5px 0 0 14px; }
   .rubric-section-heading { align-items: start; }
   .rubric-scoring-pill { font-size: 8px; }
   .rubric-score-overview { grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }

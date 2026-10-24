@@ -8,7 +8,7 @@ import {
 import type { Actor, Page, Rubric, RubricDefinition, RubricVersion, Workspace } from './authenticatedApi';
 import './authenticated.css';
 import AuthenticatedReports from './AuthenticatedReports';
-import { RubricVisualEditor } from './RubricVisualEditor';
+import { blankRubricDefinition, RubricVisualEditor } from './RubricVisualEditor';
 
 const TEMPLATE: RubricDefinition = {
   max_score: 10,
@@ -306,7 +306,7 @@ export default function AuthenticatedApp() {
           <aside className="panel">
             <div className="panel-title"><h2>Rubric</h2><button className="subtle-button" disabled={busy} onClick={() => {
               if (dirty && !window.confirm('Bỏ thay đổi chưa lưu để tạo rubric?')) return;
-              setCreating(true); setSelected(null); setVersion(null); setVersions(null); setEditor(JSON.stringify(TEMPLATE, null, 2)); setRubricKey(''); setTitle(''); setNotice(null); setError(null);
+              setCreating(true); setSelected(null); setVersion(null); setVersions(null); setEditor(JSON.stringify(blankRubricDefinition(), null, 2)); setRubricKey(''); setTitle(''); setNotice(null); setError(null);
             }}>Tạo rubric</button></div>
             {loadingRubrics && <p role="status">Đang tải rubric…</p>}
             {rubrics?.items.length === 0 && <p className="section-intro">Workspace chưa có rubric. Tạo draft đầu tiên hoặc nhập definition JSON.</p>}

@@ -95,6 +95,9 @@ async function createDraft(page: Page) {
   await page.getByRole('button', { name: 'Tạo rubric', exact: true }).click();
   await page.getByLabel('Mã rubric', { exact: true }).fill('synthetic');
   await page.getByLabel('Tên rubric', { exact: true }).fill('Rubric thử nghiệm');
+  await page.getByLabel('Tên tiêu chí', { exact: true }).fill('Phương pháp');
+  await page.getByLabel('Phát biểu cần kiểm chứng', { exact: true }).fill('Báo cáo trình bày phương pháp đánh giá.');
+  await page.getByLabel('Cách diễn đạt 1 của yêu cầu 1.1.1', { exact: true }).fill('phương pháp đánh giá');
   await page.getByRole('button', { name: 'Lưu draft', exact: true }).click();
   await expect(page.getByLabel('Các version đã lưu')).toHaveValue(VERSION);
   await page.getByText('JSON nâng cao', { exact: true }).click();
@@ -141,11 +144,17 @@ test('mocked API: visual rubric editor updates real definition without exposing 
   await page.getByRole('button', { name: 'Rubric đánh giá', exact: true }).click();
   await page.getByRole('button', { name: 'Tạo rubric', exact: true }).click();
   await expect(page.getByLabel('Rubric definition JSON', { exact: true })).toBeHidden();
+  await expect(page.getByLabel('Tên tiêu chí', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Phát biểu cần kiểm chứng', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Cách diễn đạt 1 của yêu cầu 1.1.1', { exact: true })).toHaveValue('');
   await page.getByLabel('Mã rubric', { exact: true }).fill('visual');
   await page.getByLabel('Tên rubric', { exact: true }).fill('Rubric nhập bằng form');
   await page.getByLabel('Tên tiêu chí', { exact: true }).fill('Chất lượng phương pháp');
   await page.getByLabel('Phát biểu cần kiểm chứng', { exact: true }).fill('Báo cáo có mô tả phương pháp đánh giá.');
   await page.getByLabel('Cách diễn đạt 1 của yêu cầu 1.1.1', { exact: true }).fill('phương pháp đánh giá');
+  await page.locator('summary').filter({ hasText: 'Cụm từ thể hiện không đáp ứng' }).click();
+  await page.getByRole('button', { name: 'Thêm cụm không đáp ứng', exact: true }).click();
+  await page.getByLabel('Cụm không đáp ứng 1 của checklist 1.1', { exact: true }).fill('chưa thực hiện đánh giá');
   await page.getByRole('button', { name: 'Lưu draft', exact: true }).click();
   await expect(page.getByLabel('Các version đã lưu')).toHaveValue(VERSION);
   await page.getByRole('button', { name: 'Kiểm tra & publish' }).click();
@@ -156,6 +165,7 @@ test('mocked API: visual rubric editor updates real definition without exposing 
   expect(definition.criteria[0].title).toBe('Chất lượng phương pháp');
   expect(definition.criteria[0].checklists[0].statement).toBe('Báo cáo có mô tả phương pháp đánh giá.');
   expect(definition.criteria[0].checklists[0].requirements[0].any_of).toEqual(['phương pháp đánh giá']);
+  expect(definition.criteria[0].checklists[0].contradiction_patterns).toEqual(['chưa thực hiện đánh giá']);
 });
 
 test('mocked API: revision conflict preserves authored draft instead of claiming saved', async ({ page }) => {

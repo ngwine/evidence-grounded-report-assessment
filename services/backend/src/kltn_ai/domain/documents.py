@@ -23,8 +23,8 @@ from typing import Any
 from bson import ObjectId
 from pymongo.database import Database
 from pymongo.errors import DuplicateKeyError
-from pymongo.write_concern import WriteConcern
 from pymongo.read_concern import ReadConcern
+from pymongo.write_concern import WriteConcern
 
 from .access import AccessPolicy, object_id
 from .audit import append_event
@@ -33,6 +33,8 @@ from .errors import DomainError
 MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 MIME = {".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".txt": "text/plain", ".md": "text/markdown"}
+AUTHOR_CONSENT_SCOPE = "INTERNAL_SELF_AUTHORED"
+AUTHOR_CONSENT_PURPOSES = frozenset({"LOCAL_DEMO", "INTERNAL_TEST"})
 
 
 def _now() -> datetime:
@@ -173,7 +175,37 @@ class DocumentService:
         if (expiry is not None and _aware(expiry) <= instant
                 or anonymization.get("required") is True and anonymization.get("status") not in {"COMPLETED", "VERIFIED"}):
             raise DomainError(409, "GOVERNANCE_NOT_APPROVED", "Document use is not currently approved")
+        evidence = record.get("rights_evidence", {})
+        if not isinstance(evidence, dict):
+            raise DomainError(409, "GOVERNANCE_NOT_APPROVED", "Invalid consent metadata")
+        # Author consent is NOT a DATA_APPROVER decision. Its narrow scope
+        # must remain enforced on reads, worker execution and retries too.
+        if ((evidence.get("kind") == "SELF_DECLARATION" or "declaration_scope" in evidence)
+                and (evidence.get("kind") != "SELF_DECLARATION"
+                    or evidence.get("declaration_scope") != AUTHOR_CONSENT_SCOPE
+                    or evidence.get("declaration_version") != 1
+                    or record.get("rights_basis") != "CONSENT"
+                    or workspace.get("default_purpose") not in AUTHOR_CONSENT_PURPOSES
+                    or record.get("allowed_purposes") != [workspace.get("default_purpose")]
+                    or evidence.get("declared_by") != record.get("created_by")
+                    or record.get("approver_id") != record.get("created_by")
+                    or not isinstance(record.get("created_by"), ObjectId)
+                    or evidence.get("independent_approval") is not False
+                    or any(evidence.get(field) is not True for field in (
+                        "attested_authority", "pii_reviewed", "internal_use_only"))
+                    or record.get("redistribution") != "PROHIBITED"
+                    or expiry is None or record.get("valid_until") is None)):
+            raise DomainError(409, "GOVERNANCE_NOT_APPROVED", "Author consent does not permit this use")
         return record
+
+    @staticmethod
+    def _check_upload_consent(record: dict[str, Any], *, actor_id: ObjectId,
+                              kind: str, filename: str, digest: str) -> None:
+        evidence = record.get("rights_evidence") or {}
+        if evidence.get("kind") == "SELF_DECLARATION" and (
+                evidence.get("declared_by") != actor_id or evidence.get("document_kind") != kind
+                or evidence.get("filename") != filename or evidence.get("sha256") != digest):
+            raise DomainError(409, "DECLARATION_FILE_MISMATCH", "Consent is bound to the declared uploader and exact file")
 
     def _document(self, actor_id: ObjectId, workspace_id: ObjectId | str,
                   document_id: ObjectId | str, *, session: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -318,7 +350,8 @@ class DocumentService:
         }
         document["current_governance_record_id"] = governance_id
         # Neither student reports nor corpus sources can reach parser before approval.
-        self.require_governance(workspace, document)
+        consent = self.require_governance(workspace, document)
+        self._check_upload_consent(consent, actor_id=actor_id, kind=kind, filename=filename, digest=digest)
         file_id, version_id, job_id = ObjectId(), ObjectId(), ObjectId()
         storage_key = str(file_id) + suffix
         self._write_bytes(storage_key, payload)
@@ -348,7 +381,8 @@ class DocumentService:
                 current_workspace = self.policy.require(actor_id, workspace_id,
                     "report.upload" if kind == "REPORT" else "source.upload",
                     owner_id=document.get("owner_user_id"), session=session)
-                self.require_governance(current_workspace, document, session=session)
+                consent = self.require_governance(current_workspace, document, session=session)
+                self._check_upload_consent(consent, actor_id=actor_id, kind=kind, filename=filename, digest=digest)
                 if existing is None:
                     document["current_version_id"] = version_id
                     self.db.documents.insert_one(document, **options)
