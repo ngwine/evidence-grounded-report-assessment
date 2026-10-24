@@ -1,0 +1,116 @@
+.rubric-visual-editor { --rubric-navy: #142e46; --rubric-teal: #0f7c78; --rubric-muted: #6c7e8e; --rubric-line: #dfe7ed; margin-top: 26px; color: var(--rubric-navy); }
+.rubric-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.rubric-eyebrow { display: block; color: #728697; font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.rubric-section-heading h3 { margin: 7px 0 0; font-size: 19px; letter-spacing: -.035em; }
+.rubric-scoring-pill { display: inline-flex; flex: none; align-items: center; padding: 6px 9px; border: 1px solid #d2e6e4; border-radius: 5px; background: #eef8f6; color: #18756e; font-size: 10px; font-weight: 650; }
+.rubric-intro { margin: 10px 0 19px; color: var(--rubric-muted); font-size: 12px; line-height: 1.6; }
+.rubric-score-overview { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 1.45fr) auto; gap: 22px; align-items: center; margin-bottom: 24px; padding: 21px; border: 1px solid var(--rubric-line); border-radius: 10px; background: #f7fafc; }
+.rubric-field { display: block; min-width: 0; }
+.rubric-field > span:first-child, .rubric-score-readonly > span { display: block; margin-bottom: 7px; color: #52697c; font-size: 10px; font-weight: 650; line-height: 1.4; }
+.rubric-field > span small { color: #7c8d9a; font-size: 9px; font-weight: 400; }
+.rubric-visual-editor .rubric-field input, .rubric-visual-editor .rubric-field select, .rubric-visual-editor .rubric-field textarea, .rubric-visual-editor .rubric-alternative-row input { min-width: 0; padding: 10px 11px; border: 1px solid #d9e3eb; border-radius: 6px; color: #223d53; background: white; font-size: 11px; line-height: 1.5; box-shadow: 0 1px 2px #17344903; }
+.rubric-visual-editor .rubric-field input:disabled, .rubric-visual-editor .rubric-field select:disabled, .rubric-visual-editor .rubric-field textarea:disabled { background: #f5f8fa; }
+.rubric-visual-editor input::placeholder, .rubric-visual-editor textarea::placeholder { color: #98a5af; font-size: 10px; }
+.rubric-visual-editor textarea { resize: vertical; }
+.rubric-score-input { position: relative; max-width: 152px; }
+.rubric-visual-editor .rubric-score-input input { padding-right: 47px; font-size: 23px; font-weight: 700; letter-spacing: -.04em; }
+.rubric-score-input > span { position: absolute; top: 50%; right: 13px; transform: translateY(-50%); color: #8494a0; font-size: 10px; pointer-events: none; }
+.rubric-allocation { display: grid; gap: 6px; padding-left: 22px; border-left: 1px solid #dfe7ed; }
+.rubric-allocation > span:first-child { color: #61788b; font-size: 10px; }
+.rubric-allocation > strong { color: #243f55; font-size: 21px; font-weight: 700; letter-spacing: -.04em; }
+.rubric-allocation > strong small { color: #8092a0; font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.rubric-allocation-state { font-size: 9px; }
+.rubric-allocation-state.is-valid { color: #168472; }
+.rubric-allocation-state.is-invalid { color: #ac6a31; }
+.rubric-structure-count { display: grid; justify-items: end; gap: 3px; padding-left: 12px; }
+.rubric-structure-count > strong { color: #28465b; font-size: 27px; font-weight: 600; letter-spacing: -.05em; }
+.rubric-structure-count > span { color: #587185; font-size: 10px; }
+.rubric-structure-count > small { margin-top: 2px; color: #8a9aa7; font-size: 9px; }
+.rubric-criteria-stack { display: grid; gap: 20px; }
+.rubric-criterion-card { min-width: 0; overflow: hidden; border: 1px solid #dce5ec; border-radius: 10px; background: #fff; }
+.rubric-criterion-header { display: flex; align-items: center; gap: 12px; padding: 17px 19px; border-bottom: 1px solid #e6edf1; background: #fbfcfe; }
+.rubric-criterion-number { display: grid; place-items: center; flex: none; width: 34px; height: 36px; border: 1px solid #dce6ee; border-radius: 6px; color: #4b6c84; background: #edf3f8; font-size: 13px; font-weight: 650; }
+.rubric-criterion-header > div { flex: 1; min-width: 0; }
+.rubric-criterion-header .rubric-eyebrow { color: #8395a3; font-size: 8px; }
+.rubric-criterion-header h4 { margin: 5px 0 0; overflow-wrap: anywhere; color: #244057; font-size: 13px; line-height: 1.45; font-weight: 650; }
+.rubric-points-pill { flex: none; padding: 6px 9px; border: 1px solid #d9e8e9; border-radius: 5px; background: #eff8f7; color: #377874; font-size: 10px; font-weight: 650; }
+.rubric-visual-editor .rubric-remove { display: inline-grid; place-items: center; flex: none; min-height: 30px; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #91a1ad; }
+.rubric-visual-editor .rubric-remove:hover:not(:disabled) { color: #b45a50; background: #fff0ed; }
+.rubric-criterion-body { min-width: 0; padding: 20px; }
+.rubric-criterion-fields { display: grid; grid-template-columns: minmax(0, 1fr) 125px; gap: 14px; }
+.rubric-title-field { grid-column: 1 / -1; }
+.rubric-subsection-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 7px; margin: 23px 0 13px; }
+.rubric-subsection-heading h5 { display: flex; align-items: center; gap: 7px; margin: 0; color: #334f63; font-size: 11px; font-weight: 700; }
+.rubric-subsection-heading h5 > span { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 4px; background: #edf2f6; color: #6d8395; font-size: 9px; }
+.rubric-subsection-heading > span { color: #8a9ca9; font-size: 9px; }
+.rubric-checklist-stack { display: grid; gap: 14px; }
+.rubric-atomic-card { min-width: 0; padding: 15px; border: 1px solid #dfe8ee; border-radius: 8px; background: #fff; }
+.rubric-atomic-heading { display: flex; align-items: center; gap: 8px; margin: -2px -3px 12px 0; }
+.rubric-atomic-heading > strong { flex: 1; color: #4b677b; font-size: 10px; font-weight: 650; }
+.rubric-check-icon { display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid #d7e3eb; border-radius: 4px; color: #79a1ad; background: #f7fafc; font-size: 10px; }
+.rubric-checklist-fields { display: grid; grid-template-columns: .8fr 1.3fr 1.2fr; gap: 10px; margin-top: 13px; }
+.rubric-visual-editor .rubric-checklist-fields select { padding-right: 24px; font-size: 10px; }
+.rubric-requirements { min-width: 0; margin-top: 17px; padding-top: 15px; border-top: 1px dashed #dae4eb; }
+.rubric-requirements-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rubric-requirements-heading h6 { margin: 0; color: #506b7f; font-size: 10px; font-weight: 700; }
+.rubric-requirements-heading > span { color: #92a1ad; font-size: 9px; }
+.rubric-help { margin: 7px 0 12px; color: #8395a3; font-size: 9px; line-height: 1.65; }
+.rubric-requirement { min-width: 0; margin-top: 10px; padding: 13px; border: 1px solid #e2eaf0; border-radius: 6px; background: #f8fafc; }
+.rubric-requirement-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 23px; margin: -3px -4px 9px 0; }
+.rubric-requirement-top > strong { color: #607a8c; font-size: 9px; font-weight: 650; }
+.rubric-requirement-top > code { color: #7d93a3; font-size: 9px; }
+.rubric-visual-editor .rubric-requirement-top .rubric-remove { width: 25px; height: 25px; min-height: 25px; }
+.rubric-requirement-fields { display: grid; grid-template-columns: minmax(0, 1fr) 105px; gap: 10px; }
+.rubric-requirement .rubric-field > span:first-child { font-size: 9px; }
+.rubric-visual-editor .rubric-requirement .rubric-field input { padding: 8px 9px; font-size: 10px; }
+.rubric-alternatives-label { display: block; margin: 14px 0 8px; color: #5d7688; font-size: 9px; font-weight: 650; }
+.rubric-alternatives-label small { display: block; margin-top: 4px; color: #8a9ba8; font-size: 8px; font-weight: 400; }
+.rubric-alternative-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.rubric-alternative-row > span { flex: none; width: 26px; color: #92a2af; font-size: 9px; text-align: center; }
+.rubric-visual-editor .rubric-alternative-row input { width: 100%; padding: 8px 9px; font-size: 10px; }
+.rubric-visual-editor .rubric-text-button { display: inline-flex; align-items: center; justify-content: start; gap: 5px; min-height: 30px; padding: 5px 0; border: 0; border-radius: 4px; color: #34827d; background: transparent; font-size: 9px; font-weight: 650; }
+.rubric-visual-editor .rubric-text-button:hover:not(:disabled) { color: #0c5e59; text-decoration: underline; }
+.rubric-alternative-row + .rubric-text-button { margin: 4px 0 0 34px; }
+.rubric-add-requirement { margin-top: 10px; }
+.rubric-visual-editor .rubric-add-checklist { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 14px; min-height: 38px; padding: 9px 12px; border: 1px dashed #cbdde0; border-radius: 6px; background: #f8fbfb; color: #4b8581; font-size: 10px; font-weight: 650; }
+.rubric-visual-editor .rubric-add-criterion { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; margin-top: 18px; padding: 12px 16px; border: 1px dashed #afcecf; border-radius: 8px; background: #f3faf9; color: #237e76; font-size: 11px; font-weight: 700; }
+.rubric-visual-editor .rubric-add-criterion:hover:not(:disabled), .rubric-visual-editor .rubric-add-checklist:hover:not(:disabled) { border-color: #58a49e; background: #eaf7f4; }
+.rubric-scoring-note { margin: 13px 3px 0; color: #91a0ab; font-size: 9px; line-height: 1.7; }
+.rubric-advanced { margin-top: 25px; border-top: 1px solid #e4ebf0; }
+.rubric-advanced > summary { padding: 16px 1px; color: #6c8192; font-size: 10px; font-weight: 650; cursor: pointer; }
+.rubric-advanced > summary small { margin-left: 9px; color: #9aa8b3; font-size: 9px; font-weight: 400; }
+.rubric-advanced-body { padding: 0 1px 3px; }
+.rubric-visual-editor .rubric-json { min-height: 300px; font: 11px/1.7 "SFMono-Regular", Consolas, monospace; tab-size: 2; }
+.rubric-warning { margin-bottom: 13px; padding: 12px 14px; border: 1px solid #ead9bc; border-radius: 7px; color: #886332; background: #fffbf2; font-size: 10px; line-height: 1.6; }
+.rubric-warning > strong { display: block; font-size: 11px; }
+.rubric-warning p { margin: 5px 0 0; }
+.rubric-inline-warning { margin: 9px 0; color: #aa753c; font-size: 9px; line-height: 1.6; }
+.rubric-empty-copy { margin: 12px 0; padding: 16px; border: 1px dashed #dbe6ed; border-radius: 6px; color: #8b9da9; font-size: 10px; line-height: 1.7; }
+.rubric-empty-state { padding: 27px; border: 1px dashed #d4e1e8; border-radius: 8px; text-align: center; background: #fbfcfe; }
+.rubric-empty-state > strong { color: #597287; font-size: 13px; }
+.rubric-empty-state > p { margin: 7px 0 0; color: #879aa9; font-size: 11px; line-height: 1.6; }
+.rubric-score-readonly > strong { color: #29475d; font-size: 27px; letter-spacing: -.04em; }
+.rubric-score-readonly > strong small { margin-left: 9px; color: #8c9da9; font-size: 11px; font-weight: 400; letter-spacing: 0; }
+.rubric-readonly-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; color: #8295a3; font-size: 9px; line-height: 1.7; }
+.rubric-readonly-meta strong, .rubric-readonly-meta code { margin-left: 5px; color: #566f82; font-size: 9px; font-weight: 500; }
+.rubric-readonly-statement { margin: 6px 0 13px; color: #3d5b70; font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rubric-mode-badge { padding: 4px 7px; border: 1px solid #d8e5e8; border-radius: 4px; color: #548481; background: #f2f8f7; font-size: 8px; }
+.rubric-readonly-description { margin: 6px 0 10px; color: #597286; font-size: 10px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rubric-alternative-list { display: grid; gap: 7px; margin: 0; padding-left: 17px; color: #71899a; font-size: 10px; line-height: 1.6; overflow-wrap: anywhere; }
+@media (max-width: 1100px) { .rubric-checklist-fields { grid-template-columns: 1fr 1fr; } .rubric-checklist-fields > label:first-child { grid-column: 1 / -1; } }
+@media (max-width: 650px) {
+  .rubric-section-heading { align-items: start; }
+  .rubric-scoring-pill { font-size: 8px; }
+  .rubric-score-overview { grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+  .rubric-structure-count { display: none; }
+  .rubric-allocation { padding-left: 15px; }
+  .rubric-criterion-header { padding: 14px; gap: 9px; }
+  .rubric-criterion-body { padding: 14px; }
+  .rubric-criterion-fields { grid-template-columns: minmax(0, 1fr) 100px; gap: 11px; }
+  .rubric-atomic-card { padding: 12px; }
+  .rubric-checklist-fields, .rubric-requirement-fields { grid-template-columns: 1fr; }
+  .rubric-checklist-fields > label:first-child { grid-column: auto; }
+  .rubric-requirement { padding: 11px; }
+  .rubric-advanced > summary small { display: block; margin: 6px 0 0 14px; }
+  .rubric-points-pill { font-size: 9px; }
+}

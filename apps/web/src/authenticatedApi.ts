@@ -35,6 +35,7 @@ export type JobRecord = {
   progress: { step: string; completed: number; total: number }; error_code: string | null;
 };
 export type AnalysisConfigId = 'bm25-smoke' | 'research-v0';
+export type UploadAuthorization = { id: string; name: string; rights_basis: string; allowed_purposes: string[]; valid_until: string | null; resource_id: string; classification: string };
 export type IndexGeneration = {
   id: string; document_version_id: string; state: string; config_id: AnalysisConfigId;
   job_id: string; revision: number; failure_code?: string | null;
@@ -185,6 +186,8 @@ export const cloneRubricVersion = (workspaceId: string, rubric: Rubric, version:
 const collection = (kind: DocumentKind) => kind === 'REPORT' ? '/reports' : '/sources';
 export const listDocuments = (workspaceId: string, kind: DocumentKind, cursor?: string | null) =>
   request<Page<DocumentRecord>>(scope(workspaceId) + collection(kind) + pageQuery(cursor));
+export const listUploadAuthorizations = (workspaceId: string, kind: DocumentKind, cursor?: string | null) =>
+  request<Page<UploadAuthorization>>(scope(workspaceId) + '/upload-authorizations' + pageQuery(cursor) + '&kind=' + kind);
 export const getDocumentVersion = (workspaceId: string, versionId: string) =>
   request<DocumentVersion>(scope(workspaceId) + '/document-versions/' + encodeURIComponent(versionId));
 export const listDocumentVersions = (workspaceId: string, kind: DocumentKind, documentId: string, cursor?: string | null) =>

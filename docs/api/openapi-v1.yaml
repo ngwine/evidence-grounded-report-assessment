@@ -24,6 +24,68 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /workspaces/{workspace_id}/upload-authorizations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [Reports]
+      operationId: listUploadAuthorizations
+      summary: Select a pre-existing, currently usable approval for a new document
+      description: >-
+        Read-only discovery, never approval creation. Requires the corresponding
+        upload capability and current workspace access. Excludes bound resources,
+        tombstones, revoked or expired approvals, wrong purpose and incomplete
+        anonymization. Only safe enum-derived names and opaque references return.
+        Upload and workers recheck all authority independently.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [REPORT, CORPUS_SOURCE]
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Safe choices and bounded scan continuation, which may return an empty page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, rights_basis, allowed_purposes, valid_until, resource_id, classification]
+                      properties:
+                        id:
+                          $ref: '#/components/schemas/OpaqueId'
+                        name:
+                          type: string
+                        rights_basis:
+                          type: string
+                        allowed_purposes:
+                          type: array
+                          items:
+                            type: string
+                        valid_until:
+                          type: [string, 'null']
+                          format: date-time
+                        resource_id:
+                          $ref: '#/components/schemas/OpaqueId'
+                        classification:
+                          type: string
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /auth/sessions:
     post:
       tags: [Auth]

@@ -8,6 +8,7 @@ import {
 import type { Actor, Page, Rubric, RubricDefinition, RubricVersion, Workspace } from './authenticatedApi';
 import './authenticated.css';
 import AuthenticatedReports from './AuthenticatedReports';
+import { RubricVisualEditor } from './RubricVisualEditor';
 
 const TEMPLATE: RubricDefinition = {
   max_score: 10,
@@ -67,6 +68,7 @@ export default function AuthenticatedApp() {
   const [title, setTitle] = useState('');
   const [editor, setEditor] = useState('');
   const [creating, setCreating] = useState(false);
+  const [section, setSection] = useState<'analysis' | 'documents' | 'rubrics'>('analysis');
   const [loadingRubrics, setLoadingRubrics] = useState(false);
   const selectedWorkspace = useRef('');
   const requestSequence = useRef(0);
@@ -115,6 +117,10 @@ export default function AuthenticatedApp() {
     listWorkspaces().then((page) => { if (active) setWorkspaces(page); }).catch((cause) => { if (active) fail(cause); });
     return () => { active = false; };
   }, [actor]);
+
+  useEffect(() => {
+    if (!workspaceId && workspaces?.items.length === 1) setWorkspaceId(workspaces.items[0].id);
+  }, [workspaceId, workspaces]);
 
   useEffect(() => {
     selectedWorkspace.current = workspaceId;
@@ -244,16 +250,30 @@ export default function AuthenticatedApp() {
     {notice && <div className="notice">{notice}</div>}
   </div>;
 
-  return <div className="app-shell authenticated-shell">
+  return <div className={`app-shell authenticated-shell ${actor ? 'workspace-shell' : 'login-shell'}`}>
     <a className="skip-link" href="#main">Đến nội dung chính</a>
-    <header className="site-header">
-      <div className="brand"><span className="brand-mark" aria-hidden="true">EG</span><div><strong>Evidence-Grounded Assessment</strong><small>Workspace & rubric</small></div></div>
-      {actor && <div className="header-right"><span>{actor.display_name}</span><button className="secondary-button" disabled={busy} onClick={signOut}>Đăng xuất</button></div>}
+    {actor && <aside className="workspace-sidebar" aria-label="Điều hướng chính">
+      <a href="#main" className="workspace-brand" onClick={() => setSection('analysis')}><span className="workspace-brand-mark" aria-hidden="true">e<span>.</span></span><div><strong>evidence</strong><small>REPORT INTELLIGENCE</small></div></a>
+      <p className="sidebar-caption">KHÔNG GIAN GIẢNG VIÊN</p>
+      <nav>{([
+        ['analysis', 'Phân tích báo cáo', '◫'],
+        ['documents', 'Kho tài liệu', '▤'],
+        ['rubrics', 'Rubric đánh giá', '☷'],
+      ] as const).map(([id, name, icon]) => <button key={id} className={`workspace-nav ${section === id ? 'is-active' : ''}`} aria-current={section === id ? 'page' : undefined} onClick={() => {
+        if (!dirty || section === id || window.confirm('Giữ nguyên bản nháp rubric và chuyển màn hình?')) setSection(id);
+      }}><span aria-hidden="true">{icon}</span>{name}{section === id && <span className="nav-active-dot" aria-hidden="true" />}</button>)}</nav>
+      <div className="sidebar-principle"><span className="sidebar-principle-mark" aria-hidden="true">↗</span><strong>Bằng chứng trước.<br />Kết luận sau.</strong><p>Mỗi nhận xét gắn với đoạn văn, nguồn và phiên bản tài liệu.</p></div>
+      <div className="sidebar-footer"><span className="live-dot" /> Local workspace <small>Hỗ trợ giảng viên · không tự chấm điểm chính thức</small></div>
+    </aside>}
+    <div className="workspace-body">
+    <header className="site-header workspace-topbar">
+      {actor ? <div className="workspace-breadcrumb"><span>Không gian làm việc</span><span aria-hidden="true">/</span><strong>{section === 'analysis' ? 'Phân tích báo cáo' : section === 'documents' ? 'Kho tài liệu' : 'Rubric đánh giá'}</strong></div> : <div className="brand"><span className="brand-mark" aria-hidden="true">e.</span><strong>evidence</strong></div>}
+      {actor && <div className="header-right"><span className="local-runtime-badge"><span />Chạy trên máy của bạn</span><div className="workspace-user"><span className="user-avatar" aria-hidden="true">{actor.display_name.trim().charAt(0).toUpperCase()}</span><span>{actor.display_name}<small>Giảng viên</small></span></div><button className="subtle-button" disabled={busy} onClick={signOut}>Đăng xuất</button></div>}
     </header>
     <main id="main">
-      {starting ? <p role="status">Đang kiểm tra phiên đăng nhập…</p> : actor === null ? <section className="panel auth-login">
-        <span className="eyebrow">Không gian làm việc</span><h1>Đăng nhập</h1>
-        <p className="section-intro">Dùng tài khoản đã được cấp quyền. Phiên làm việc và nội dung rubric được kiểm tra ở backend.</p>
+      {starting ? <p role="status">Đang kiểm tra phiên đăng nhập…</p> : actor === null ? <div className="login-layout"><section className="login-story"><span className="eyebrow">EVIDENCE-GROUNDED ASSESSMENT</span><h1>Đọc sâu hơn.<br />Đánh giá có<br /><em>cơ sở hơn.</em></h1><p>Một không gian để đối chiếu nội dung, đánh giá theo rubric và xem lại bằng chứng trong báo cáo sinh viên.</p><div className="login-feature"><span>01</span><div><strong>Đối chiếu nội dung</strong><p>Tìm đoạn liên quan và truy về tài liệu nguồn.</p></div></div><div className="login-feature"><span>02</span><div><strong>Đánh giá theo rubric</strong><p>Mỗi checklist đi kèm evidence và lý do đánh giá.</p></div></div><small>Phân tích hỗ trợ quyết định. Giảng viên luôn là người review.</small></section><section className="panel auth-login">
+        <span className="eyebrow">CHÀO MỪNG TRỞ LẠI</span><h2>Đăng nhập</h2>
+        <p className="section-intro">Tiếp tục vào không gian đánh giá của bạn.</p>
         {feedback}
         <form onSubmit={signIn}>
           <label className="field-label" htmlFor="auth-email">Email</label>
@@ -262,8 +282,9 @@ export default function AuthenticatedApp() {
           <input id="auth-password" type="password" autoComplete="current-password" required maxLength={1024} value={password} onChange={(event) => setPassword(event.target.value)} disabled={busy} />
           <button className="primary-button submit-button" disabled={busy}>{busy ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
         </form>
-      </section> : <>
-        <section className="hero"><div><span className="eyebrow">Quản lý đánh giá</span><h1>Rubric có version,<br /><em>yêu cầu rõ ràng.</em></h1><p>Soạn atomic checklist và evidence requirements, kiểm tra rồi publish một version bất biến để dùng cho phân tích.</p></div></section>
+        <p className="login-private-note"><span aria-hidden="true">◇</span> Tài liệu và model được xử lý tại máy local.</p>
+      </section></div> : <>
+        <div className="workspace-page-heading"><div><span className="eyebrow">{section === 'analysis' ? 'TỪ BÁO CÁO ĐẾN BẰNG CHỨNG' : section === 'documents' ? 'QUẢN LÝ ĐẦU VÀO' : 'TIÊU CHÍ RÕ RÀNG, NHẤT QUÁN'}</span><h1>{section === 'analysis' ? 'Phân tích báo cáo' : section === 'documents' ? 'Kho tài liệu' : 'Rubric đánh giá'}</h1><p>{section === 'analysis' ? 'Đối chiếu nguồn và đánh giá theo rubric trong cùng một lượt phân tích.' : section === 'documents' ? 'Báo cáo, nguồn đối chứng và các phiên bản được lưu trong một nơi.' : 'Soạn tiêu chí, yêu cầu evidence và khóa phiên bản trước khi sử dụng.'}</p></div><span className="workspace-version">BẢN THỬ NGHIỆM <span>·</span> LOCAL</span></div>
         {feedback}
         <section className="panel auth-workspace-select">
           <label className="field-label" htmlFor="auth-workspace">Workspace</label>
@@ -279,12 +300,13 @@ export default function AuthenticatedApp() {
             catch (cause) { fail(cause); } finally { setBusy(false); }
           }}>Tải thêm workspace</button>}
         </section>
+        {workspaces?.items.find((item) => item.id === workspaceId)?.key === 'demo-midterm-20261024' && <div className="demo-data-banner"><strong>DỮ LIỆU MINH HỌA</strong><span>Report và nguồn được tự viết để trình diễn luồng. Các số hiển thị không phải kết quả thực nghiệm trên dữ liệu nghiên cứu.</span></div>}
         {workspaceId && !canManage && <div className="notice notice-muted">Bạn có quyền vào workspace này nhưng không có quyền quản lý rubric. Nội dung học thuật không được mở rộng theo quyền quản trị hệ thống.</div>}
-        {workspaceId && canManage && <div className="auth-rubric-grid">
+        {workspaceId && canManage && <div className="auth-rubric-grid" hidden={section !== 'rubrics'}>
           <aside className="panel">
             <div className="panel-title"><h2>Rubric</h2><button className="subtle-button" disabled={busy} onClick={() => {
               if (dirty && !window.confirm('Bỏ thay đổi chưa lưu để tạo rubric?')) return;
-              setCreating(true); setSelected(null); setVersion(null); setVersions(null); setEditor(''); setRubricKey(''); setTitle(''); setNotice(null); setError(null);
+              setCreating(true); setSelected(null); setVersion(null); setVersions(null); setEditor(JSON.stringify(TEMPLATE, null, 2)); setRubricKey(''); setTitle(''); setNotice(null); setError(null);
             }}>Tạo rubric</button></div>
             {loadingRubrics && <p role="status">Đang tải rubric…</p>}
             {rubrics?.items.length === 0 && <p className="section-intro">Workspace chưa có rubric. Tạo draft đầu tiên hoặc nhập definition JSON.</p>}
@@ -320,14 +342,12 @@ export default function AuthenticatedApp() {
               <input id="rubric-key" value={rubricKey} disabled={busy || !creating} maxLength={128} onChange={(event) => setRubricKey(event.target.value)} />
               <label className="field-label" htmlFor="rubric-title">Tên rubric</label>
               <input id="rubric-title" value={title} disabled={busy || !creating} maxLength={500} onChange={(event) => setTitle(event.target.value)} />
-              {(creating || version?.status === 'DRAFT') && <div className="auth-editor-tools">
+              {(creating || version?.status === 'DRAFT') && <details className="auth-editor-tools"><summary>Nhập file và công cụ nâng cao</summary><div className="auth-actions">
                 <label>Nhập JSON<input type="file" accept=".json,application/json" disabled={busy} onChange={(event) => { void importDefinition(event.target.files?.[0]); event.target.value = ''; }} /></label>
                 <button className="subtle-button" disabled={busy} onClick={() => { if (!editor || window.confirm('Thay nội dung editor bằng cấu trúc mẫu?')) { setEditor(JSON.stringify(TEMPLATE, null, 2)); setNotice('Đây là cấu trúc minh họa. Cần thay yêu cầu và alternatives theo rubric thực tế trước khi dùng.'); } }}>Cấu trúc mẫu</button>
-              </div>}
-              <label className="field-label" htmlFor="rubric-definition">Rubric definition JSON</label>
-              <textarea id="rubric-definition" className="auth-definition" spellCheck={false} value={editor} disabled={busy} readOnly={!creating && version?.status !== 'DRAFT'} onChange={(event) => setEditor(event.target.value)} placeholder={'{ "max_score": 10, "criteria": [...] }'} />
-              <p className="field-help">LOCAL cần ít nhất một evidence requirement; GRAPH cần ít nhất hai. Version này thực thi proportional checklist scoring; custom levels chưa được hỗ trợ khi publish.</p>
-              {version && <p className="field-help">Revision {version.revision} · SHA-256 <code>{version.rubric_sha256}</code></p>}
+              </div></details>}
+              <RubricVisualEditor value={editor} onChange={setEditor} disabled={busy} readOnly={!creating && version?.status !== 'DRAFT'} />
+              {version && <details className="technical-details"><summary>Thông tin phiên bản</summary><p className="field-help">Revision {version.revision} · SHA-256 <code>{version.rubric_sha256}</code></p></details>}
               {unsaved && <p className="field-help">Có thay đổi chưa lưu. Lưu draft trước khi publish.</p>}
               <div className="auth-actions">
                 {(creating || version?.status === 'DRAFT') && <button className="primary-button" disabled={busy || !editor.trim() || !rubricKey.trim() || !title.trim()} onClick={saveDraft}>{busy ? 'Đang thực hiện…' : 'Lưu draft'}</button>}
@@ -338,10 +358,12 @@ export default function AuthenticatedApp() {
             </>}
           </section>
         </div>}
-        {workspaceId && <AuthenticatedReports key={workspaceId} actor={actor} workspaceId={workspaceId}
-          rubricRefreshKey={`${version?.id ?? ''}:${version?.revision ?? ''}`} onAuthenticationError={fail} />}
+        {workspaceId && <div hidden={section === 'rubrics'}><AuthenticatedReports key={workspaceId} actor={actor} workspaceId={workspaceId}
+          view={section === 'documents' ? 'documents' : 'analysis'} onViewChange={setSection}
+          rubricRefreshKey={`${version?.id ?? ''}:${version?.revision ?? ''}`} onAuthenticationError={fail} /></div>}
         <p className="safe-note">Phân tích tạo proposal có version và evidence để review; không tự công bố điểm chính thức hoặc kết luận đạo văn.</p>
       </>}
     </main>
+    </div>
   </div>;
 }

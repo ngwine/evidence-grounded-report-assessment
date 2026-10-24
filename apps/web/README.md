@@ -1,5 +1,31 @@
 # Web local demo
 
+## Giao diện authenticated hiện tại
+
+Giao diện có sidebar **Phân tích báo cáo / Kho tài liệu / Rubric đánh giá**.
+Form phân tích tự chuẩn bị index của nguồn đã chọn; người dùng không phải nhập
+run ID hoặc mở JSON để chạy luồng chính. Hai result tabs hiển thị đoạn report–
+source cạnh nhau và checklist kèm evidence; cấu hình/version/hash nằm trong
+phần nâng cao. Rubric có form tiêu chí/checklist/requirements; JSON vẫn có để
+kiểm tra cấu hình chi tiết. Mọi kết quả và quyền vẫn do backend kiểm tra.
+
+```bash
+VITE_APP_MODE=authenticated npm --prefix apps/web run dev -- --port 5173
+```
+
+API/worker/MongoDB cần chạy theo
+[hướng dẫn app](../../docs/architecture/version-locked-analysis-app.md).
+Tài khoản demo không có trong mã nguồn và không được tự tạo khi chạy web.
+`scripts/seed_ui_demo.py --confirm-self-authored-demo` chỉ chuẩn bị hai PDF tự
+viết và rubric trong **workspace demo đã được tạo riêng**; không nạp hoặc duyệt
+dataset/report thật. Các file `[DEMO]` và banner minh họa không phải số liệu bài
+báo. Seed đi qua Document/Rubric/Index/Analysis services và worker thật, không
+ghi kết quả giả vào frontend. Chọn một lượt phân tích đã lưu hoặc chạy lại bằng
+nút **Phân tích báo cáo** sau khi chọn nguồn.
+
+Phần còn lại bên dưới mô tả chế độ `/api/local/v1` cũ, không phải màn chính
+authenticated. Không trộn review hoặc kết quả giữa hai chế độ.
+
 Chế độ `VITE_APP_MODE=authenticated` có login/workspace/rubric authoring,
 report/source upload/version, index, hai pipeline, evidence/review và JSON export;
 xem [version-locked analysis app](../../docs/architecture/version-locked-analysis-app.md).
