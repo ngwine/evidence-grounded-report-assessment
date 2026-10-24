@@ -76,3 +76,6 @@ không âm thầm dùng version đã chọn trước khi upload.
 
 Các fixture tổng hợp chỉ xác nhận luồng phần mềm, không thay thế gold data
 độc lập hoặc thực nghiệm chất lượng trên dataset nghiên cứu.
+
+Lượt kiểm tra trước push ngày 25/10, gồm giao diện không checkbox và audit
+dependency mới, được ghi riêng tại [demo preflight](./demo-pre-push-2026-10-25.md).
