@@ -44,9 +44,9 @@ def completed(ctx, *, zero_evidence=False):
         service = RubricService(ctx["db"], transaction_mode=False)
         changed = service.create(ctx["identities"]["lecturer"], ctx["workspace"],
             {"rubric_key": "zero-evidence", "title": "Zyxwvu", "definition": rubric},
-            idempotency_key="rubric-no-evidence-0001", request_id="synthetic-request")
+            idempotency_key="rubric-0000000001", request_id="synthetic-request")
         service.publish_version(ctx["identities"]["lecturer"], ctx["workspace"], changed["current_version_id"],
-            expected_revision=1, idempotency_key="rubric-no-evidence-publish", request_id="synthetic-request")
+            expected_revision=1, idempotency_key="rubric-0000000002", request_id="synthetic-request")
         prepared["body"]["rubric_version_id"] = changed["current_version_id"]
     operation = create(ctx, prepared)
     assert MongoAnalysisWorker(ctx["db"], ctx["private"], transactional=False).process_one()
