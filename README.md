@@ -37,7 +37,7 @@ Chất lượng hai pipeline chưa được xác nhận đủ để chấm
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
 | SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
-| Product Backlog/WBS                         | WBS v1.12 có [audit W1–W11](docs/planning/W1-W11_STATUS_2026-10-22.md) và [app Mongo hai pipeline](docs/architecture/version-locked-analysis-app.md); chờ review/ký baseline |
+| Product Backlog/WBS                         | WBS v1.13 có [audit W1–W11](docs/planning/W1-W11_STATUS_2026-10-22.md), app Mongo và [item review/gold evaluation](docs/architecture/item-review-and-gold-evaluation.md); chờ review/ký baseline |
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
@@ -46,7 +46,7 @@ Chất lượng hai pipeline chưa được xác nhận đủ để chấm
 | Frontend, API, worker                       | Authenticated web → upload/PARSE/INDEX/ANALYZE workers → hai báo cáo/evidence → review/export đã chạy Mongo thật; demo local cũ vẫn riêng |
 | Parser và chunking | Worker/runner gọi parser process riêng có wall/CPU/input/output budgets; stable provenance và synthetic golden có; vẫn cần corpus đủ đại diện |
 | Citation context | Runner lưu marker/bibliography candidates với exact span và unknown/ambiguous status; không tự xác minh nguồn hay trừ similarity |
-| MongoDB runtime/index | Migrations 001–004; private BM25/E5 generation artifacts và Mongo activation/head; run/results/evidence version-locked. Graph/lifecycle/backup còn mở |
+| MongoDB runtime/index | Migrations 001–005; private BM25/E5 artifacts và Mongo generation/head; run/results/evidence version-locked, item review append-only. Graph/lifecycle/backup còn mở |
 | Quality/browser tests | Unit, HTTP authorization, real-Mongo auth/rubric/PDF-DOCX provenance và Chromium local/mock-auth tests; [baseline CI](docs/benchmarks/w1-w11-hardening-2026-10-22.md) không thay thế CI của commit mới hoặc gold evaluation |
 | Model local | `research-v0` chạy E5 và mMARCO revision đã khóa từ cache local; hiệu quả tổng quát vẫn cần đánh giá trên tập nhãn độc lập |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |

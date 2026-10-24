@@ -4,7 +4,7 @@
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.11 |
+| Phiên bản | 1.12 |
 | Ngày lập baseline | 21/08/2026 |
 | Ngày cập nhật | 23/10/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
@@ -14,13 +14,13 @@
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | [Authenticated Mongo app](../architecture/version-locked-analysis-app.md) chạy upload/PARSE/INDEX/ANALYZE→hai kết quả/evidence→review/export; actual theo WBS v1.12. [Audit W1–W11](./W1-W11_STATUS_2026-10-22.md) giữ lịch sử; semantic/gold, graph extraction, backup/lifecycle, quyền dữ liệu và review/merge/deployment vẫn mở |
+| Trạng thái baseline | [Authenticated Mongo app](../architecture/version-locked-analysis-app.md) chạy hai pipeline; [item review/gold evaluation](../architecture/item-review-and-gold-evaluation.md) bổ sung trên branch riêng. Actual theo WBS v1.13; [audit W1–W11](./W1-W11_STATUS_2026-10-22.md) giữ lịch sử. Semantic/gold, graph extraction, backup/lifecycle, quyền dữ liệu và review/merge/deployment vẫn mở |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.12; không đổi target backlog để che độ trễ.
+phiên bản 1.13; không đổi target backlog để che độ trễ.
 
 ## 1. Quy ước backlog
 
@@ -330,6 +330,7 @@ Tên issue:
 | 1.7 | 22/10/2026 | Dẫn chiếu audit đủ 66 task theo WBS v1.8; citation/span mapping chuyển IN PROGRESS với adapter và runner artifact; ghi nhận Mongo replica-set/queue, vector generation, parser budgets, JSON Schema runtime, RRF/coverage/gold fixes trong PR #19. Các điều kiện rights/gold/production và gate chưa đạt vẫn mở |
 | 1.8 | 22/10/2026 | Theo WBS v1.9: thêm rubric API compiler adapter, migration/DB roles, browser E2E và quality/security/browser CI jobs; EP-11-S01 sang IN PROGRESS. Không tính database role là application RBAC hoặc adapter là HTTP implementation; các acceptance/gold gates giữ mở |
 | 1.9 | 23/10/2026 | Theo WBS v1.10, xác nhận CI5/5 trên code commit37c6277 với Mongo8.0.34/Ubuntu22.04 target, six live tests/restart/reapply, Chromium và quality/security gates; chưa nâng story DONE khi thiếu phần app integration hoặc review/gold |
+| 1.12 | 24/10/2026 | Theo WBS v1.13, bổ sung model-visible item review append-only và approved-gold freeze/evaluation runner trên nhánh riêng. Giữ gold/semantic/graph và human approval gates mở; không coi review đã nhìn predictions là nhãn độc lập |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|
