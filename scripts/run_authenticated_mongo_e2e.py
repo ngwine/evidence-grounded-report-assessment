@@ -6,37 +6,36 @@ only those on exit. API/worker then use scoped identities, never the admin URI.
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 import os
-from pathlib import Path
 import secrets
 import sys
 import tempfile
 import threading
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
+import uvicorn
 from bson import ObjectId
 from pymongo import MongoClient
-import uvicorn
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from services.backend.src.kltn_ai.api.app import create_app  # noqa: E402
-from services.backend.src.kltn_ai.auth.service import create_local_user  # noqa: E402
-from services.backend.src.kltn_ai.db.migrations import apply_schema_v1  # noqa: E402
-from services.backend.src.kltn_ai.db.application_schema import apply_schema_v2  # noqa: E402
-from services.backend.src.kltn_ai.db.document_schema import apply_schema_v3  # noqa: E402
-from services.backend.src.kltn_ai.db.analysis_schema import apply_schema_v4  # noqa: E402
-from services.backend.src.kltn_ai.db.annotation_schema import apply_schema_v5  # noqa: E402
-from services.backend.src.kltn_ai.db.roles import provision_roles  # noqa: E402
-from services.backend.src.kltn_ai.domain.documents import _common  # noqa: E402
-from services.backend.src.kltn_ai.domain.rubrics import RubricService  # noqa: E402
-from services.backend.src.kltn_ai.worker.mongo_worker import MongoParseWorker  # noqa: E402
-from services.backend.src.kltn_ai.worker.mongo_index_worker import MongoIndexWorker  # noqa: E402
-from services.backend.src.kltn_ai.worker.mongo_analysis_worker import (  # noqa: E402
+from services.backend.src.kltn_ai.api.app import create_app
+from services.backend.src.kltn_ai.auth.service import create_local_user
+from services.backend.src.kltn_ai.db.analysis_schema import apply_schema_v4
+from services.backend.src.kltn_ai.db.annotation_schema import apply_schema_v5
+from services.backend.src.kltn_ai.db.application_schema import apply_schema_v2
+from services.backend.src.kltn_ai.db.document_schema import apply_schema_v3
+from services.backend.src.kltn_ai.db.migrations import apply_schema_v1
+from services.backend.src.kltn_ai.db.roles import provision_roles
+from services.backend.src.kltn_ai.domain.documents import _common
+from services.backend.src.kltn_ai.worker.mongo_analysis_worker import (
     MongoAnalysisWorker,
 )
+from services.backend.src.kltn_ai.worker.mongo_index_worker import MongoIndexWorker
+from services.backend.src.kltn_ai.worker.mongo_worker import MongoParseWorker
 
 WORKSPACE = ObjectId("000000000000000000000101")
 
@@ -44,6 +43,12 @@ WORKSPACE = ObjectId("000000000000000000000101")
 def main():
     if os.environ.get("KLTN_RUN_AUTH_MONGO_E2E") != "1":
         raise SystemExit("Opt-in required: KLTN_RUN_AUTH_MONGO_E2E=1")
+    try:
+        api_port = int(os.environ.get("KLTN_AUTH_E2E_API_PORT", "8001"))
+    except ValueError as error:
+        raise SystemExit("KLTN_AUTH_E2E_API_PORT must be an integer") from error
+    if not 1024 <= api_port <= 65535:
+        raise SystemExit("KLTN_AUTH_E2E_API_PORT must be an unprivileged TCP port")
     from urllib.parse import urlsplit
 
     uri = (ROOT / "var/infra/mongodb/admin-uri").read_text().strip()
@@ -82,7 +87,7 @@ def main():
                 "name": "Browser fixture",
                 "kind": "RESEARCH",
                 "status": "ACTIVE",
-                "default_purpose": "SYNTHETIC_BROWSER_TEST",
+                "default_purpose": "INTERNAL_TEST",
             }
         )
         db.memberships.insert_one(
@@ -97,74 +102,9 @@ def main():
                 "valid_until": None,
             }
         )
-        for suffix in ("201", "202"):
-            db.governance_records.insert_one(
-                {
-                    "_id": ObjectId("0" * 21 + suffix),
-                    **common,
-                    "workspace_id": WORKSPACE,
-                    "resource_type": "DOCUMENT",
-                    "resource_id": ObjectId(),
-                    "record_version": 1,
-                    "data_owner": {"kind": "SYNTHETIC_FIXTURE"},
-                    "rights_basis": "INTERNAL_APPROVAL",
-                    "license_id": None,
-                    "rights_evidence": {"kind": "SELF_AUTHORED_TEST_BYTES_ONLY"},
-                    "allowed_purposes": ["SYNTHETIC_BROWSER_TEST"],
-                    "redistribution": "ALLOWED",
-                    "data_class": "INTERNAL",
-                    "anonymization": {"required": False},
-                    "retention_policy": {},
-                    "approver_id": actor,
-                    "approved_at": now,
-                    "valid_from": None,
-                    "valid_until": None,
-                    "status": "APPROVED",
-                }
-            )
-        rubric_service = RubricService(db)
-        rubric = rubric_service.create(
-            actor,
-            WORKSPACE,
-            {
-                "rubric_key": "browser-rubric",
-                "title": "Browser fixture rubric",
-                "definition": {
-                    "max_score": 10,
-                    "criteria": [
-                        {
-                            "criterion_key": "C1",
-                            "title": "Benchmark",
-                            "weight": 10,
-                            "scoring_mode": "PROPORTIONAL_CHECKLIST_V0",
-                            "checklists": [
-                                {
-                                    "checklist_key": "C1.1",
-                                    "statement": "Presents measured benchmark evidence",
-                                    "evidence_mode": "LOCAL",
-                                    "requirements": [
-                                        {
-                                            "requirement_id": "R1",
-                                            "any_of": ["benchmark"],
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ],
-                },
-            },
-            idempotency_key="browser-rubric-create",
-            request_id="browser-fixture",
-        )
-        rubric_service.publish_version(
-            actor,
-            WORKSPACE,
-            rubric["current_version_id"],
-            expected_revision=1,
-            idempotency_key="browser-rubric-publish",
-            request_id="browser-fixture",
-        )
+        # Deliberately no document governance, rubric or result fixtures here.
+        # The browser must declare rights for its self-authored bytes, upload
+        # both files, author a rubric through the form and run the real workers.
         provision_roles(db)
         for role in ("api", "worker"):
             secret = secrets.token_urlsafe(24)
@@ -200,7 +140,7 @@ def main():
                 while not stop.is_set():
                     try:
                         did_work = any(worker.process_one() for worker in workers)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 - redact driver/file errors in test logs.
                         # Test surfaces a missing result; never log credentials/content.
                         print("Synthetic worker failed safely", flush=True)
                         return
@@ -221,7 +161,7 @@ def main():
 
             app.router.lifespan_context = lifespan
             uvicorn.run(
-                app, host="127.0.0.1", port=8001, log_level="error", access_log=False
+                app, host="127.0.0.1", port=api_port, log_level="error", access_log=False
             )
     finally:
         for client in runtime_clients:

@@ -31,6 +31,7 @@ from ..domain.documents import MAX_DOCUMENT_BYTES
 from .document_routes import document_router
 from .analysis_routes import analysis_router
 from .item_annotation_routes import item_annotation_router
+from .governance_routes import governance_router
 
 
 PREFIX = "/api/v1"
@@ -266,6 +267,8 @@ def create_app(database: Database[dict[str, Any]], *, allow_test_client: bool = 
             request_id=request.state.request_id))
 
     storage_root = private_root or Path(__file__).resolve().parents[5] / "var/app-mongo"
+    app.include_router(governance_router(database, storage_root,
+        transaction_mode=transaction_mode, prefix=PREFIX, json_reader=json_body, key_reader=_key))
     app.include_router(document_router(
         database, storage_root,
         transaction_mode=transaction_mode, prefix=PREFIX, key_reader=_key, revision_reader=_revision))
