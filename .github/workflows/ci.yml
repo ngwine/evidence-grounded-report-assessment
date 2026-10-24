@@ -48,7 +48,7 @@ jobs:
         run: >-
           python -m ruff check --select E4,E7,E9,F
           services/backend/src research/offline_retrieval
-          research/core_mvp research/evidence_graph
+          research/core_mvp research/evidence_graph research/gold_annotation
       - name: Mypy typed backend slice
         run: >-
           python -m mypy --check-untyped-defs --show-error-codes
