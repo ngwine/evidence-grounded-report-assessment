@@ -49,6 +49,37 @@ source bị RRF đẩy ra ngoài `rerank_depth`, và đúng source document chư
 `docs/benchmarks/pan-pc-11-cross-encoder-ablation-dev0-result.md`. `DEV0` được
 đóng băng sau phân tích này; không điều chỉnh tham số tiếp trên 30 parent đó.
 
+## Controlled short-evidence follow-up
+
+A6 (`multiview_hybrid_cross_encoder_short_evidence`) is an opt-in comparison
+against A5 with the same source candidates, support IDs, top-N head, model and
+max pooling. It changes only visible pair construction: a bounded query prefix
+and one lexical passage window. Full raw spans remain candidate provenance;
+cropped model input is recorded through relative character ranges and hashes.
+
+See [the locked DEV1 protocol](../protocols/rq1-similarity/short-evidence-dev1-v1.md)
+and [configuration](../configs/retrieval/pan-pc-11-short-evidence-dev1-v1.json).
+A5/default behavior is unchanged. The optional policy requires actual fast
+character offsets and checks the exact re-tokenized pair budget. Unsupported
+inputs fail rather than silently selecting another policy. The runner refuses
+to overwrite an existing nonempty output directory.
+
+After a completed, approved run, audit candidate invariants and produce the
+paired report with:
+
+```bash
+python -m research.offline_retrieval.analysis.short_evidence_comparison \
+  --run-dir /path/to/completed/dev1-run \
+  --queries /path/to/approved/DEV1/queries.jsonl \
+  --output /path/to/reports/short-evidence-dev1.md
+```
+
+This report uses paired parent-cluster resampling for A6 minus A5. It checks
+candidate/support/tail equality, visible-token diagnostics and artifact hashes
+before interpreting the metrics. Support-request truncation counts include
+memoized pairs and must not be compared as unique-pair counts or independent
+cold latency. TEST0 remains unopened during DEV1 method development.
+
 ## Input
 
 Dataset manifest phải khóa checksum cho bốn JSONL:

@@ -126,7 +126,8 @@ def _validate_metric_value(
 
 
 def build_parent_vectors(
-    metrics: Mapping[str, Any], query_parents: Mapping[str, str]
+    metrics: Mapping[str, Any], query_parents: Mapping[str, str],
+    *, methods: Mapping[str, str] = METHODS,
 ) -> tuple[list[str], dict[str, dict[str, list[float]]]]:
     """Build aligned per-parent means for every method and metric.
 
@@ -141,7 +142,7 @@ def build_parent_vectors(
 
     vectors: dict[str, dict[str, list[float]]] = {}
     expected_queries = set(query_parents)
-    for label, method_name in METHODS.items():
+    for label, method_name in methods.items():
         method_metrics = metrics.get(method_name)
         if not isinstance(method_metrics, Mapping):
             raise ValueError(f"Missing method in metrics.json: {method_name}")
@@ -214,6 +215,8 @@ def bootstrap_parent_vectors(
     repetitions: int,
     seed: int,
     confidence_level: float = 0.95,
+    methods: Mapping[str, str] = METHODS,
+    contrasts: Sequence[tuple[str, str]] = CONTRASTS,
 ) -> dict[str, Any]:
     """Compute percentile intervals with one shared parent resample per draw."""
 
@@ -225,7 +228,9 @@ def bootstrap_parent_vectors(
         raise ValueError("confidence_level must be in (0, 1)")
 
     parent_count = len(parent_ids)
-    for label in METHODS:
+    if not methods or any(left not in methods or right not in methods for left, right in contrasts):
+        raise ValueError("Bootstrap contrasts must reference the configured methods")
+    for label in methods:
         if label not in vectors:
             raise ValueError(f"Missing parent vectors for {label}")
         for metric_label in METRICS:
@@ -236,22 +241,22 @@ def bootstrap_parent_vectors(
                 )
 
     method_draws = {
-        label: {metric: [] for metric in METRICS} for label in METHODS
+        label: {metric: [] for metric in METRICS} for label in methods
     }
     delta_draws = {
         f"{left}-{right}": {metric: [] for metric in METRICS}
-        for left, right in CONTRASTS
+        for left, right in contrasts
     }
     rng = random.Random(seed)
     for _ in range(repetitions):
         sampled = [rng.randrange(parent_count) for _ in range(parent_count)]
-        for label in METHODS:
+        for label in methods:
             for metric_label in METRICS:
                 values = vectors[label][metric_label]
                 method_draws[label][metric_label].append(
                     math.fsum(values[index] for index in sampled) / parent_count
                 )
-        for left, right in CONTRASTS:
+        for left, right in contrasts:
             contrast = f"{left}-{right}"
             for metric_label in METRICS:
                 left_values = vectors[left][metric_label]
@@ -275,7 +280,7 @@ def bootstrap_parent_vectors(
         }
 
     estimates: dict[str, Any] = {}
-    for label, method_name in METHODS.items():
+    for label, method_name in methods.items():
         estimates[label] = {
             "method": method_name,
             "metrics": {
@@ -288,7 +293,7 @@ def bootstrap_parent_vectors(
         }
 
     deltas: dict[str, Any] = {}
-    for left, right in CONTRASTS:
+    for left, right in contrasts:
         contrast = f"{left}-{right}"
         deltas[contrast] = {
             "left": left,
@@ -325,16 +330,19 @@ def analyse(
     repetitions: int,
     seed: int,
     confidence_level: float = 0.95,
+    methods: Mapping[str, str] = METHODS,
+    contrasts: Sequence[tuple[str, str]] = CONTRASTS,
 ) -> dict[str, Any]:
     metrics = _read_json(metrics_path)
     query_parents = load_query_parents(queries_path)
-    parent_ids, vectors = build_parent_vectors(metrics, query_parents)
+    parent_ids, vectors = build_parent_vectors(metrics, query_parents, methods=methods)
     result = bootstrap_parent_vectors(
         parent_ids,
         vectors,
         repetitions=repetitions,
         seed=seed,
         confidence_level=confidence_level,
+        methods=methods, contrasts=contrasts,
     )
     query_counts: dict[str, int] = defaultdict(int)
     for parent_id in query_parents.values():
@@ -342,7 +350,7 @@ def analyse(
     result.update(
         {
             "schema_version": 1,
-            "method_mapping": dict(METHODS),
+            "method_mapping": dict(methods),
             "query_count": len(query_parents),
             "queries_per_parent": {
                 "min": min(query_counts.values()),

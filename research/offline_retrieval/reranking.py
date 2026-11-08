@@ -179,6 +179,7 @@ def rerank_documents(
                 "model_visible_source_spans": (
                     deepcopy(reference.source_spans)
                     if diagnostic.get("truncated") is False
+                    and diagnostic.get("source_span_scope") != "CROPPED_PAIR_OFFSETS_ONLY"
                     else None
                 ),
             }
@@ -221,6 +222,11 @@ def rerank_documents(
                 "candidate_passage_origin; consult cross_encoder_input.truncated "
                 "before treating the full span as model-visible"
             )
+            if winner["cross_encoder_input"].get("source_span_scope") == "CROPPED_PAIR_OFFSETS_ONLY":
+                record["source_spans_semantics"] = (
+                    "candidate_passage_origin_only; model input is described by "
+                    "cross_encoder_input selected character ranges, not the full raw spans"
+                )
             record["supporting_chunk_id"] = str(winner["support_id"])
             record["source_spans"] = deepcopy(winner["source_spans"])
             record["reranked"] = True
