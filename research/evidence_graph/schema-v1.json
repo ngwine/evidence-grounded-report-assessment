@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kltn.local/schemas/evidence-graph-v1.schema.json",
+  "title": "Evidence Graph snapshot v1",
+  "type": "object",
+  "required": ["schema_version", "scope", "input_versions", "chunks", "spans", "nodes", "edges"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "evidence-graph-v1"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "input_versions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/inputVersion"}},
+    "chunks": {"type": "array", "items": {"$ref": "#/$defs/chunk"}},
+    "spans": {"type": "array", "items": {"$ref": "#/$defs/span"}},
+    "nodes": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+    "edges": {"type": "array", "items": {"$ref": "#/$defs/edge"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "scope": {
+      "type": "object",
+      "required": ["workspace_id", "report_id", "report_version_id", "graph_version", "analysis_run_id"],
+      "additionalProperties": false,
+      "properties": {
+        "workspace_id": {"$ref": "#/$defs/id"},
+        "report_id": {"$ref": "#/$defs/id"},
+        "report_version_id": {"$ref": "#/$defs/id"},
+        "graph_version": {"$ref": "#/$defs/id"},
+        "analysis_run_id": {"$ref": "#/$defs/id"}
+      }
+    },
+    "inputVersion": {
+      "type": "object",
+      "required": ["document_id", "document_version_id", "kind", "rights_state"],
+      "additionalProperties": false,
+      "properties": {
+        "document_id": {"$ref": "#/$defs/id"},
+        "document_version_id": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["REPORT", "SOURCE"]},
+        "rights_state": {"const": "APPROVED"}
+      }
+    },
+    "sourceSpan": {
+      "type": "object",
+      "required": [
+        "element_key", "element_type", "element_raw_char_start", "element_raw_char_end",
+        "element_normalized_char_start", "element_normalized_char_end",
+        "chunk_raw_char_start", "chunk_raw_char_end", "chunk_normalized_char_start",
+        "chunk_normalized_char_end", "locator"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "element_key": {"$ref": "#/$defs/id"},
+        "element_type": {"$ref": "#/$defs/id"},
+        "element_raw_char_start": {"type": "integer", "minimum": 0},
+        "element_raw_char_end": {"type": "integer", "minimum": 1},
+        "element_normalized_char_start": {"type": "integer", "minimum": 0},
+        "element_normalized_char_end": {"type": "integer", "minimum": 1},
+        "chunk_raw_char_start": {"type": "integer", "minimum": 0},
+        "chunk_raw_char_end": {"type": "integer", "minimum": 1},
+        "chunk_normalized_char_start": {"type": "integer", "minimum": 0},
+        "chunk_normalized_char_end": {"type": "integer", "minimum": 1},
+        "locator": {"type": "object", "minProperties": 1}
+      }
+    },
+    "chunk": {
+      "type": "object",
+      "required": ["chunk_id", "document_id", "document_version_id", "content_sha256", "source_spans"],
+      "additionalProperties": false,
+      "properties": {
+        "chunk_id": {"$ref": "#/$defs/id"},
+        "document_id": {"$ref": "#/$defs/id"},
+        "document_version_id": {"$ref": "#/$defs/id"},
+        "content_sha256": {"$ref": "#/$defs/sha256"},
+        "source_spans": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/sourceSpan"}}
+      }
+    },
+    "span": {
+      "type": "object",
+      "required": ["scope", "chunk_id", "document_id", "document_version_id", "source_span_index", "source_span", "span_id"],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {"$ref": "#/$defs/scope"},
+        "chunk_id": {"$ref": "#/$defs/id"},
+        "document_id": {"$ref": "#/$defs/id"},
+        "document_version_id": {"$ref": "#/$defs/id"},
+        "source_span_index": {"type": "integer", "minimum": 0},
+        "source_span": {"$ref": "#/$defs/sourceSpan"},
+        "span_id": {"$ref": "#/$defs/id"}
+      }
+    },
+    "spanIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "node": {
+      "type": "object",
+      "required": [
+        "scope", "node_id", "node_type", "label", "attributes", "evidence_span_ids",
+        "extractor", "model_or_rule_version", "prompt_sha256", "confidence", "created_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {"$ref": "#/$defs/scope"},
+        "node_id": {"$ref": "#/$defs/id"},
+        "node_type": {"enum": ["CLAIM", "CONCEPT", "METHOD", "RESULT", "CONCLUSION", "SOURCE", "EVIDENCE_SPAN"]},
+        "label": {"$ref": "#/$defs/id"},
+        "attributes": {"type": "object"},
+        "evidence_span_ids": {"$ref": "#/$defs/spanIds"},
+        "extractor": {"$ref": "#/$defs/id"},
+        "model_or_rule_version": {"$ref": "#/$defs/id"},
+        "prompt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "created_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": [
+        "scope", "edge_id", "relation_type", "from_node_id", "to_node_id",
+        "evidence_span_ids", "extractor", "model_or_rule_version", "prompt_sha256",
+        "confidence", "review_state", "reviewer_id", "reviewed_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "scope": {"$ref": "#/$defs/scope"},
+        "edge_id": {"$ref": "#/$defs/id"},
+        "relation_type": {"enum": ["MENTIONS", "USES_METHOD", "EVALUATED_ON", "SUPPORTS", "CONTRADICTS", "REPORTS_RESULT", "DRAWS_CONCLUSION", "REFERS_TO"]},
+        "from_node_id": {"$ref": "#/$defs/id"},
+        "to_node_id": {"$ref": "#/$defs/id"},
+        "evidence_span_ids": {"$ref": "#/$defs/spanIds"},
+        "extractor": {"$ref": "#/$defs/id"},
+        "model_or_rule_version": {"$ref": "#/$defs/id"},
+        "prompt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "review_state": {"enum": ["UNREVIEWED", "ACCEPTED", "REJECTED"]},
+        "reviewer_id": {"type": ["string", "null"]},
+        "reviewed_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    }
+  }
+}

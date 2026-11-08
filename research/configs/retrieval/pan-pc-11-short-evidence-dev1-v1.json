@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "experiment_id": "pan-pc-11-short-evidence-dev1-v1",
+  "protocol": {
+    "dataset_role": "DEV1_CONTROLLED_INPUT_CONSTRUCTION",
+    "query_unit": "annotated_suspicious_span_window",
+    "target_scope": "source_document",
+    "corpus_scope": "DETERMINISTIC_RESOURCE_BOUNDED_PILOT",
+    "parent_annotation_count": 30,
+    "candidate_source_document_count": 200,
+    "parameter_selection_allowed": true,
+    "comparison": "A1_to_A5_plus_A6_short_visible_input",
+    "ablation_mapping": {
+      "A1": "fixed_window_bm25",
+      "A2": "structure_dense",
+      "A3": "multiview_hybrid_rrf",
+      "A4": "dense_cross_encoder",
+      "A5": "multiview_hybrid_cross_encoder",
+      "A6": "multiview_hybrid_cross_encoder_short_evidence"
+    },
+    "candidate_protocol": "top_100_per_retrieval_view",
+    "rerank_protocol": "cross_encoder_top_50_then_preserve_candidate_tail",
+    "reporting_units": [
+      "query_window_macro",
+      "parent_annotation_balanced_macro"
+    ],
+    "full_corpus_result": false,
+    "official_pan_result": false,
+    "final_model_selection_result": false,
+    "changed_factor": "cross_encoder_visible_input_construction_only",
+    "gold_used_for_input_selection": false
+  },
+  "seed": 20261012,
+  "methods": [
+    "fixed_window_bm25",
+    "structure_dense",
+    "multiview_hybrid_rrf",
+    "dense_cross_encoder",
+    "multiview_hybrid_cross_encoder",
+    "multiview_hybrid_cross_encoder_short_evidence"
+  ],
+  "candidate_retrieval_depth": 100,
+  "retrieval_depth": 100,
+  "metric_cutoffs": [
+    1,
+    5,
+    10,
+    20,
+    100
+  ],
+  "fixed_window": {
+    "size_tokens": 256,
+    "stride_tokens": 128
+  },
+  "bm25": {
+    "k1": 1.2,
+    "b": 0.75
+  },
+  "dense": {
+    "backend": "sentence_transformers",
+    "model": "intfloat/multilingual-e5-small",
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "revision_source": "https://huggingface.co/intfloat/multilingual-e5-small/commit/614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "device": "cpu",
+    "batch_size": 16,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: "
+  },
+  "rrf": {
+    "k": 60
+  },
+  "cross_encoder": {
+    "backend": "sentence_transformers_cross_encoder",
+    "model": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd652930e4ba29e8149678df786c240d8825",
+    "revision_source": "https://huggingface.co/cross-encoder/mmarco-mMiniLMv2-L12-H384-v1/commit/1427fd652930e4ba29e8149678df786c240d8825",
+    "device": "cpu",
+    "batch_size": 8,
+    "max_length": 512,
+    "rerank_depth": 50,
+    "support_aggregation": "max",
+    "score_output": "raw_logit",
+    "failure_policy": "write_partial_baselines_and_fail",
+    "stage_timeout_seconds": 7200,
+    "evidence_input_policy": {
+      "strategy": "lexical_window_v1",
+      "query_token_budget": 192,
+      "passage_token_budget": 256
+    }
+  },
+  "metrics": {
+    "target_scope": "document",
+    "gold_overlap_threshold": 0.5,
+    "primary_dev_metric": "parent_macro.recall@10"
+  }
+}

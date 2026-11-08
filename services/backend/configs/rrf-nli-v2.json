@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "experiment_id": "two-pipeline-output-quality-rrf-nli-v2",
+  "seed": 20261013,
+  "documents": {
+    "max_tokens": 220,
+    "min_tokens": 30
+  },
+  "models": {
+    "semantic_verifier": {
+      "backend": "transformers_nli",
+      "model": "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli",
+      "revision": "8adb042d524ecd5c26d3e3ba0e3fbcf7e2d0864c",
+      "device": "mps",
+      "batch_size": 8,
+      "max_length": 512
+    },
+    "dense": {
+      "backend": "sentence_transformers",
+      "model": "intfloat/multilingual-e5-small",
+      "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+      "device": "cpu",
+      "batch_size": 16,
+      "query_prefix": "query: ",
+      "document_prefix": "passage: "
+    }
+  },
+  "pipeline1": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 3,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": true,
+    "reranker_enabled": false,
+    "classification": {
+      "verbatim_query_coverage": 0.72,
+      "verbatim_exact_char_ratio": 0.45,
+      "semantic_similarity": 0.72,
+      "semantic_min_lexical": 0.05,
+      "cross_encoder_min_score": 0.0,
+      "lexical_paraphrase_coverage": 0.32,
+      "summary_length_ratio": 0.65,
+      "minimum_alignment_chars": 24
+    },
+    "semantic_verification": {
+      "enabled": true,
+      "entailment_threshold": 0.65,
+      "rejection_threshold": 0.85,
+      "margin": 0.2,
+      "max_sentence_pairs": 12,
+      "min_sentence_words": 5,
+      "max_context_sentences": 2,
+      "citation_number_guard": "LINKED_SINGLE_NUMERIC_MARKERS"
+    }
+  },
+  "pipeline2": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 5,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": false,
+    "reranker_enabled": false,
+    "graph": {
+      "seed_depth": 8,
+      "iterations": 20,
+      "damping": 0.85,
+      "minimum_shared_terms": 2,
+      "maximum_term_degree": 30
+    }
+  },
+  "config_id": "rrf-nli-v2",
+  "limits": {
+    "max_report_chunks": 500,
+    "max_source_chunks": 2000,
+    "max_total_text_chars": 1000000,
+    "max_result_bytes": 8388608,
+    "wall_seconds": 600
+  }
+}

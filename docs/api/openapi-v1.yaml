@@ -3,8 +3,12 @@ info:
   title: Evidence-Grounded Report Assessment API
   version: 0.1.0-draft
   description: >-
-    Review-candidate contract for W2.3. It describes intended behavior and does
-    not claim that the API has been implemented.
+    Review-candidate contract for the full target API. The authenticated local
+    Mongo app implements auth/workspaces, rubrics, upload/PARSE, index generations,
+    version-locked analysis results/evidence/export, run-scoped lecturer reviews
+    and versioned model-visible item annotations. Item annotations are not blinded gold.
+    Legacy proposal/publication, graph and lifecycle endpoints remain intended
+    behavior. The local two-pipeline demo is a separate API.
 servers:
   - url: /api/v1
 tags:
@@ -20,6 +24,126 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /workspaces/{workspace_id}/upload-declarations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [Reports, Sources]
+      operationId: declareUploadAuthorConsent
+      summary: Declare limited author consent for an exact private upload
+      description: >-
+        Requires current workspace access and report.upload or source.upload for
+        the declared kind. This is the uploader's consent for their own or
+        co-authored work, not independent DATA_APPROVER approval. All three
+        attestations must be explicitly true. Only workspaces whose default
+        purpose is LOCAL_DEMO or INTERNAL_TEST accept this declaration. It permits
+        internal processing for 30 days, prohibits redistribution, and grants no
+        research, publication or gold-evaluation approval. Expiry blocks further
+        use; it does not schedule automatic physical deletion. The returned
+        governance record is bound to the uploader, exact SHA-256, filename and
+        document kind; upload rechecks these before storing bytes and inside its
+        transaction. For a new version, document_id must identify a currently
+        accessible document of the same kind. Idempotent replay rechecks current
+        access and governance; changed payload under the same key conflicts.
+        Third-party sources and datasets still need separate rights approval.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadAuthorDeclarationRequest'
+      responses:
+        '201':
+          description: Limited author consent recorded, or an identical authorized replay
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadAuthorDeclaration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            DECLARATION_SCOPE_NOT_ALLOWED, IDEMPOTENCY_CONFLICT,
+            GOVERNANCE_NOT_APPROVED or REVISION_CONFLICT. A subsequent upload
+            returns DECLARATION_FILE_MISMATCH when uploader, file, kind or digest
+            does not match the recorded declaration.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /workspaces/{workspace_id}/upload-authorizations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [Reports]
+      operationId: listUploadAuthorizations
+      summary: Select a pre-existing, currently usable rights record for a new document
+      description: >-
+        Read-only discovery, never approval creation. Requires the corresponding
+        upload capability and current workspace access. Excludes bound resources,
+        tombstones, revoked or expired approvals, wrong purpose and incomplete
+        anonymization. Author declarations are visible only to their declaring
+        uploader for the declared kind and are named as self-declarations, not
+        independent approval. Only safe enum-derived names and opaque references return.
+        Upload and workers recheck all authority independently.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [REPORT, CORPUS_SOURCE]
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Safe choices and bounded scan continuation, which may return an empty page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name, rights_basis, allowed_purposes, valid_until, resource_id, classification]
+                      properties:
+                        id:
+                          $ref: '#/components/schemas/OpaqueId'
+                        name:
+                          type: string
+                        rights_basis:
+                          type: string
+                        allowed_purposes:
+                          type: array
+                          items:
+                            type: string
+                        valid_until:
+                          type: [string, 'null']
+                          format: date-time
+                        resource_id:
+                          $ref: '#/components/schemas/OpaqueId'
+                        classification:
+                          type: string
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /auth/sessions:
     post:
       tags: [Auth]
@@ -69,6 +193,40 @@ paths:
                 $ref: '#/components/schemas/Actor'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /auth/csrf:
+    get:
+      tags: [Auth]
+      operationId: refreshCsrfToken
+      summary: Recover an in-memory CSRF token after same-origin reload
+      description: >-
+        Requires X-CSRF-Refresh to prevent cross-origin simple requests from
+        rotating the token. Rotation invalidates tokens in other tabs; reload
+        that tab on CSRF_INVALID. No CORS access is enabled.
+      parameters:
+        - in: header
+          name: X-CSRF-Refresh
+          required: true
+          schema:
+            type: string
+            const: '1'
+      responses:
+        '200':
+          description: Fresh CSRF token; session cookie remains HttpOnly
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [csrf_token]
+                properties:
+                  csrf_token:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /auth/session:
     delete:
       tags: [Auth]
@@ -203,6 +361,20 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [Reports]
+      operationId: listReportVersions
+      summary: List authorized immutable report versions
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Version page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionPage'
     post:
       tags: [Reports]
       operationId: createReportVersion
@@ -285,7 +457,7 @@ paths:
               $ref: '#/components/schemas/SourceUpload'
       responses:
         '202':
-          description: Source accepted into quarantine
+          description: Approved source accepted for bounded parsing
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -335,6 +507,20 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/SourceId'
+    get:
+      tags: [Sources]
+      operationId: listSourceVersions
+      summary: List authorized immutable source versions
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Version page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersionPage'
     post:
       tags: [Sources]
       operationId: createSourceVersion
@@ -352,7 +538,7 @@ paths:
               $ref: '#/components/schemas/SourceVersionUpload'
       responses:
         '202':
-          description: Source version accepted into quarantine
+          description: Approved source version accepted for bounded parsing
           headers:
             X-Request-ID:
               $ref: '#/components/headers/RequestId'
@@ -398,6 +584,79 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /workspaces/{workspace_id}/document-versions/{version_id}/file:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Reports, Sources]
+      operationId: getDocumentVersionFile
+      summary: Read approved, hash-verified bytes with current ownership/governance checks
+      responses:
+        '200':
+          description: PDF inline or other format attachment; private storage key never exposed
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/document-versions/{version_id}/index-generations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/VersionId'
+    post:
+      tags: [Analysis]
+      operationId: requestIndexGeneration
+      summary: Queue an immutable index generation for a parsed version
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [config_id]
+              properties:
+                config_id:
+                  $ref: '#/components/schemas/RuntimeConfigId'
+                rebuild:
+                  type: boolean
+                  default: false
+      responses:
+        '202':
+          description: Generation queued or existing identical generation returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexGeneration'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/index-generations/{generation_id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - in: path
+        name: generation_id
+        required: true
+        schema:
+          $ref: '#/components/schemas/OpaqueId'
+    get:
+      tags: [Analysis]
+      operationId: getIndexGeneration
+      summary: Read generation state under current authorization and governance
+      responses:
+        '200':
+          description: Generation state; artifact storage path is private
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexGeneration'
   /workspaces/{workspace_id}/document-versions/{version_id}/chunks:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
@@ -605,6 +864,35 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/RubricId'
+    get:
+      tags: [Rubrics]
+      operationId: listRubricVersions
+      summary: List draft and published versions visible to the rubric manager
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Version page
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RubricVersion'
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags: [Rubrics]
       operationId: createRubricVersion
@@ -646,6 +934,26 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/VersionId'
+    get:
+      tags: [Rubrics]
+      operationId: getRubricVersion
+      summary: Read an authorized draft or immutable published version
+      responses:
+        '200':
+          description: Rubric version
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RubricVersion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
     put:
       tags: [Rubrics]
       operationId: replaceRubricDraft
@@ -719,6 +1027,20 @@ paths:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
       - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [Analysis]
+      operationId: listReportAnalysisRuns
+      summary: Recover visible runs without browser-local content storage
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Authorized analysis run page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisRunPage'
     post:
       tags: [Analysis]
       operationId: createAnalysisRun
@@ -779,6 +1101,197 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/results:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Analysis]
+      operationId: getAnalysisResults
+      summary: Read integrity-checked persisted similarity and assessment proposals
+      responses:
+        '200':
+          description: Only selected pipelines are non-null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RuntimeResults'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/export:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Analysis]
+      operationId: exportAnalysisResults
+      summary: Export authorized versioned proposal and manifest as JSON attachment
+      responses:
+        '200':
+          description: JSON attachment; no automatic academic publication
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [schema_version, run, results, interpretation]
+                properties:
+                  schema_version:
+                    const: 1
+                  run:
+                    $ref: '#/components/schemas/AnalysisRun'
+                  results:
+                    $ref: '#/components/schemas/RuntimeResults'
+                  interpretation:
+                    type: string
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/reviews:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: listAnalysisReviews
+      summary: List immutable run-scoped lecturer reviews
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Run review page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RunReview'
+                  page:
+                    $ref: '#/components/schemas/PageInfo'
+    post:
+      tags: [Review]
+      operationId: reviewAnalysisRun
+      summary: Record authenticated review with revision CAS; does not publish a grade
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision, reason_code]
+              properties:
+                decision:
+                  type: string
+                  enum: [ACCEPT, REJECT]
+                reason_code:
+                  type: string
+                  pattern: '^[A-Z][A-Z0-9_]{0,63}$'
+                reason_text:
+                  type: [string, 'null']
+                  maxLength: 4000
+      responses:
+        '201':
+          description: Review created or identical revision retry replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunReview'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/annotation-items:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: listAnalysisAnnotationItems
+      summary: List pinned pair/checklist items and exact raw parser spans for model-visible review
+      description: Does not conceal model predictions or create independently annotated gold.
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Items with the current actor's latest annotation and the run revision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnnotationItemPage'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/item-annotations:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: listOwnItemAnnotations
+      summary: List the current actor's immutable item-review history
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Own annotation history, not independent blinded gold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemAnnotationPage'
+    post:
+      tags: [Review]
+      operationId: createItemAnnotation
+      summary: Append a human item annotation without modifying machine output
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemAnnotationRequest'
+      responses:
+        '201':
+          description: Annotation appended or an identical idempotent retry replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemAnnotation'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+  /workspaces/{workspace_id}/analysis-runs/{run_id}/item-annotations/export:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceId'
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [Review]
+      operationId: exportOwnItemAnnotations
+      summary: Export private model-visible review history; not gold or official grades
+      responses:
+        '200':
+          description: JSON attachment with explicit predictions-visible and independent-gold flags
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [annotation_mode, predictions_visible, independent_gold, official_grade]
+                properties:
+                  annotation_mode:
+                    const: MODEL_VISIBLE_REVIEW
+                  predictions_visible:
+                    const: true
+                  independent_gold:
+                    const: false
+                  official_grade:
+                    const: false
   /workspaces/{workspace_id}/analysis-runs/{run_id}/evidence:
     parameters:
       - $ref: '#/components/parameters/WorkspaceId'
@@ -786,7 +1299,7 @@ paths:
     get:
       tags: [Analysis]
       operationId: listRunEvidence
-      summary: List verified evidence for a run
+      summary: List persisted evidence including unverified retrieval candidates, with explicit verification state
       parameters:
         - $ref: '#/components/parameters/RequestId'
         - $ref: '#/components/parameters/Cursor'
@@ -800,7 +1313,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EvidencePage'
+                $ref: '#/components/schemas/RuntimeEvidencePage'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1240,6 +1753,70 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
   schemas:
+    UploadAuthorDeclarationRequest:
+      type: object
+      additionalProperties: false
+      required: [kind, filename, content_sha256, rights_basis, attested_authority, pii_reviewed, internal_use_only]
+      properties:
+        kind:
+          type: string
+          enum: [REPORT, CORPUS_SOURCE]
+        filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Exact upload filename, with PDF, DOCX, TXT or MD extension and no control characters
+        content_sha256:
+          $ref: '#/components/schemas/Sha256'
+        rights_basis:
+          type: string
+          const: SELF_AUTHORED
+        attested_authority:
+          type: boolean
+          const: true
+          description: Uploader has authority and all co-authors permit this internal use
+        pii_reviewed:
+          type: boolean
+          const: true
+          description: Uploader reviewed the file and removed unnecessary personal information
+        internal_use_only:
+          type: boolean
+          const: true
+          description: No publication, redistribution or gold-data approval is requested
+        document_id:
+          $ref: '#/components/schemas/OpaqueId'
+    UploadAuthorDeclaration:
+      type: object
+      additionalProperties: false
+      required: [id, name, rights_basis, allowed_purposes, valid_until, resource_id, classification, declaration_scope, independent_approval]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        name:
+          type: string
+        rights_basis:
+          type: string
+          const: CONSENT
+        allowed_purposes:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: string
+            enum: [LOCAL_DEMO, INTERNAL_TEST]
+        valid_until:
+          $ref: '#/components/schemas/Timestamp'
+        resource_id:
+          $ref: '#/components/schemas/OpaqueId'
+        classification:
+          type: string
+          const: RESTRICTED
+        declaration_scope:
+          type: string
+          const: INTERNAL_SELF_AUTHORED
+        independent_approval:
+          type: boolean
+          const: false
     OpaqueId:
       type: string
       minLength: 16
@@ -1302,7 +1879,7 @@ components:
           $ref: '#/components/schemas/OpaqueId'
         role:
           type: string
-          enum: [STUDENT, LECTURER, ADMIN]
+          enum: [STUDENT, LECTURER, OPERATOR, DATA_APPROVER, ADMIN]
         capabilities:
           type: array
           uniqueItems: true
@@ -1349,7 +1926,7 @@ components:
     DocumentUpload:
       type: object
       additionalProperties: false
-      required: [file, document_key, title]
+      required: [file, document_key, title, governance_record_id]
       properties:
         file:
           type: string
@@ -1361,15 +1938,19 @@ components:
         title:
           type: string
           minLength: 1
-          maxLength: 500
+          maxLength: 256
+        governance_record_id:
+          $ref: '#/components/schemas/OpaqueId'
     VersionUpload:
       type: object
       additionalProperties: false
-      required: [file]
+      required: [file, governance_record_id]
       properties:
         file:
           type: string
           format: binary
+        governance_record_id:
+          $ref: '#/components/schemas/OpaqueId'
     SourceUpload:
       type: object
       additionalProperties: false
@@ -1385,7 +1966,7 @@ components:
         title:
           type: string
           minLength: 1
-          maxLength: 500
+          maxLength: 256
         governance_record_id:
           $ref: '#/components/schemas/OpaqueId'
     SourceVersionUpload:
@@ -1575,6 +2156,37 @@ components:
           $ref: '#/components/schemas/Sha256'
         locator:
           $ref: '#/components/schemas/Locator'
+        raw_text:
+          type: string
+        normalization_map:
+          type: object
+          description: Versioned half-open Unicode code-point raw-to-normalized map
+        source_spans:
+          type: array
+          description: Exact per-element coordinates; use these for multi-page highlight
+          items:
+            type: object
+            additionalProperties: false
+            required: [element_id, stable_element_key, element_raw_char_start, element_raw_char_end, chunk_raw_char_start, chunk_raw_char_end, locator]
+            properties:
+              element_id:
+                $ref: '#/components/schemas/OpaqueId'
+              stable_element_key:
+                type: string
+              element_raw_char_start:
+                type: integer
+                minimum: 0
+              element_raw_char_end:
+                type: integer
+                minimum: 0
+              chunk_raw_char_start:
+                type: integer
+                minimum: 0
+              chunk_raw_char_end:
+                type: integer
+                minimum: 0
+              locator:
+                $ref: '#/components/schemas/Locator'
     ChunkPage:
       type: object
       additionalProperties: false
@@ -1713,45 +2325,64 @@ components:
     RubricDefinition:
       type: object
       additionalProperties: false
-      required: [criteria]
+      required: [max_score, criteria]
       properties:
+        max_score:
+          type: number
+          exclusiveMinimum: 0
+          description: Explicit total; must equal the sum of criterion weights.
         criteria:
           type: array
           minItems: 1
           maxItems: 100
           items:
             $ref: '#/components/schemas/RubricCriterion'
+        decision_rules:
+          type: object
+          additionalProperties: false
+          description: Optional authored rule parameters; omitted fields use the documented compiler defaults.
+          properties:
+            rule_version:
+              type: string
+              minLength: 1
+            cannot_assess_count_threshold:
+              type: integer
+              minimum: 1
+            cannot_assess_ratio_threshold:
+              type: number
+              minimum: 0
+              maximum: 1
+            required_unmet_score:
+              type: number
+              minimum: 0
     RubricCriterion:
       type: object
       additionalProperties: false
-      required: [criterion_key, title, weight, checklists, levels]
+      required: [criterion_key, title, weight, scoring_mode, checklists]
       properties:
         criterion_key:
           type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
         title:
           type: string
+          minLength: 1
         weight:
           type: number
-          minimum: 0
+          exclusiveMinimum: 0
+        scoring_mode:
+          type: string
+          enum: [PROPORTIONAL_CHECKLIST_V0]
+          description: Only the deterministic proportional checklist rule is executable in v1.
         checklists:
           type: array
           minItems: 1
           maxItems: 100
           items:
-            type: object
-            required: [checklist_key, requirement, evidence_mode]
-            properties:
-              checklist_key:
-                type: string
-              requirement:
-                type: string
-              evidence_mode:
-                type: string
-                enum: [LOCAL, GRAPH]
+            $ref: '#/components/schemas/RubricChecklist'
         levels:
           type: array
-          minItems: 1
           maxItems: 20
+          description: Authoring-only descriptor; nonempty levels are rejected by the v1 execution adapter until level scoring is implemented.
           items:
             type: object
             required: [level_key, score, rule]
@@ -1762,6 +2393,60 @@ components:
                 type: number
               rule:
                 type: string
+    RubricChecklist:
+      type: object
+      additionalProperties: false
+      required: [checklist_key, statement, evidence_mode, requirements]
+      properties:
+        checklist_key:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+        statement:
+          type: string
+          minLength: 1
+        requirement:
+          type: string
+          deprecated: true
+          description: Legacy free-text property; never executable and rejected by the v1 compiler adapter.
+        evidence_mode:
+          type: string
+          enum: [LOCAL, GRAPH]
+        importance:
+          type: string
+          enum: [CORE, REQUIRED, OPTIONAL]
+          description: Defaults to REQUIRED when absent.
+        query:
+          type: string
+          minLength: 1
+          description: Defaults to statement when absent.
+        requirements:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/RubricEvidenceRequirement'
+        contradiction_patterns:
+          type: array
+          items:
+            type: string
+            minLength: 1
+    RubricEvidenceRequirement:
+      type: object
+      additionalProperties: false
+      required: [requirement_id, any_of]
+      properties:
+        requirement_id:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
+        description:
+          type: string
+          minLength: 1
+        any_of:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            minLength: 1
     RubricVersion:
       type: object
       additionalProperties: false
@@ -1783,9 +2468,275 @@ components:
           $ref: '#/components/schemas/Sha256'
         revision:
           $ref: '#/components/schemas/Revision'
+    RuntimeConfigId:
+      type: string
+      enum: [bm25-smoke, research-v0, bm25-nli-v1, rrf-nli-v1, bm25-nli-v2, rrf-nli-v2, bm25-p2-llm-v1, bm25-p2-llm-v2]
+      description: Server-locked config; no client-selected model/path/prompt is accepted.
+    IndexGeneration:
+      type: object
+      additionalProperties: false
+      required: [id, document_version_id, job_id, state, config_id, revision, generation_no, chunk_count, failure_code]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        document_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        job_id:
+          $ref: '#/components/schemas/OpaqueId'
+        state:
+          type: string
+          enum: [QUEUED, BUILDING, ACTIVE, SUPERSEDED, FAILED, REVOKED]
+        config_id:
+          $ref: '#/components/schemas/RuntimeConfigId'
+        revision:
+          $ref: '#/components/schemas/Revision'
+        generation_no:
+          type: integer
+          minimum: 1
+        chunk_count:
+          type: integer
+          minimum: 0
+        failure_code:
+          type: [string, 'null']
+    DocumentVersionPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentVersion'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    AnalysisRunPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisRun'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    RuntimeResults:
+      type: object
+      additionalProperties: false
+      required: [similarity, assessment, manifest]
+      properties:
+        similarity:
+          type: [object, 'null']
+          description: Validated by research/schemas/similarity-report-v1.schema.json
+        assessment:
+          type: [object, 'null']
+          description: Validated by research/schemas/assessment-report-v1.schema.json
+        manifest:
+          type: object
+    RuntimeEvidence:
+      type: object
+      additionalProperties: false
+      required: [id, analysis_run_id, report_version_id, source_version_id, pipeline, report_chunk_id, source_chunk_id, checklist_id, evidence]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        analysis_run_id:
+          $ref: '#/components/schemas/OpaqueId'
+        report_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        source_version_id:
+          type: [string, 'null']
+        pipeline:
+          type: string
+          enum: [SIMILARITY, ASSESSMENT]
+        report_chunk_id:
+          type: string
+        source_chunk_id:
+          type: [string, 'null']
+        checklist_id:
+          type: [string, 'null']
+        evidence:
+          type: object
+          required: [evidence_key, source_document_version_id, chunk_ids, locator, quote_text, quote_sha256, verification_state, verification_reason_code, details]
+          properties:
+            verification_state:
+              $ref: '#/components/schemas/EvidenceRelation'
+            details:
+              type: object
+    RuntimeEvidencePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RuntimeEvidence'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+    RunReview:
+      type: object
+      additionalProperties: false
+      required: [id, analysis_run_id, reviewer_id, decision, reason_code, reason_text, based_on_revision, created_at]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        analysis_run_id:
+          $ref: '#/components/schemas/OpaqueId'
+        reviewer_id:
+          $ref: '#/components/schemas/OpaqueId'
+        decision:
+          type: string
+          enum: [ACCEPT, REJECT]
+        reason_code:
+          type: string
+        reason_text:
+          type: [string, 'null']
+        based_on_revision:
+          $ref: '#/components/schemas/Revision'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+    AnnotationSpan:
+      type: object
+      additionalProperties: false
+      required: [span_id, side, document_version_id, chunk_id, raw_start, raw_end, quote_text, locator]
+      properties:
+        span_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        side:
+          enum: [REPORT, SOURCE]
+        document_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        chunk_id:
+          type: string
+        raw_start:
+          type: integer
+          minimum: 0
+        raw_end:
+          type: integer
+          minimum: 1
+        quote_text:
+          type: string
+        locator:
+          type: object
+    ItemAnnotationRequest:
+      type: object
+      additionalProperties: false
+      required: [item_id, label, evidence_span_ids, rationale]
+      properties:
+        item_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        label:
+          enum: [VERBATIM, PARAPHRASE, SUMMARY, NONE, MET, UNMET, CANNOT_ASSESS, UNSURE]
+        evidence_span_ids:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            pattern: '^[a-f0-9]{64}$'
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        quote_or_citation:
+          type: [string, 'null']
+          enum: ['YES', 'NO', UNSURE, null]
+    ItemAnnotation:
+      type: object
+      required: [id, item_id, pipeline, annotator_id, label, evidence_span_ids, rationale, quote_or_citation, annotation_revision, created_at, annotation_mode, run_revision]
+      properties:
+        id:
+          $ref: '#/components/schemas/OpaqueId'
+        item_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        pipeline:
+          enum: [SIMILARITY, ASSESSMENT]
+        annotator_id:
+          $ref: '#/components/schemas/OpaqueId'
+        label:
+          type: string
+        evidence_span_ids:
+          type: array
+          items:
+            type: string
+        rationale:
+          type: string
+        quote_or_citation:
+          type: [string, 'null']
+        annotation_revision:
+          $ref: '#/components/schemas/Revision'
+        created_at:
+          $ref: '#/components/schemas/Timestamp'
+        annotation_mode:
+          const: MODEL_VISIBLE_REVIEW
+        run_revision:
+          $ref: '#/components/schemas/Revision'
+    AnnotationItem:
+      type: object
+      required: [item_id, pipeline, report_version_id, report_chunk_id, source_version_id, source_chunk_id, checklist_id, statement, report_text, source_text, span_options, latest_annotation]
+      properties:
+        item_id:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        pipeline:
+          enum: [SIMILARITY, ASSESSMENT]
+        report_version_id:
+          $ref: '#/components/schemas/OpaqueId'
+        report_chunk_id:
+          type: [string, 'null']
+        source_version_id:
+          type: [string, 'null']
+        source_chunk_id:
+          type: [string, 'null']
+        checklist_id:
+          type: [string, 'null']
+        statement:
+          type: [string, 'null']
+        report_text:
+          type: string
+        source_text:
+          type: [string, 'null']
+        span_options:
+          type: array
+          maxItems: 512
+          items:
+            $ref: '#/components/schemas/AnnotationSpan'
+        latest_annotation:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ItemAnnotation'
+    AnnotationItemPage:
+      type: object
+      required: [items, page, run_revision]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnnotationItem'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        run_revision:
+          $ref: '#/components/schemas/Revision'
+    ItemAnnotationPage:
+      type: object
+      required: [items, page, run_revision, annotation_mode, predictions_visible]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemAnnotation'
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        run_revision:
+          $ref: '#/components/schemas/Revision'
+        annotation_mode:
+          const: MODEL_VISIBLE_REVIEW
+        predictions_visible:
+          const: true
     RunType:
       type: string
-      enum: [SIMILARITY, ASSESSMENT, EXPERIMENT]
+      enum: [SIMILARITY, ASSESSMENT, BOTH]
     CreateAnalysisRunRequest:
       type: object
       additionalProperties: false
@@ -1794,8 +2745,8 @@ components:
         run_type:
           $ref: '#/components/schemas/RunType'
         mode:
-          type: [string, 'null']
-          enum: [LOCAL, GRAPH, SELECTIVE, null]
+          type: 'null'
+          description: Evidence modes come from the published rubric; per-run overrides are not executable.
         report_version_id:
           $ref: '#/components/schemas/OpaqueId'
         source_scope:
@@ -1806,19 +2757,15 @@ components:
             source_version_ids:
               type: array
               uniqueItems: true
-              maxItems: 10000
+              maxItems: 20
               items:
                 $ref: '#/components/schemas/OpaqueId'
-            dataset_manifest_id:
-              oneOf:
-                - $ref: '#/components/schemas/OpaqueId'
-                - type: 'null'
         rubric_version_id:
           oneOf:
             - $ref: '#/components/schemas/OpaqueId'
             - type: 'null'
         config_id:
-          $ref: '#/components/schemas/OpaqueId'
+          $ref: '#/components/schemas/RuntimeConfigId'
     AnalysisRun:
       type: object
       additionalProperties: false
@@ -1830,6 +2777,17 @@ components:
           $ref: '#/components/schemas/RunType'
         mode:
           type: [string, 'null']
+        config_id:
+          $ref: '#/components/schemas/RuntimeConfigId'
+        job_id:
+          $ref: '#/components/schemas/OpaqueId'
+        review_state:
+          type: string
+          enum: [UNREVIEWED, REVIEWED]
+        source_version_ids:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpaqueId'
         report_version_id:
           $ref: '#/components/schemas/OpaqueId'
         source_scope_sha256:

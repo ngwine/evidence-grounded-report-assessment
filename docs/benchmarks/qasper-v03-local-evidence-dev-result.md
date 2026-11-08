@@ -1,12 +1,19 @@
-# QASPER v0.3 dev — Pipeline 2 LOCAL evidence retrieval
+# QASPER v0.3 dev — within-paper evidence retrieval proxy
 
 **Run date:** 18/10/2026
 **Result class:** preliminary component diagnostic on the full dev split
 **Task:** rank evidence paragraphs inside the question's own paper
 
-This run evaluates the LOCAL evidence retrieval component of Pipeline 2. It
-does not evaluate rubric scoring, LOCAL versus GRAPH routing, answer generation,
-or end-to-end grading of student reports.
+This run evaluates paragraph evidence retrieval using BM25, Dense and RRF
+utilities shared with Pipeline 2. It does not evaluate rubric scoring, LOCAL
+versus GRAPH routing, answer generation, or end-to-end grading of student reports.
+
+More precisely, the runner directly calls the shared BM25, Dense and RRF
+utilities. It does not call `assessment._rank_local` or the complete assessment
+pipeline. QASPER questions replace authored checklist queries, and the candidate
+units are dataset paragraphs rather than the app's parser chunks. Report this
+as a **within-paper retrieval proxy/component diagnostic**, not execution or
+validation of the complete LOCAL assessment path, its reranker or rubric rules.
 
 ## Source and protocol
 
@@ -106,3 +113,47 @@ the four paragraphs above 512 whitespace tokens are only a lower-bound warning,
 not a tokenizer-level truncation audit. Pipeline 2 still needs an approved
 report–rubric corpus, rubric labels, instructor scores, and a separate GRAPH
 evaluation before making any claim about grading quality.
+
+## Clean-code revalidation — 30 October 2026
+
+The owner reran the same full-DEV diagnostic with actual cached E5 inference
+from clean commit `9b9721d6b0d0eb9069b95b4d937635c2d9e3924e`. The launcher
+completed with return code 0 and `CLI_SUCCEEDED`. Data/model/configuration,
+selection, coverage and metric definitions match the reference above:
+281 papers, 1,005 questions, 646 evaluable and 359 excluded.
+
+Every aggregate metric at every recorded cutoff matches, and `metrics.json`
+is byte-identical to the reference (SHA-256 `e254444c3921a6a189caf7888f62e127a471fcd94a0132e2dbe63d9da4bff237`).
+The RRF source hash differs from the historical run; the other three recorded
+code-component hashes match. This is aggregate revalidation on the current
+frozen implementation, not exact historical-source replay. Equal aggregates
+do not establish identical per-query rankings; these runs do not export them.
+
+The new files are under
+`var/results/rq2-qasper/local-paragraph-dev-v03-revalidation-20261030-v1/`.
+[Comparison record](../../var/paper/p2-preparation-2026-10-30/qasper/new-run-comparison-v1.json)
+checks artifact hashes and identical inputs, settings, scope and coverage.
+Wall time was 371.11 seconds for this offline run; it is not end-to-end app latency.
+
+The clean rerun resolves the code-snapshot concern for this revalidation.
+The manifest still states `team_dataset_approval=NOT_RECORDED`; no approval
+was added retroactively. The previously inspected DEV scope, paragraph-only
+task and lack of rubric/verifier/GRAPH evaluation remain unchanged.
+
+## Inclusion in the faculty-review manuscript — 1 November 2026
+
+The manuscript now reports this experiment in §4.6 (protocol) and §5.6/Table 10
+(results), separately from the PAN source-retrieval study. The table uses the
+existing revalidated aggregate values, with the same 646 evaluable questions
+out of 1,005 and 359 exclusions. No model inference or new result selection
+was performed for this writing update.
+
+The result supports a descriptive comparison of within-paper paragraph
+retrievers. It is not the official QASPER QA/evidence F1 evaluation or a
+validation of P2's rubric-to-score path. Both Hit@10 and evidence completeness
+are reported so that the small RRF Hit@10 advantage is not presented as
+overall superiority. DEV reuse, absent uncertainty/holdout evidence and
+paragraph-mapping restrictions remain methodological limits. Separately, the
+project's pack status remains `NOT_RECORDED`: manuscript inclusion does not
+itself supply an approval decision or establish that a final publication
+submission has met all project gates.

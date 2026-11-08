@@ -1,4 +1,4 @@
-export type ConfigId = 'bm25-smoke' | 'research-v0';
+export type ConfigId = 'bm25-smoke' | 'research-v0' | 'bm25-nli-v1' | 'rrf-nli-v1' | 'bm25-nli-v2' | 'rrf-nli-v2' | 'bm25-p2-llm-v1' | 'bm25-p2-llm-v2';
 export type ReviewDecision = 'ACCEPT' | 'REJECT' | 'DEFER';
 
 export interface SourceSpan {
@@ -37,6 +37,8 @@ export interface SimilarityMatch {
   selected_for_document_coverage: boolean;
   selected_for_manual_review: boolean;
   review_group_id?: string;
+  semantic_verification_status?: string;
+  semantic_evidence?: Array<{ report: EvidenceRange; source: EvidenceRange }>;
   alignment?: {
     kind?: string;
     report?: EvidenceRange;
@@ -56,6 +58,7 @@ export interface SimilarityReviewSourceGroup {
 }
 
 export interface SimilarityReport {
+  semantic_classifier_available?: boolean;
   research_status?: string;
   report_chunk_count?: number;
   source_chunk_count?: number;
@@ -84,6 +87,8 @@ export interface AssessmentSpan {
   requirement_id?: string;
   matched_alternative?: string;
   evidence_id?: string;
+  context_reason?: string;
+  pattern?: string;
   span?: EvidenceRange;
 }
 
@@ -98,11 +103,18 @@ export interface ChecklistResult {
   reason_code?: string;
   rationale?: string;
   matched_evidence_spans?: AssessmentSpan[];
+  contradiction_hits?: AssessmentSpan[];
   negated_evidence_spans?: AssessmentSpan[];
+  non_asserted_evidence_spans?: AssessmentSpan[];
+  withheld_contradiction_spans?: AssessmentSpan[];
   evidence_pack?: AssessmentEvidence[];
+  llm_verification?: Record<string, unknown>;
 }
 
 export interface AssessmentReport {
+  verification_method?: string;
+  verification_metadata?: Record<string, unknown>;
+  human_review_required_before_publication?: boolean;
   proposed_total_score?: number | null;
   max_score?: number;
   checklist_outcome_counts?: Record<string, number>;

@@ -14,10 +14,19 @@ lặp model, policy và repository.
 API không chạy parse/AI dài trong request. Worker không có quyền tự công bố
 điểm hoặc bỏ qua RBAC/evidence policy.
 
+## Authenticated MongoDB slice
+
+[Hướng dẫn chạy và phạm vi](../../docs/architecture/authenticated-mongo-app.md):
+`api.runtime:create_runtime_app` dùng session/workspace RBAC, rubric lifecycle,
+immutable upload/version và Mongo PARSE worker. Endpoint `/api/v1` đã có cho
+các phần này; [index/analysis/results/review](../../docs/architecture/version-locked-analysis-app.md)
+đã được nối tiếp bằng worker Mongo với immutable provenance. Không
+dùng admin URI cho API/worker. Demo hai pipeline dưới đây vẫn giữ riêng.
+
 HTTP boundary dự kiến được mô tả tại
 [`API_CONTRACT_V1.md`](../../docs/api/API_CONTRACT_V1.md) và
-[`openapi-v1.yaml`](../../docs/api/openapi-v1.yaml). Đây là review candidate
-`W2.3`, chưa phải bằng chứng endpoint đã được hiện thực.
+[`openapi-v1.yaml`](../../docs/api/openapi-v1.yaml). Contract bao gồm cả route
+đã hiện thực và route dự kiến; đối chiếu implementation matrix trong hướng dẫn.
 
 ## Local two-pipeline demo (provisional)
 

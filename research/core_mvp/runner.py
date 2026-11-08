@@ -14,6 +14,10 @@ import time
 from typing import Any, Mapping, Sequence
 
 from research.offline_retrieval.common import read_json, sha256_file, write_json
+from research.schema_validation import validate_json_schema
+from services.backend.src.kltn_ai.integrations.parsing.citation_markers import (
+    extract_citation_candidates,
+)
 from research.offline_retrieval.cross_encoder import (
     PairScorer,
     SentenceTransformersCrossEncoder,
@@ -22,7 +26,8 @@ from research.offline_retrieval.dense import Encoder, SentenceTransformerEncoder
 
 from .assessment import run_assessment_pipeline
 from .contracts import validate_assessment_report, validate_similarity_report
-from .documents import ParsedDocument, parse_document, parse_documents
+from .documents import ParsedDocument
+from .bounded_documents import ParseLimits, parse_document_bounded
 from .similarity import run_similarity_pipeline
 
 
@@ -175,6 +180,8 @@ def run_core_mvp(
     pipeline: str = "both",
     encoder: Encoder | None = None,
     reranker: PairScorer | None = None,
+    semantic_verifier: Any | None = None,
+    llm_verifier: Any | None = None,
 ) -> dict[str, Any]:
     """Execute the selected core pipelines and write reproducible artifacts."""
 
@@ -185,8 +192,14 @@ def run_core_mvp(
     sources = [_require_file(path, "source_paths") for path in source_paths]
     if selected_pipeline in {"similarity", "both"} and not sources:
         raise ValueError("Similarity pipeline requires at least one source document")
-    output = Path(output_dir).expanduser().resolve()
-    output.mkdir(parents=True, exist_ok=True)
+    supplied_output = Path(output_dir).expanduser()
+    if supplied_output.is_symlink():
+        raise ValueError("Output directory cannot be a symlink")
+    output = supplied_output.resolve()
+    output.mkdir(parents=True, mode=0o700, exist_ok=True)
+    if any(output.iterdir()):
+        raise FileExistsError("Refusing to overwrite a previous run or partial artifacts")
+    os.chmod(output, 0o700)
 
     initial_hashes = {
         "report": sha256_file(report_file),
@@ -210,22 +223,25 @@ def run_core_mvp(
     min_tokens = int(document_config.get("min_tokens", 30))
     if max_tokens <= 0 or min_tokens <= 0 or min_tokens > max_tokens:
         raise ValueError("documents requires 0 < min_tokens <= max_tokens")
+    parser_limits = ParseLimits.from_config(document_config.get("resource_limits"))
 
     timings: dict[str, float] = {}
     started = time.perf_counter()
     stage = time.perf_counter()
-    report = parse_document(
+    report = parse_document_bounded(
         report_file,
         role="student-report",
         max_tokens=max_tokens,
         min_tokens=min_tokens,
+        limits=parser_limits,
     )
-    source_documents = parse_documents(
-        sources,
-        role="comparison-source",
-        max_tokens=max_tokens,
-        min_tokens=min_tokens,
-    )
+    source_documents = [
+        parse_document_bounded(
+            source, role="comparison-source", max_tokens=max_tokens,
+            min_tokens=min_tokens, limits=parser_limits,
+        )
+        for source in sources
+    ]
     if any(
         source.document["sha256"] == report.document["sha256"]
         for source in source_documents
@@ -255,11 +271,36 @@ def run_core_mvp(
         encoder = _load_encoder(model_config)
     if needs_reranker and reranker is None:
         reranker = _load_reranker(model_config)
+    semantic_policy = _object(pipeline1_config.get("semantic_verification", {}), "pipeline1.semantic_verification")
+    if (selected_pipeline in {"similarity", "both"}
+            and semantic_policy.get("enabled", False) and semantic_verifier is None):
+        from .semantic_verification import load_semantic_verifier
+        semantic_verifier = load_semantic_verifier(
+            _object(model_config.get("semantic_verifier"), "models.semantic_verifier"),
+            semantic_policy,
+        )
+    llm_policy = _object(
+        pipeline2_config.get("llm_verification", {}), "pipeline2.llm_verification"
+    )
+    uses_llm_assessment = (
+        selected_pipeline in {"assessment", "both"}
+        and llm_policy.get("enabled", False) is True
+    )
+    if uses_llm_assessment and llm_verifier is None:
+        from .llm_assessment import load_llm_assessment_verifier
+
+        llm_verifier = load_llm_assessment_verifier(
+            _object(model_config.get("assessment_verifier"), "models.assessment_verifier"),
+            llm_policy,
+        )
     timings["model_load_seconds"] = time.perf_counter() - stage
 
     similarity_report: dict[str, Any] | None = None
     assessment_report: dict[str, Any] | None = None
     output_paths: dict[str, Path] = {}
+    citation_path = output / "citation-context.json"
+    write_json(citation_path, extract_citation_candidates(report.chunks))
+    output_paths["citation_context"] = citation_path
     if selected_pipeline in {"similarity", "both"}:
         stage = time.perf_counter()
         source_chunks = [
@@ -271,8 +312,10 @@ def run_core_mvp(
             config=pipeline1_config,
             encoder=encoder,
             reranker=reranker,
+            **({"semantic_verifier": semantic_verifier} if semantic_verifier is not None else {}),
         )
         validate_similarity_report(similarity_report)
+        validate_json_schema(similarity_report, kind="similarity")
         similarity_path = output / "similarity-report.json"
         write_json(similarity_path, similarity_report)
         output_paths["similarity_report"] = similarity_path
@@ -286,8 +329,10 @@ def run_core_mvp(
             config=pipeline2_config,
             encoder=encoder,
             reranker=reranker,
+            **({"llm_verifier": llm_verifier} if uses_llm_assessment else {}),
         )
         validate_assessment_report(assessment_report)
+        validate_json_schema(assessment_report, kind="assessment")
         assessment_path = output / "assessment-report.json"
         write_json(assessment_path, assessment_report)
         output_paths["assessment_report"] = assessment_path
@@ -388,6 +433,10 @@ def run_core_mvp(
         "models": {
             "dense": deepcopy(getattr(encoder, "metadata", None)),
             "cross_encoder": deepcopy(getattr(reranker, "metadata", None)),
+            **({"semantic_verifier": deepcopy(semantic_verifier.metadata)}
+               if semantic_verifier is not None else {}),
+            **({"assessment_verifier": deepcopy(llm_verifier.metadata)}
+               if uses_llm_assessment else {}),
         },
         "timings_seconds": {key: round(value, 6) for key, value in timings.items()},
         "outputs": {

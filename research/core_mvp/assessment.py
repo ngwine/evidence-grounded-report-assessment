@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 from dataclasses import dataclass
-import math
 import re
 import unicodedata
 from typing import Any, Mapping, Sequence
@@ -30,6 +29,61 @@ _NEGATION_CUE = re.compile(
 _CLAUSE_BREAK = re.compile(
     r"[.!?;:,\n]|\b(?:but|however|nhưng|tuy nhiên)\b",
     flags=re.IGNORECASE,
+)
+_CONTEXT_BREAK = re.compile(
+    r"[.!?;\n]|\b(?:but|however|nhưng|tuy nhiên)\b", re.IGNORECASE,
+)
+_CONDITIONAL_CUE = re.compile(
+    r"\b(?:if|unless|provided that|hypothetically|nếu|giả sử|giả định)\b",
+    re.IGNORECASE,
+)
+_FUTURE_CUE = re.compile(
+    r"\b(?:will|shall|plans?|planned|planning|"
+    r"proposes?|proposed|intends?|intended|scheduled|future work|"
+    r"sẽ|dự kiến|dự định|kế hoạch)\b|"
+    r"\b(?:is|are|was|were)\s+to\s+be\s+"
+    r"(?:compared|evaluated|measured|collected|executed|performed|implemented|"
+    r"conducted|validated|verified|assessed|supplied|tested)\b", re.IGNORECASE,
+)
+_MODAL_ACTION_CUE = re.compile(
+    r"\b(?:would|should|might|may|could)\s+(?:still\s+)?(?:be\s+|have\s+)?"
+    r"(?:perform(?:ed)?|conduct(?:ed)?|implement(?:ed)?|collect(?:ed)?|"
+    r"complet(?:e|ed)|evaluat(?:e|ed)|measur(?:e|ed)|run|validat(?:e|ed)|"
+    r"verif(?:y|ied)|assess(?:ed)?|suppl(?:y|ied)|us(?:e|ed))\b", re.IGNORECASE,
+)
+_PENDING_CUE = re.compile(
+    r"\b(?:pending|await(?:s|ed|ing)?|todo|đang chờ|chờ)\b", re.IGNORECASE,
+)
+_PLAN_REQUEST = re.compile(
+    r"\b(?:plan|proposal|proposed|protocol|future work|kế hoạch|đề xuất|dự kiến)\b",
+    re.IGNORECASE,
+)
+_COMPLETION_REQUEST = re.compile(
+    r"\b(?:completed|implemented|measured|executed|finished|"
+    r"đã|hoàn tất|hoàn thành|được đo)\b", re.IGNORECASE,
+)
+_PLANNING_SECTION = re.compile(
+    r"\b(?:remaining work|work plan|future work|next steps|evidence needed|"
+    r"kế hoạch|công việc còn lại|bằng chứng cần bổ sung)\b", re.IGNORECASE,
+)
+_LIMITATION_REQUEST = re.compile(
+    r"\b(?:limitations?|external validity|representativeness|generalizability|"
+    r"hạn chế|ngoại suy|tính đại diện)\b", re.IGNORECASE,
+)
+_PRESERVATION_REQUEST = re.compile(
+    r"\b(?:immutab\w*|integrity|unchanged|preserv\w*|protect\w*|"
+    r"bất biến|toàn vẹn|bảo vệ|cố định|không thay đổi)\b", re.IGNORECASE,
+)
+_NEGATED_MUTATION = re.compile(
+    r"\b(?:not|never)\s+(?:(?:be|been|being|have|directly|actually)\s+)*"
+    r"(?:chang\w*|alter\w*|modif\w*|overwrit\w*|overwrot\w*|mutat\w*|replac\w*)\b|"
+    r"\b(?:không|chưa)\s+(?:(?:bị|được|hề)\s+)*(?:thay đổi|ghi đè|sửa đổi)\b",
+    re.IGNORECASE,
+)
+_DENIED_REPORTING = re.compile(
+    r"\b(?:not|never|không|chưa)\s+(?:(?:explicitly|clearly|hề)\s+)*"
+    r"(?:mention\w*|acknowledg\w*|discuss\w*|describ\w*|report\w*|"
+    r"nêu|thừa nhận|trình bày|chỉ ra)\b", re.IGNORECASE,
 )
 
 
@@ -111,6 +165,8 @@ def _validated_evidence_pack(
             raise ValueError(f"Invalid evidence source spans for {chunk_id}")
         if report_version is not None and not spans:
             raise ValueError(f"Missing evidence source spans for {chunk_id}")
+        text = str(chunk.get("normalized_text", chunk.get("text", "")))
+        ranges: list[tuple[int, int]] = []
         for span in spans:
             if not isinstance(span, Mapping):
                 raise ValueError(f"Invalid evidence source span for {chunk_id}")
@@ -119,6 +175,25 @@ def _validated_evidence_pack(
             span_version = _document_version(span)
             if span_version != report_version:
                 raise ValueError(f"Cross-version evidence source span for {chunk_id}")
+            start = span.get("chunk_normalized_char_start")
+            end = span.get("chunk_normalized_char_end")
+            if (
+                type(start) is not int
+                or type(end) is not int
+                or not 0 <= start < end <= len(text)
+            ):
+                raise ValueError(f"Invalid evidence source span bounds for {chunk_id}")
+            ranges.append((start, end))
+        if ranges:
+            covered_end = 0
+            for start, end in sorted(ranges):
+                # The chunker inserts whitespace between source elements. It
+                # must never introduce factual text without a source span.
+                if text[covered_end:start].strip():
+                    raise ValueError(f"Unmapped evidence text for {chunk_id}")
+                covered_end = max(covered_end, end)
+            if text[covered_end:].strip():
+                raise ValueError(f"Unmapped evidence text for {chunk_id}")
         pack.append(_ScopedEvidence(_evidence_record(candidate, chunk), chunk))
     return pack
 
@@ -150,7 +225,7 @@ def validate_assessment_config(config: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(graph_value, Mapping):
         raise ValueError("pipeline2.graph must be an object")
     graph = validate_graph_config({**graph_value, "top_k": top_k})
-    return {
+    resolved = {
         "candidate_depth": candidate_depth,
         "rerank_depth": rerank_depth,
         "top_k": top_k,
@@ -161,6 +236,67 @@ def validate_assessment_config(config: Mapping[str, Any]) -> dict[str, Any]:
         "rrf_k": _positive_int(config.get("rrf_k", 60), "pipeline2.rrf_k"),
         "graph": graph,
     }
+    # Keep historical configurations byte-equivalent unless the new policy
+    # is explicitly supplied. Validation must not contact a model service.
+    if "llm_verification" in config:
+        from .llm_assessment import validate_llm_policy
+
+        resolved["llm_verification"] = validate_llm_policy(config["llm_verification"])
+    if "evidence_context" in config:
+        policy = config["evidence_context"]
+        allowed = {"strategy", "max_chars", "max_utf8_bytes", "max_chunks"}
+        if not isinstance(policy, Mapping) or set(policy) - allowed:
+            raise ValueError("Invalid pipeline2.evidence_context policy")
+        if policy.get("strategy") != "all_parsed_chunks_if_bounded":
+            raise ValueError("Unsupported pipeline2.evidence_context.strategy")
+        context = {"strategy": policy["strategy"]}
+        for key, default, maximum in (("max_chars", 14000, 100000),
+                                      ("max_utf8_bytes", 20000, 200000),
+                                      ("max_chunks", 32, 500)):
+            value = _positive_int(policy.get(key, default), f"pipeline2.evidence_context.{key}")
+            if value > maximum:
+                raise ValueError(f"pipeline2.evidence_context.{key} exceeds bound")
+            context[key] = value
+        resolved["evidence_context"] = context
+    return resolved
+
+
+def _bounded_report_context(
+    candidates: list[dict[str, Any]],
+    retrieval: Mapping[str, Any],
+    report_chunks: Sequence[dict[str, Any]],
+    policy: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Use all parsed chunks for bounded short reports without implying raw coverage.
+
+    Parsed chunks can omit images, raw regions or content discarded upstream.
+    This policy never proves absence from the full original document. Over
+    budget means the original ranked pack, not a silently cropped document.
+    """
+    texts = [chunk.get("normalized_text", chunk.get("text")) for chunk in report_chunks]
+    if any(not isinstance(text, str) or not text.strip() for text in texts):
+        raise ValueError("Bounded report context requires nonempty chunk text")
+    char_count = sum(len(text) for text in texts)
+    byte_count = sum(len(text.encode("utf-8")) for text in texts)
+    over = [name for name, actual in (("max_chars", char_count),
+                                     ("max_utf8_bytes", byte_count),
+                                     ("max_chunks", len(report_chunks)))
+            if actual > policy[name]]
+    metadata = {
+        "strategy": policy["strategy"], "parsed_chunk_count": len(report_chunks),
+        "parsed_text_chars": char_count, "parsed_text_utf8_bytes": byte_count,
+        "selected_all_report_chunks": not over,
+        "original_document_completeness_asserted": False,
+        "fallback_reason": "CONTEXT_LIMIT_EXCEEDED" if over else None,
+        "exceeded_limits": over,
+    }
+    if not over:
+        candidates = [{
+            "chunk_id": chunk["chunk_id"], "document_id": chunk["document_id"],
+            "document_version_id": _document_version(chunk), "rank": index,
+            "score": None, "score_type": "bounded_parsed_report_context",
+        } for index, chunk in enumerate(report_chunks, 1)]
+    return candidates, {**retrieval, "evidence_context": metadata}
 
 
 def _query_for_checklist(checklist: Mapping[str, Any]) -> str:
@@ -260,7 +396,7 @@ def _phrase_match(text: str, phrase: str) -> tuple[int, int] | None:
 def _negated_clause(
     text: str, start: int, end: int
 ) -> tuple[int, int] | None:
-    """Find a nearby negation cue in this clause, without claiming NLI."""
+    """Withhold nearby negative mentions, respecting directional no/without."""
 
     left = 0
     right = len(text)
@@ -277,8 +413,145 @@ def _negated_clause(
         if cue_start < end and cue_end > start:
             continue  # An authored phrase may itself express a negative claim.
         between = text[cue_end:start] if cue_end <= start else text[end:cue_start]
+        if cue_start >= end and cue.group().casefold() in {"no", "without"}:
+            # "audit found no overlap" and "queue without another broker"
+            # negate the following object, not the earlier audit/queue.
+            # Keep predicate forms such as "X has no ..." conservative.
+            if not re.fullmatch(r"\s*(?:is|are|was|were|has|have|had)\s+", between, re.IGNORECASE):
+                continue
         if len(re.findall(r"\b\w+\b", between)) <= 4:
             return left, right
+    return None
+
+
+def _context_range(text: str, start: int, end: int) -> tuple[int, int]:
+    left, right = 0, len(text)
+    for boundary in _CONTEXT_BREAK.finditer(text):
+        if boundary.end() <= start:
+            left = boundary.end()
+        elif boundary.start() >= end:
+            right = boundary.start()
+            break
+    return left, right
+
+
+def _non_asserted_context(
+    text: str, start: int, end: int, *, allow_plan: bool = False,
+    contradiction: bool = False,
+    section_path: Sequence[Any] = (),
+    completion_required: bool = False,
+) -> tuple[int, int, str] | None:
+    """Detect a bounded set of non-actual contexts, not semantic entailment.
+
+    Pending work cannot prove completion, but an actual pending statement can
+    still match an authored contradiction. Hypotheticals prove neither side.
+    A checklist explicitly requesting a plan can accept prospective language.
+    """
+    left, right = _context_range(text, start, end)
+    context = text[left:right]
+    if not contradiction and not allow_plan:
+        # A table under "Evidence needed" is an acceptance plan, even when
+        # an individual cell only lists metric names or reference artifacts.
+        # Keep the local span as provenance; do not invent a completed event.
+        heading = " ".join(str(value) for value in section_path)
+        first_line = text.splitlines()[0] if text.splitlines() else ""
+        planning_header = (
+            len(first_line) <= 120 and not re.search(r"[.!?;]", first_line)
+            and _PLANNING_SECTION.search(first_line)
+        )
+        completed_statement = re.search(
+            r"\b(?:completed|finished|measured|executed|implemented|"
+            r"hoàn tất|hoàn thành|đã đo|đã chạy)\b", context, re.IGNORECASE,
+        )
+        if (_PLANNING_SECTION.search(heading) or planning_header) and not completed_statement:
+            return left, right, "PLANNING_SECTION_MENTION"
+        if re.match(r"\s*(?:next|todo|tiếp theo|cần thực hiện)\s*:", context, re.IGNORECASE):
+            return left, right, "PROSPECTIVE_MENTION"
+        if completion_required and re.search(
+            r"\b(?:tool|script|runner|utility|công cụ|kịch bản)\b.{0,100}"
+            r"\b(?:for|để|cho)\s+(?:a\s+|an\s+)?[^.;]*$",
+            text[left:start], re.IGNORECASE,
+        ) and not re.search(
+            r"\b(?:used|executed|ran|measured|completed|đã dùng|đã chạy|đã đo)\b",
+            context, re.IGNORECASE,
+        ):
+            return left, right, "CAPABILITY_ONLY_MENTION"
+    if any(left + cue.start() < end for cue in _CONDITIONAL_CUE.finditer(context)):
+        return left, right, "CONDITIONAL_MENTION"
+    cues = [(_FUTURE_CUE, "PROSPECTIVE_MENTION"), (_MODAL_ACTION_CUE, "PROSPECTIVE_MENTION")]
+    if not contradiction:
+        cues.append((_PENDING_CUE, "PENDING_WORK_MENTION"))
+    for pattern, reason in cues:
+        if allow_plan and not contradiction:
+            continue
+        for cue in pattern.finditer(context):
+            cue_start = left + cue.start()
+            if cue_start < end:
+                return left, right, reason
+            # Postposed status ("inspection remains pending") governs the
+            # subject. A later independent clause does not cancel earlier work.
+            between = text[end:cue_start]
+            if re.fullmatch(
+                r"\s*(?:(?:is|are|was|were|remains?|still|currently|"
+                r"has|have|been|đang|vẫn|còn|được)\s+)*", between, re.IGNORECASE,
+            ):
+                return left, right, reason
+            if pattern is _PENDING_CUE and not contradiction:
+                # A coordinated subject can list several metrics before
+                # "remain pending" or end a table row with "(pending)".
+                # An intervening measured value/completed predicate prevents
+                # the status of a later item from erasing an earlier result.
+                if re.search(
+                    r"(?:\b(?:remain\w*|is|are|was|were|vẫn|còn)\s+|\()$",
+                    text[left:cue_start], re.IGNORECASE,
+                ) and not re.search(
+                    r"\b(?:completed|finished|measured|achieved|implemented|"
+                    r"hoàn tất|hoàn thành|đã đo)\b|(?:=|:)\s*[-+]?\d|"
+                    r"\b\d+\.\d+\b|\b\d+\s*%", between, re.IGNORECASE,
+                ):
+                    return left, right, reason
+    return None
+
+
+def _requested_negative_context(
+    text: str, start: int, end: int, request_text: str,
+    negated_range: tuple[int, int],
+) -> str | None:
+    """Recognize two explicit negative predicates requested by the rubric.
+
+    An absence of mutation can support an immutability requirement, and an
+    explicit limitation can support a request to disclose limitations. These
+    are bounded lexical rules, not general entailment. A denial of reporting
+    the requested limitation continues to withhold support.
+    """
+    left, _ = negated_range
+    before = text[left:start]
+    if _COMPLETION_REQUEST.search(request_text):
+        # A request to complete an action takes precedence over a general
+        # mention of integrity or limitations elsewhere in the checklist.
+        return None
+    if _PRESERVATION_REQUEST.search(request_text) and _NEGATED_MUTATION.search(before):
+        return "PRESERVATION_NEGATIVE_PREDICATE"
+    if _LIMITATION_REQUEST.search(request_text) and not _DENIED_REPORTING.search(before):
+        return "REQUESTED_LIMITATION_STATEMENT"
+    return None
+
+
+def _denied_counterclaim_context(text: str, start: int, end: int) -> tuple[int, int] | None:
+    """Withhold explicitly denied counterclaims without canceling coordination.
+
+    "No audit and no results" asserts two negatives. Only a direct denial
+    operator such as "not true that" denies the following authored pattern.
+    """
+    left, right = _context_range(text, start, end)
+    if re.search(
+        r"\b(?:not|never)\s+(?:(?:true|correct|the case)\s+(?:that\s+)?|"
+        r"(?:claim|assert|state|say)\s+(?:that\s+)?)$|"
+        r"\bkhông\s+(?:(?:đúng|chính xác)\s+(?:rằng\s+|là\s+)?|"
+        r"(?:khẳng định|cho rằng|tuyên bố)\s+(?:rằng\s+)?)$",
+        text[left:start], re.IGNORECASE,
+    ):
+        return left, right
     return None
 
 
@@ -313,17 +586,32 @@ def _verify(
     requirement_results: list[dict[str, Any]] = []
     matched_spans: list[dict[str, Any]] = []
     negated_spans: list[dict[str, Any]] = []
+    non_asserted_spans: list[dict[str, Any]] = []
     for requirement in checklist["requirements"]:
         hits: list[dict[str, Any]] = []
         negated_hits: list[dict[str, Any]] = []
+        non_asserted_hits: list[dict[str, Any]] = []
+        request_text = f"{checklist['statement']} {requirement['description']}"
+        allow_plan = bool(_PLAN_REQUEST.search(request_text)) and not _COMPLETION_REQUEST.search(request_text)
+        completion_required = bool(_COMPLETION_REQUEST.search(request_text))
         for entry in evidence_pack:
             chunk = entry.chunk
             text = str(chunk.get("normalized_text", chunk.get("text", "")))
             for alternative in requirement["any_of"]:
                 for start, end in _phrase_matches(text, str(alternative)):
+                    non_asserted = _non_asserted_context(
+                        text, start, end, allow_plan=allow_plan,
+                        section_path=chunk.get("section_path", []),
+                        completion_required=completion_required,
+                    )
                     negated_clause = _negated_clause(text, start, end)
+                    requested_negative = (
+                        _requested_negative_context(text, start, end, request_text, negated_clause)
+                        if negated_clause is not None else None
+                    )
                     span_start, span_end = (
-                        negated_clause if negated_clause is not None else (start, end)
+                        non_asserted[:2] if non_asserted is not None
+                        else negated_clause if negated_clause is not None else (start, end)
                     )
                     hit = {
                         "requirement_id": requirement["requirement_id"],
@@ -331,10 +619,16 @@ def _verify(
                         "evidence_id": entry.record["evidence_id"],
                         "span": _resolve_normalized_range(chunk, span_start, span_end),
                     }
-                    if negated_clause is not None:
+                    if non_asserted is not None:
+                        hit["context_reason"] = non_asserted[2]
+                        non_asserted_hits.append(hit)
+                        non_asserted_spans.append(hit)
+                    elif negated_clause is not None and requested_negative is None:
                         negated_hits.append(hit)
                         negated_spans.append(hit)
                     else:
+                        if requested_negative is not None:
+                            hit["context_reason"] = requested_negative
                         hits.append(hit)
                         matched_spans.append(hit)
         requirement_results.append(
@@ -344,25 +638,33 @@ def _verify(
                 "satisfied": bool(hits),
                 "hits": hits,
                 "negated_hits": negated_hits,
+                "non_asserted_hits": non_asserted_hits,
             }
         )
 
     contradiction_hits: list[dict[str, Any]] = []
+    withheld_contradictions: list[dict[str, Any]] = []
     for pattern in checklist["contradiction_patterns"]:
         for entry in evidence_pack:
             chunk = entry.chunk
             text = str(chunk.get("normalized_text", chunk.get("text", "")))
-            location = _phrase_match(text, str(pattern))
-            if location is None:
-                continue
-            start, end = location
-            contradiction_hits.append(
-                {
+            for start, end in _phrase_matches(text, str(pattern)):
+                non_asserted = _non_asserted_context(text, start, end, contradiction=True)
+                negated_clause = _denied_counterclaim_context(text, start, end)
+                span_start, span_end = (
+                    non_asserted[:2] if non_asserted is not None
+                    else negated_clause if negated_clause is not None else (start, end)
+                )
+                hit = {
                     "pattern": pattern,
                     "evidence_id": entry.record["evidence_id"],
-                    "span": _resolve_normalized_range(chunk, start, end),
+                    "span": _resolve_normalized_range(chunk, span_start, span_end),
                 }
-            )
+                if non_asserted is not None or negated_clause is not None:
+                    hit["context_reason"] = non_asserted[2] if non_asserted else "NEGATED_CONTRADICTION_MENTION"
+                    withheld_contradictions.append(hit)
+                else:
+                    contradiction_hits.append(hit)
 
     satisfied_count = sum(item["satisfied"] for item in requirement_results)
     all_satisfied = satisfied_count == len(requirement_results)
@@ -370,6 +672,15 @@ def _verify(
         relation = "INSUFFICIENT"
         outcome = "CANNOT_ASSESS"
         reason_code = "CONFLICTING_REPORT_EVIDENCE"
+    elif all_satisfied and any(
+        hit["context_reason"] != "NEGATED_CONTRADICTION_MENTION"
+        for hit in withheld_contradictions
+    ):
+        # A lexical future/conditional cue may govern another clause. Do not
+        # claim MET by silently removing a potentially factual counterclaim.
+        relation = "INSUFFICIENT"
+        outcome = "CANNOT_ASSESS"
+        reason_code = "UNRESOLVED_COUNTERCLAIM_SCOPE"
     elif contradiction_hits:
         relation = "CONTRADICTED"
         outcome = "UNMET"
@@ -382,6 +693,10 @@ def _verify(
         relation = "INSUFFICIENT"
         outcome = "CANNOT_ASSESS"
         reason_code = "NEGATED_REQUIRED_EVIDENCE"
+    elif non_asserted_spans:
+        relation = "INSUFFICIENT"
+        outcome = "CANNOT_ASSESS"
+        reason_code = "NON_ACTUAL_REQUIRED_EVIDENCE"
     else:
         relation = "INSUFFICIENT"
         outcome = "CANNOT_ASSESS"
@@ -398,13 +713,16 @@ def _verify(
         "contradiction_hits": contradiction_hits,
         "matched_evidence_spans": matched_spans,
         "negated_evidence_spans": negated_spans,
+        "non_asserted_evidence_spans": non_asserted_spans,
+        "withheld_contradiction_spans": withheld_contradictions,
         "evidence_pack": evidence,
         "rationale": (
             f"{relation}: {satisfied_count}/{len(requirement_results)} explicit "
             f"evidence requirements matched; {len(contradiction_hits)} authored "
             f"contradiction pattern(s) matched; {len(negated_spans)} negated "
             f"mention(s) withheld from support. Decision={outcome} "
-            f"({reason_code})."
+            f"({reason_code}); {len(non_asserted_spans)} non-actual mention(s) "
+            f"and {len(withheld_contradictions)} unasserted counterclaim(s) withheld."
         ),
     }
 
@@ -502,12 +820,16 @@ def run_assessment_pipeline(
     config: Mapping[str, Any],
     encoder: Encoder | None,
     reranker: PairScorer | None,
+    llm_verifier: Any | None = None,
 ) -> dict[str, Any]:
     """Run rubric compiler, LOCAL/GRAPH retrieval, verification and scoring."""
 
     if not report_chunks:
         raise ValueError("Pipeline 2 requires at least one report chunk")
     resolved = validate_assessment_config(config)
+    llm_enabled = bool(resolved.get("llm_verification", {}).get("enabled", False))
+    if llm_enabled and llm_verifier is None:
+        raise ValueError("Enabled P2 LLM verification requires an explicit verifier runtime")
     compiled = compile_rubric(rubric)
     report_map, report_id, report_version = _report_scope(report_chunks)
 
@@ -522,6 +844,10 @@ def run_assessment_pipeline(
                     encoder=encoder,
                     reranker=reranker,
                 )
+                if llm_enabled and "evidence_context" in resolved:
+                    candidates, retrieval = _bounded_report_context(
+                        candidates, retrieval, report_chunks, resolved["evidence_context"],
+                    )
             else:
                 candidates, graph_diagnostics = rank_graph(
                     report_chunks,
@@ -546,7 +872,10 @@ def run_assessment_pipeline(
                 report_id=report_id,
                 report_version=report_version,
             )
-            verification = _verify(checklist, evidence_pack)
+            verification = (
+                llm_verifier.verify(checklist, evidence_pack)
+                if llm_enabled else _verify(checklist, evidence_pack)
+            )
             checklist_results.append(
                 {
                     "criterion_id": criterion["criterion_id"],
@@ -565,10 +894,14 @@ def run_assessment_pipeline(
     outcome_counts = Counter(
         str(result["checklist_outcome"]) for result in checklist_results
     )
-    return {
+    result = {
         "schema_version": 1,
         "pipeline": "evidence-grounded-assessment-core-mvp-v0",
         "research_status": "FEASIBILITY_BASELINE_REQUIRES_GOLD_VALIDATION",
+        "verification_method": (
+            "LOCAL_LLM_REQUIREMENT_VERIFIER_V1" if llm_enabled
+            else "SCOPED_PHRASE_CONTEXT_V4"
+        ),
         "compiled_rubric": compiled,
         "configuration": resolved,
         "report_chunk_count": len(report_chunks),
@@ -583,10 +916,25 @@ def run_assessment_pipeline(
         ),
         "limitations": [
             "Verification v0 uses explicit authored phrase requirements and does not infer semantic entailment.",
-            "Negation handling uses nearby lexical cues; scope and context still require human review.",
+            "Scoped negation, planning/table status and capability-only cues withhold non-actual mentions; requested preservation/limitation predicates use bounded lexical rules, not semantic entailment.",
             "Any CANNOT_ASSESS checklist withholds its criterion and total score; assessable_subtotal is diagnostic only.",
             "GRAPH v0 is a structure-and-term PPR baseline, not the complete HippoRAG architecture.",
             "Automatic decomposition of free-form rubric criteria is outside this feasibility baseline.",
             "Every proposed score remains subject to lecturer review and gold-set validation.",
         ],
     }
+    if llm_enabled:
+        result["research_status"] = "EXPERIMENTAL_LLM_VERIFIER_REQUIRES_GOLD_VALIDATION"
+        result["verification_metadata"] = deepcopy(llm_verifier.metadata)
+        result["human_review_required_before_publication"] = True
+        result["limitations"] = [
+            "Local LLM verification is an experimental proposal, not independently validated grading accuracy.",
+            "Exact quotation and provenance checks establish evidence identity, not the semantic truth of the model's conclusion.",
+            "Only the supplied Evidence Pack is visible; missing evidence is not proof that the full report lacks a required component.",
+            "Images and external sources absent from the Evidence Pack cannot be verified; insufficient evidence withholds the affected score.",
+            "Invalid, incomplete, over-budget or unavailable LLM responses abstain without silently switching to the phrase baseline.",
+            "Deterministic scoring is unchanged; any CANNOT_ASSESS checklist withholds its criterion and total score.",
+            "GRAPH retrieval remains a structure-and-term PPR baseline, not validated semantic multi-hop reasoning.",
+            "Every proposed score remains subject to lecturer review before publication.",
+        ]
+    return result

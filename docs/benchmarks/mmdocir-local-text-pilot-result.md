@@ -3,8 +3,11 @@
 Ngày chạy: 18/10/2026. Code: `research/mmdocir_pilot.py`.
 
 Pilot dùng PDF và annotation chính thức được ghi trong sheet `Dataset mapping`,
-dòng 6 của workbook `Quản lý KLTN - 52200229, 523H0087-4.xlsx`. Workbook ghi
-rights status `APPROVED`, approver Yến. Hai file tải mới khớp SHA-256 trong workbook:
+dòng 6 của workbook `Quản lý KLTN - 52200229, 523H0087-4.xlsx`. Workbook chọn
+MMDocIR để dùng và ghi nhận quyền sử dụng; chưa có ngày phê duyệt một pack/split
+cụ thể. Đây là lượt chạy thăm dò trước khi bổ sung pack-approval gate, không
+dùng riêng kết quả này làm số liệu cuối cho bài báo. Hai file tải khớp SHA-256
+trong workbook:
 
 - `MMDocIR_annotations.jsonl`: `812d14b22d92389a1d9b288c0143b0ffc31fba6d114322e2e75cab2528833e09`.
 - `doc_pdfs.rar`: `360e0c7907f1c78012bbc9016623a0ec0d05cb3308ec6ded7c8b46e582b785df`.
@@ -58,11 +61,16 @@ Chưa đo answer generation, semantic verification, rubric scoring hoặc câu h
 ## Tái lập
 
 Đặt hai file chính thức ở `var/datasets/raw/mmdocir-eval`, cài `unar`, cache
-model đúng revision trong config, rồi chạy từ repo root:
+model đúng revision trong config. Trước khi chạy lại, đối chiếu và duyệt
+`dataset-manifest.json` cho đúng hai file, năm PDF, mục đích chạy và thời hạn
+lưu trữ theo [hướng dẫn pack](../../research/datasets/assessment/mmdocir-local-evidence-pilot-v1/README.md).
+Script hiện từ chối chạy nếu manifest còn `PENDING`. Sau khi được duyệt, chạy từ
+repo root:
 
 ```bash
 HF_HOME=var/models/hf-home HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
-TOKENIZERS_PARALLELISM=false .venv-research/bin/python -m research.mmdocir_pilot
+TOKENIZERS_PARALLELISM=false .venv-research/bin/python -m research.mmdocir_pilot \
+  --dataset-manifest var/datasets/raw/mmdocir-eval/dataset-manifest.json
 ```
 
 Kết quả tại `research/results/rq2-mmdocir/local-text-p5-s20261018` gồm metrics

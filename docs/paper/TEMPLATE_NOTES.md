@@ -28,3 +28,19 @@ final step in Microsoft Word:
 
 Do not open the DOT with **File → Open**, because that edits the template
 instead of attaching it to a manuscript.
+
+## Rebuilding the paper diagrams
+
+The editable sources are `figures/framework_overview.svg` and
+`figures/pipeline1_experiment.svg`. After changing either SVG, rebuild its PNG
+and then the Word document from the repository root:
+
+```bash
+node scripts/render_paper_figures.mjs
+.venv-research/bin/python scripts/generate_lncs_paper.py
+```
+
+The renderer uses the existing web Playwright installation and cached Chromium,
+loads local files only, and writes both diagrams at 3200 × 1800 pixels after
+checking their canvas and text bounds. Arrowheads use fixed polygon geometry.
+Figure 2 distinguishes A4's direct Dense-to-reranker path from A5's fused path.

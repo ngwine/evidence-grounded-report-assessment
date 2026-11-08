@@ -144,6 +144,8 @@ def parse_document(
     role: str,
     max_tokens: int = 220,
     min_tokens: int = 30,
+    document_id: str | None = None,
+    document_version_id: str | None = None,
 ) -> ParsedDocument:
     """Parse and chunk one PDF, DOCX or UTF-8 text document.
 
@@ -165,8 +167,12 @@ def parse_document(
 
     content_sha256 = sha256_file(source_path)
     stable_role = re.sub(r"[^a-z0-9]+", "-", role.casefold()).strip("-")
-    document_id = f"{stable_role}-doc-sha256-{content_sha256}"
-    document_version_id = f"dv-sha256-{content_sha256}"
+    for identity in (document_id, document_version_id):
+        if identity is not None and (not isinstance(identity, str)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,255}", identity) is None):
+            raise ValueError("Document identities must be safe non-empty identifiers")
+    document_id = document_id or f"{stable_role}-doc-sha256-{content_sha256}"
+    document_version_id = document_version_id or f"dv-sha256-{content_sha256}"
     if suffix == ".pdf":
         elements = extract_pdf_elements(
             source_path,

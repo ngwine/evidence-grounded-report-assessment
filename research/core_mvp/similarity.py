@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from copy import deepcopy
 from difflib import SequenceMatcher
+import hashlib
 import math
+import re
 import unicodedata
 from typing import Any, Mapping, Sequence
 
@@ -17,13 +19,13 @@ from research.offline_retrieval.rrf import fuse_rrf
 
 
 SIMILARITY_TYPES = {"VERBATIM", "PARAPHRASE", "SUMMARY", "NONE"}
-CLASSIFICATION_POLICY = "EXACT_EVIDENCE_OR_UNVERIFIED_RETRIEVAL_V1"
+CLASSIFICATION_POLICY = "EXACT_EVIDENCE_OR_UNVERIFIED_RETRIEVAL_V2"
 # An exact alignment can be shown with fewer characters, but automatic
 # document coverage needs a substantial run of complete, varied words.
 _VERBATIM_MIN_EXACT_CHARS = 60
 _VERBATIM_MIN_EXACT_TOKENS = 8
 _VERBATIM_MIN_DISTINCT_TOKENS = 6
-_VERBATIM_MIN_LONG_DISTINCT_TOKENS = 2
+_VERBATIM_MIN_DISTINCT_LETTER_TOKENS = 6
 
 
 def _require_positive_int(value: Any, field: str) -> int:
@@ -51,6 +53,12 @@ def _finite_number(value: Any, field: str) -> float:
 
 
 def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    semantic = config.get("semantic_verification")
+    if semantic is not None:
+        if not isinstance(semantic, Mapping) or type(semantic.get("enabled", False)) is not bool:
+            raise ValueError("pipeline1.semantic_verification requires a boolean enabled flag")
+        if semantic.get("citation_number_guard") not in {None, "LINKED_SINGLE_NUMERIC_MARKERS"}:
+            raise ValueError("Unknown semantic citation-number policy")
     candidate_depth = _require_positive_int(
         config.get("candidate_depth", 30), "pipeline1.candidate_depth"
     )
@@ -114,7 +122,7 @@ def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
     thresholds = config.get("classification", {})
     if not isinstance(thresholds, Mapping):
         raise ValueError("pipeline1.classification must be an object")
-    return {
+    resolved = {
         "candidate_depth": candidate_depth,
         "rerank_depth": rerank_depth,
         "top_k": top_k,
@@ -162,6 +170,9 @@ def validate_similarity_config(config: Mapping[str, Any]) -> dict[str, Any]:
             ),
         },
     }
+    if semantic is not None:
+        resolved["semantic_verification"] = deepcopy(dict(semantic))
+    return resolved
 
 
 def _select_candidate_pool(
@@ -475,6 +486,31 @@ def _resolve_normalized_range(
     }
 
 
+def _document_token_keys(chunk: Mapping[str, Any]) -> list[tuple[int, int, tuple[Any, ...]]]:
+    """Map tokens to immutable element coordinates, deduplicating chunk overlap."""
+    text = str(chunk.get("normalized_text", chunk.get("text", "")))
+    result = []
+    for left, right in token_spans(text):
+        key: tuple[Any, ...] | None = None
+        for span in chunk.get("source_spans", []):
+            start, end = span.get("chunk_normalized_char_start"), span.get("chunk_normalized_char_end")
+            element_start = span.get("element_normalized_char_start")
+            version = span.get("document_version_id", chunk.get("document_version_id"))
+            if (all(isinstance(value, int) and not isinstance(value, bool)
+                    for value in (start, end, element_start))
+                    and start <= left < right <= end
+                    and version and span.get("element_key")):
+                key = ("element", str(version), str(span["element_key"]),
+                       element_start + left - start, element_start + right - start)
+                break
+        if key is None:
+            # Older test/research inputs lack authoritative element coordinates.
+            # Keep the old chunk-local interpretation and disclose the fallback.
+            key = ("chunk", str(chunk["chunk_id"]), left, right)
+        result.append((left, right, key))
+    return result
+
+
 def _alignment(
     query: Mapping[str, Any],
     source: Mapping[str, Any],
@@ -545,6 +581,9 @@ def _alignment(
         "exact_match_long_distinct_token_count": sum(
             len(token) >= 5 for token in distinct_tokens
         ),
+        "exact_match_distinct_letter_token_count": sum(
+            token.isalpha() for token in distinct_tokens
+        ),
         "report": _resolve_normalized_range(query, query_start, query_end),
         "source": _resolve_normalized_range(source, source_start, source_end),
     }
@@ -560,8 +599,11 @@ def _is_evidence_backed_exact_span(
         and int(alignment["exact_match_token_count"]) >= _VERBATIM_MIN_EXACT_TOKENS
         and int(alignment["exact_match_distinct_token_count"])
         >= _VERBATIM_MIN_DISTINCT_TOKENS
-        and int(alignment["exact_match_long_distinct_token_count"])
-        >= _VERBATIM_MIN_LONG_DISTINCT_TOKENS
+        # Word length is not a language-neutral evidence floor: Vietnamese
+        # whitespace tokens are commonly short syllables. Require lexical
+        # diversity and letters, alongside the same character/token minimums.
+        and int(alignment["exact_match_distinct_letter_token_count"])
+        >= _VERBATIM_MIN_DISTINCT_LETTER_TOKENS
     )
 
 
@@ -612,6 +654,133 @@ def _group_review_candidates(matches: Sequence[dict[str, Any]]) -> list[dict[str
             ),
         })
     return sorted(groups, key=lambda group: (-group["report_chunk_count"], group["group_id"]))
+
+
+def _verify_semantic_matches(
+    matches: Sequence[dict[str, Any]],
+    report_map: Mapping[str, dict[str, Any]],
+    source_map: Mapping[str, dict[str, Any]],
+    verifier: Any,
+    *, linked_citations: bool = False,
+) -> None:
+    """Attach model proposals to exact compared spans without changing coverage."""
+    selected = [match for match in matches
+                if match["classification_status"] != "EVIDENCE_BACKED_EXACT_MATCH"]
+    if not selected:
+        return
+    pairs = [
+        (str(report_map[match["report_chunk_id"]].get("normalized_text", report_map[match["report_chunk_id"]].get("text", ""))),
+         str(source_map[match["source_chunk_id"]].get("normalized_text", source_map[match["source_chunk_id"]].get("text", ""))))
+        for match in selected
+    ]
+    citation_context: list[dict[str, Any]] = []
+    if linked_citations:
+        report_citations = _linked_citation_number_ranges(list(report_map.values()))
+        source_citations = _linked_citation_number_ranges(list(source_map.values()))
+        citation_context = [{
+            "report": report_citations.get(match["report_chunk_id"], {"ranges": [], "markers": []}),
+            "source": source_citations.get(match["source_chunk_id"], {"ranges": [], "markers": []}),
+        } for match in selected]
+        results = verifier.verify_pairs(pairs, number_exclusion_ranges=[
+            {side: context[side]["ranges"] for side in ("report", "source")}
+            for context in citation_context
+        ])
+    else:
+        results = verifier.verify_pairs(pairs)
+    if len(results) != len(selected):
+        raise ValueError("Semantic verifier returned an invalid result count")
+    decisions = {
+        "PARAPHRASE_SUPPORTED": ("PARAPHRASE", "MODEL_SUPPORTED_SEMANTIC_MATCH"),
+        "NOT_EQUIVALENT": ("NONE", "MODEL_REJECTED_EQUIVALENCE"),
+        "ABSTAIN": (None, "PROVISIONAL_REVIEW_REQUIRED"),
+    }
+    for index, (match, pair, result) in enumerate(zip(selected, pairs, results, strict=True)):
+        decision = result.get("decision")
+        if decision not in decisions or result.get("similarity_type") != decisions[decision][0]:
+            raise ValueError("Semantic verifier returned inconsistent labels")
+        for side, text in zip(("report", "source"), pair, strict=True):
+            if result.get(side + "_text_sha256") != hashlib.sha256(text.encode()).hexdigest():
+                raise ValueError("Semantic evidence does not match the compared text")
+        matched_evidence = []
+        if decision == "PARAPHRASE_SUPPORTED":
+            if not result.get("evidence"):
+                raise ValueError("A semantic proposal requires compared sentence spans")
+            for entry in result["evidence"]:
+                spans = {}
+                for side, chunk in (("report", report_map[match["report_chunk_id"]]),
+                                    ("source", source_map[match["source_chunk_id"]])):
+                    raw_range = entry[side + "_range"]
+                    start, end = raw_range["start"], raw_range["end"]
+                    if type(start) is not int or type(end) is not int:
+                        raise ValueError("Semantic evidence offsets must be integers")
+                    spans[side] = _resolve_normalized_range(chunk, start, end)
+                matched_evidence.append({"kind": "MODEL_COMPARED_SENTENCE_PAIR", **spans,
+                                         "forward": deepcopy(entry["forward"]),
+                                         "reverse": deepcopy(entry["reverse"])})
+        match["semantic_verification"] = deepcopy(result)
+        if linked_citations:
+            match["semantic_citation_context"] = deepcopy(citation_context[index])
+        match["semantic_evidence"] = matched_evidence
+        match["semantic_verification_status"] = decision
+        match["classification_status"] = decisions[decision][1]
+        match["similarity_type"] = decisions[decision][0]
+        match["provisional_similarity_type"] = None
+        match["classification_reasons"] = list(result["reason_codes"])
+        if decision == "PARAPHRASE_SUPPORTED":
+            match["selected_for_manual_review"] = True
+        elif decision == "NOT_EQUIVALENT":
+            match["selected_for_manual_review"] = False
+        # Coverage remains governed by verified exact alignments only.
+        if match["selected_for_document_coverage"]:
+            raise ValueError("Semantic proposals must not contribute to exact coverage")
+
+
+def _citation_number_context_safe(text: str, start: int, end: int) -> bool:
+    """Use the verifier's shared shape/context guard after bibliography linking."""
+    from .semantic_verification import is_safe_single_numeric_marker
+
+    return is_safe_single_numeric_marker(text, start, end)
+
+
+def _linked_citation_number_ranges(chunks: Sequence[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Use validated citation/bibliography provenance, never arbitrary brackets.
+
+    A printed-key candidate is not citation validity or academic-use approval.
+    It only identifies numeric markers that should not be treated as quantities.
+    """
+    from services.backend.src.kltn_ai.integrations.parsing.citation_markers import extract_citation_candidates
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for chunk in chunks:
+        artifact_version = chunk.get("artifact_schema_version", chunk.get("schema_version"))
+        if artifact_version != 2:
+            continue  # Legacy text has no trustworthy marker provenance.
+        grouped[(str(chunk.get("document_id")), str(chunk.get("document_version_id")))].append(chunk)
+    output: dict[str, dict[str, Any]] = {}
+    for group in grouped.values():
+        converted = deepcopy(group)
+        for chunk in converted:
+            chunk["schema_version"] = 2  # Mongo envelope v1, parser artifact v2.
+        by_key = {chunk["chunk_key"]: chunk for chunk in group}
+        extracted = extract_citation_candidates(converted)
+        for marker in extracted["markers"]:
+            if (marker["kind"] != "NUMERIC" or marker["link_status"] != "CANDIDATE_LINK"
+                    or re.fullmatch(r"\[[0-9]+\]", marker["normalized_text"]) is None):
+                continue
+            span = marker["span"]
+            chunk = by_key[span["chunk_key"]]
+            start, end = span["chunk_normalized_char_start"], span["chunk_normalized_char_end"]
+            if not _citation_number_context_safe(chunk["normalized_text"], start, end):
+                continue
+            entry = output.setdefault(str(chunk["chunk_id"]), {"ranges": [], "markers": []})
+            bounds = {"start": start, "end": end}
+            if bounds in entry["ranges"]:
+                continue
+            entry["ranges"].append(bounds)
+            entry["markers"].append({"marker_id": marker["id"], "range": bounds,
+                                     "candidate_entry_ids": marker["candidate_entry_ids"],
+                                     "verification_status": "UNKNOWN"})
+    return output
 
 
 def _rerank_chunks(
@@ -681,10 +850,14 @@ def run_similarity_pipeline(
     config: Mapping[str, Any],
     encoder: Encoder | None,
     reranker: PairScorer | None,
+    semantic_verifier: Any | None = None,
 ) -> dict[str, Any]:
     """Run the complete offline Pipeline 1 feasibility baseline."""
 
     resolved = validate_similarity_config(config)
+    semantic_enabled = resolved.get("semantic_verification", {}).get("enabled", False)
+    if semantic_enabled != (semantic_verifier is not None):
+        raise ValueError("Semantic verification requires both enabled configuration and a verifier")
     if not report_chunks:
         raise ValueError("Pipeline 1 requires at least one report chunk")
     if not source_chunks:
@@ -927,30 +1100,40 @@ def run_similarity_pipeline(
                 review_query_ids.add(query_id)
         matches.extend(query_matches)
 
-    review_source_groups = _group_review_candidates(matches)
-    total_report_tokens = sum(len(tokenize(str(chunk["text"]))) for chunk in report_chunks)
-    flagged_report_tokens = sum(
-        len(tokenize(str(query_map[query_id]["text"])))
-        for query_id in flagged_query_ids
-    )
-    exact_matched_report_tokens = 0
-    for query_id, ranges in exact_selected_ranges.items():
-        report_chunk = query_map[query_id]
-        report_text = str(report_chunk.get("normalized_text", report_chunk["text"]))
-        exact_matched_report_tokens += sum(
-            1
-            for left, right in token_spans(report_text)
-            if any(start <= left and right <= end for start, end in ranges)
+    if semantic_enabled:
+        _verify_semantic_matches(
+            matches, query_map, source_map, semantic_verifier,
+            linked_citations=resolved.get("semantic_verification", {}).get("citation_number_guard")
+            == "LINKED_SINGLE_NUMERIC_MARKERS",
         )
+        review_query_ids = {
+            str(match["query_id"]) for match in matches
+            if match["selected_for_manual_review"]
+        }
+    review_source_groups = _group_review_candidates(matches)
+    keys_by_query = {
+        query_id: _document_token_keys(chunk) for query_id, chunk in query_map.items()
+    }
+    all_token_keys = {key for tokens in keys_by_query.values() for _, _, key in tokens}
+    flagged_token_keys = {
+        key for query_id in flagged_query_ids for _, _, key in keys_by_query[query_id]
+    }
+    exact_token_keys = {
+        key for query_id, ranges in exact_selected_ranges.items()
+        for left, right, key in keys_by_query[query_id]
+        if any(start <= left and right <= end for start, end in ranges)
+    }
+    total_report_tokens = len(all_token_keys)
+    flagged_report_tokens = len(flagged_token_keys)
+    exact_matched_report_tokens = len(exact_token_keys)
     flagged_passage_coverage = (
         100.0 * flagged_report_tokens / total_report_tokens
         if total_report_tokens
         else 0.0
     )
-    provisional_review_tokens = sum(
-        len(tokenize(str(query_map[query_id]["text"])))
-        for query_id in review_query_ids
-    )
+    provisional_review_tokens = len({
+        key for query_id in review_query_ids for _, _, key in keys_by_query[query_id]
+    })
     provisional_review_coverage = (
         100.0 * provisional_review_tokens / total_report_tokens
         if total_report_tokens
@@ -961,21 +1144,31 @@ def run_similarity_pipeline(
         if total_report_tokens
         else 0.0
     )
+    exact_keys_by_source: dict[str, set[tuple[Any, ...]]] = {}
+    for document_id, values in selected_by_source.items():
+        source_keys: set[tuple[Any, ...]] = set()
+        for value in values:
+            location = value["alignment"]["report"]
+            source_keys.update(
+                key for left, right, key in keys_by_query[str(value["query_id"])]
+                if location["normalized_start"] <= left and right <= location["normalized_end"]
+            )
+        exact_keys_by_source[document_id] = source_keys
     source_summary: list[dict[str, Any]] = []
     for source_rank, (document_id, count) in enumerate(
         sorted(
             selected_source_documents.items(),
-            key=lambda item: (-item[1], item[0]),
+            key=lambda item: (-len(exact_keys_by_source[item[0]]), item[0]),
         ),
         1,
     ):
         values = selected_by_source[document_id]
         scores = [float(value["heuristic_score"]) for value in values]
         source_query_ids = {str(value["query_id"]) for value in values}
-        source_flagged_tokens = sum(
-            len(tokenize(str(query_map[query_id]["text"])))
-            for query_id in source_query_ids
-        )
+        source_flagged_tokens = len({
+            key for query_id in source_query_ids for _, _, key in keys_by_query[query_id]
+        })
+        source_exact_tokens = len(exact_keys_by_source[document_id])
         source_summary.append(
             {
                 "rank": source_rank,
@@ -995,6 +1188,11 @@ def run_similarity_pipeline(
                 "max_uncalibrated_heuristic_score": max(scores),
                 "mean_uncalibrated_heuristic_score": sum(scores) / len(scores),
                 "flagged_report_tokens": source_flagged_tokens,
+                "exact_matched_report_tokens": source_exact_tokens,
+                "exact_token_coverage_weight": (
+                    round(source_exact_tokens / total_report_tokens, 8)
+                    if total_report_tokens else 0.0
+                ),
                 "flagged_report_token_coverage_percentage": round(
                     100.0 * source_flagged_tokens / total_report_tokens,
                     4,
@@ -1007,8 +1205,15 @@ def run_similarity_pipeline(
         "schema_version": 1,
         "pipeline": "similarity-core-mvp-v0",
         "research_status": "FEASIBILITY_BASELINE_NOT_FINAL_CLASSIFIER",
-        "classification_policy": CLASSIFICATION_POLICY,
-        "semantic_classifier_available": False,
+        "classification_policy": (
+            "EXACT_OR_MODEL_SUPPORTED_SENTENCE_NLI_V1" if semantic_enabled
+            else CLASSIFICATION_POLICY
+        ),
+        "semantic_classifier_available": semantic_enabled,
+        **({"semantic_verifier": deepcopy(semantic_verifier.metadata),
+            "semantic_decision_counts": dict(sorted(Counter(
+                match["semantic_verification_status"] for match in matches
+            ).items()))} if semantic_enabled else {}),
         "deprecated_unused_thresholds": ["summary_length_ratio"],
         "configuration": resolved,
         "retrieval_methods": sorted(methods),
@@ -1029,14 +1234,35 @@ def run_similarity_pipeline(
         "source_summary": source_summary,
         "review_source_groups": review_source_groups,
         "coverage_definitions": {
+            "version": "document-element-token-union-v2",
+            "scope": (
+                "DOCUMENT_VERSION_ELEMENT_COORDINATES"
+                if all(key[0] == "element" for key in all_token_keys)
+                else "CHUNK_LOCAL_FALLBACK_PRESENT"
+            ),
+            "exact": {
+                "unit": "unique_report_token",
+                "definition": "Union of exact aligned report tokens divided by the union of all report tokens, keyed by document version, parser element and normalized offsets. Overlapping chunks count once.",
+            },
+            "source_aggregation": {
+                "formula": "source exact-token union / report token union",
+                "ranking": "descending exact token coverage weight, then source_document_id",
+                "is_calibrated_probability": False,
+            },
             "provisional_review": {
                 "is_similarity_percentage": False,
-                "unit": "chunk_token_mass",
-                "definition": "Tokens in selected unverified report chunks divided by tokens in all report chunks; overlaps may be counted more than once. Measures review workload, not matched spans or confirmed similarity.",
+                "unit": "unique_report_token",
+                "definition": "Union of tokens in selected unverified report chunks divided by all report tokens. Measures review workload, not matched spans or confirmed similarity; legacy inputs without element coordinates fall back to chunk-local counting.",
             },
         },
         "matches": matches,
-        "disclaimer": (
+        "disclaimer": ((
+            "Sentence-level bidirectional NLI labels are uncalibrated model proposals, "
+            "not proof of copying or plagiarism. Only the compared sentence spans "
+            "are assessed; semantic matches never contribute to exact coverage. "
+            "Uncertain, incomplete and overlength comparisons abstain. SUMMARY is "
+            "not implemented. Lecturer review remains required."
+        ) if semantic_enabled else (
             "Similarity is not a plagiarism verdict. The classifier in this MVP is "
             "a transparent heuristic feasibility baseline. Retrieval relevance "
             "does not establish paraphrase or summary: both semantic labels remain "
@@ -1045,5 +1271,5 @@ def run_similarity_pipeline(
             "is not independent evidence. Review coverage measures chunk-token "
             "workload, not similarity. "
             "Lecturer review is required before academic use."
-        ),
+        )),
     }

@@ -14,3 +14,10 @@ It rejects untraceable evidence, inconsistent relation/outcome pairs and any
 match counted in confirmed coverage without an exact report/source span. The
 schemas remain forward-compatible so diagnostic fields can be added without a
 breaking format change.
+
+`research.schema_validation.validate_json_schema` runs the checked-in schemas
+with the official `jsonschema` Draft 2020-12 validator and resolves the evidence
+`$ref` from an in-memory registry, without fetching remote schemas. Run it on
+the generated similarity report, assessment report, or an Evidence Pack entry
+with `kind="similarity"`, `"assessment"`, or `"evidence"`. Schema validation
+checks shape and types; keep the runtime cross-field/provenance checks as well.

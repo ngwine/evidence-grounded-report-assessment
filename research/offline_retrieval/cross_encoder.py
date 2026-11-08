@@ -181,6 +181,11 @@ class MemoizedPairScorer:
             deadline_monotonic is not None
         )
 
+    @property
+    def tokenizer(self) -> Any:
+        """Expose the underlying tokenizer for explicit input-policy wrappers."""
+        return getattr(self._scorer, "tokenizer", None)
+
 
 def pair_diagnostics(
     pairs: Sequence[TextPair],
@@ -343,6 +348,11 @@ class SentenceTransformersCrossEncoder:
                 "max_tokens_model_input": None,
             },
         }
+
+    @property
+    def tokenizer(self) -> Any:
+        """Return the exact tokenizer used to score pairs, without reloading it."""
+        return getattr(self._model, "tokenizer", None)
 
     def set_deadline(self, deadline_monotonic: float | None) -> None:
         """Set a monotonic deadline checked around every inference batch."""

@@ -148,9 +148,16 @@ class LocalStore:
         config_id: str,
         report_display_name: str | None = None,
         source_display_names: list[str] | None = None,
+        request_id: str | None = None,
     ) -> dict[str, Any]:
         if config_id not in CONFIG_FILES:
             raise ValueError("Unknown config_id")
+        if request_id is None:
+            request_id = "req-" + uuid4().hex
+        if (not isinstance(request_id, str) or len(request_id) != 36
+                or not request_id.startswith("req-")
+                or any(character not in "0123456789abcdef" for character in request_id[4:])):
+            raise ValueError("Invalid server request ID")
         run_id = uuid4().hex
         directory = self.run_dir(run_id)
         directory.mkdir(mode=0o700)
@@ -169,6 +176,8 @@ class LocalStore:
         record: dict[str, Any] = {
             "run_id": run_id,
             "job_id": run_id,
+            "request_id": request_id,
+            "correlation_id": request_id,
             "status": "QUEUED",
             "config_id": config_id,
             "method_warning": METHOD_WARNINGS[config_id],
@@ -186,6 +195,7 @@ class LocalStore:
                 "config": sha256_bytes(config_data),
             },
             "error": None,
+            "error_code": None,
         }
         # Queue publication is last: a worker never sees partial inputs.
         atomic_json(directory / "job.json", record)

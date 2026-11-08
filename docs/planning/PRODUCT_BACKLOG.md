@@ -1,26 +1,52 @@
 # PRODUCT BACKLOG
 
+Theo chỉ đạo 08/11, **giữ nguyên phạm vi đề tài và hoàn thiện cho đủ**.
+Ưu tiên hiện hành theo [đối chiếu yêu cầu và các gói thực hiện](KE_HOACH_HOAN_THANH_PHAM_VI_DE_TAI.md),
+song song [xử lý phản biện bài báo](../paper/KE_HOACH_XU_LY_PHAN_BIEN.md).
+Không đổi đề tài thành diagnostics; GRAPH và hướng câu hỏi không được bỏ
+theo cut-line cũ. Chọn cấu hình tốt hơn trên DEV làm luồng chính, giữ
+phương pháp đối chứng và đo trên tập chưa dùng sửa code sau khi khóa.
+Không tự đóng story hoặc đổi lịch baseline từ việc sửa kế hoạch này.
+
 ## Evidence-Grounded Plagiarism Checking and Student Report Assessment
 
 | Thuộc tính | Giá trị |
 |---|---|
-| Phiên bản | 1.6 |
+| Phiên bản | 1.12 |
 | Ngày lập baseline | 21/08/2026 |
-| Ngày cập nhật | 20/10/2026 |
+| Ngày cập nhật | 23/10/2026 |
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
 | Thành viên | Nguyễn Trần Ngọc Quý — 523H0087 (Q), Võ Thị Kim Yến — 52200229 (Y) |
 | GVHD | Vũ Đình Hồng |
-| Nguồn phạm vi | [`README.md`](../../README.md) và mô tả đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
+| Nguồn phạm vi | [Mô tả đăng ký người phụ trách gửi lại](MO_TA_DE_TAI_GOC.md): 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung phải hoàn thành (Targeted Questions) |
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
-| Trạng thái baseline | Phạm vi, pipeline và dataset-task mapping đã chốt; hai technical slice và app local đã chạy; quyền dữ liệu, gold evaluation, production persistence/security và các gate vẫn mở; actual/evidence theo WBS v1.7 |
+| Trạng thái baseline | [Authenticated Mongo app](../architecture/version-locked-analysis-app.md) chạy hai pipeline; [item review/gold evaluation](../architecture/item-review-and-gold-evaluation.md) bổ sung trên branch riêng. Actual theo WBS v1.13; [audit W1–W11](./W1-W11_STATUS_2026-10-22.md) giữ lịch sử. Semantic/gold, graph extraction, backup/lifecycle, quyền dữ liệu và review/merge/deployment vẫn mở |
 
 ---
 
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
-phiên bản 1.7; không đổi target backlog để che độ trễ.
+phiên bản 1.13; không đổi target backlog để che độ trễ.
+
+Ưu tiên 28/10 tập trung bản bài báo được cập nhật ngày 08/11: bắt đầu sửa
+bằng chứng P2 và mức đánh giá rubric, chuẩn bị dữ liệu trong miền song song;
+hoàn thiện GRAPH, classifier bốn dạng, review điểm và câu hỏi theo dependency.
+[Bài báo](../paper/KE_HOACH_HOAN_THIEN_BAI_BAO.md) viết song song và phản ánh
+kết quả thật, không thay việc hoàn thiện hệ thống bằng thu hẹp claim.
+
+Đối chứng đầu vào ngắn A5/A6 trên DEV1 đã hoàn tất và được đưa vào bài báo:
+[kết quả và audit](../benchmarks/pan-pc-11-short-evidence-dev1-result.md).
+A6 bỏ truncation bổ sung nhưng chưa cải thiện Recall@10; TEST0 vẫn giữ kín.
+Đây là tiến độ thực nghiệm thành phần, chưa đóng các story cần holdout/gold.
+
+Cập nhật triển khai 29/10: đã thêm P1 NLI theo span, P2 verifier từ vựng/ngữ
+cảnh V4 và [bộ ca kiểm tra đầu ra](../benchmarks/output-quality-development-2026-10-29.md).
+Challenge đầu tiên ở `7aa249f` và cohort sửa guard citation ở `a2a3d885`
+được giữ riêng; cohort sau không cải thiện kết quả 8/16. Nhãn do trợ lý soạn,
+chưa phải gold độc lập. SUMMARY, calibration, đánh giá P2 trên corpus độc lập
+và PAN TEST0 vẫn còn mở; không nâng story lên DONE từ các ca phát triển này.
 
 ## 1. Quy ước backlog
 
@@ -104,7 +130,7 @@ Một item chỉ được kéo lên `Ready` khi:
 |---|---|---:|---:|---|---|---|---|---|---|
 | `EP-02-S01` | Repo, dependency manifest, Compose, CI và môi trường tái lập | P0 | 5 | Q | Y | W01–W03 | `EP-01-S04` | FE/BE/worker/DB chạy healthcheck; lint/type/test, SAST, secret và dependency scan chạy trong CI từ W03; High/Critical làm fail gate hoặc có waiver owner/expiry; README chạy trên môi trường sạch | IN PROGRESS |
 | `EP-02-S02` | Thiết kế MongoDB collection, index, invariant và data dictionary | P0 | 8 | Q | Y | W02–W03 | `EP-02-S05` | [ADR-001](../adr/ADR-001-mongodb-provenance-storage.md) và [data dictionary](../architecture/data-dictionary.md) mô tả schema/version/reference/index/migration/rebuild; source of truth và derived index tách rõ | DONE |
-| `EP-02-S03` | Authentication, session, RBAC và user management tối thiểu | P0 | 8 | Q | Y | W03 | `EP-02-S02/06/07` | Student/Lecturer/Admin đúng ma trận; cross-user access bị chặn; authorization test đạt | PLANNED |
+| `EP-02-S03` | Authentication, session, RBAC và user management tối thiểu | P0 | 8 | Q | Y | W03 | `EP-02-S02/06/07` | Student/Lecturer/Admin đúng ma trận; cross-user access bị chặn; authorization test đạt; local Mongo account/session/RBAC có, còn account lifecycle và review/deployment | IN PROGRESS |
 | `EP-02-S04` | Threat model và adversarial test plan | P0 | 5 | Q | Y | W02, cập nhật W16/W21 | `EP-02-S05` | [Threat model v1](../threat-model/threat-model-v1.md) có asset/trust boundary/risk→mitigation→test traceability cho upload/parser, queue, DB, tenant retrieval, prompt injection, output sanitization và log privacy | DONE |
 | `EP-02-S05` | Thiết kế C4 Context/Container/Deployment và trust boundary | P0 | 5 | Q | Y | W02 | `EP-01-S01` | [C4](../architecture/c4.md) phản ánh React–FastAPI–worker–MongoDB–storage–local AI; [data flow](../architecture/data-flow.md) làm rõ ranh giới đồng bộ/bất đồng bộ | DONE |
 | `EP-02-S06` | Viết API contract v1 và error format chung | P0 | 8 | Q | Y | W02–W03 | `EP-02-S02/05` | Contract bao phủ auth, report/source, upload, job/run, chunks, rubric, result/review; có lỗi và pagination | IN PROGRESS |
@@ -121,7 +147,7 @@ Một item chỉ được kéo lên `Ready` khi:
 | `EP-03-S04` | Lập lexical/vector index có version và có thể rebuild | P0 | 8 | Q | Y | W05–W06 | `EP-03-S03`, `EP-02-S02` | Index idempotent/resumable; model/config/index version lưu; smoke recall/latency/RAM có artifact | IN PROGRESS |
 | `EP-03-S05` | Hỗ trợ PDF scan bằng OCR | P2 | 8 | Y | Q | Sau W16 | `EP-03-S02–04`, `G-07` | OCR confidence/page mapping được lưu; benchmark riêng; không làm giảm parser text | ICEBOX |
 | `EP-03-S06` | Xử lý tác vụ dài qua queue/worker có retry và idempotency | P0 | 8 | Q | Y | W03–W04 | `EP-03-S01` | State queued/processing/failed/review-ready/completed; restart không mất checkpoint; retry hữu hạn | IN PROGRESS |
-| `EP-03-S07` | Ánh xạ quote/citation/reference marker vào span/chunk có provenance | P0 | 5 | Y | Q | W04, W08 | `EP-03-S02/03` | Marker/entry và ngữ cảnh quote/citation giữ raw/confidence/page/span/chunk; mở đúng vị trí; parse failure là unknown | PLANNED |
+| `EP-03-S07` | Ánh xạ quote/citation/reference marker vào span/chunk có provenance | P0 | 5 | Y | Q | W04, W08 | `EP-03-S02/03` | Marker/entry và ngữ cảnh quote/citation giữ raw/confidence/page/span/chunk; mở đúng vị trí; parse failure là unknown | IN PROGRESS |
 | `EP-03-S08` | Xây golden fixture và benchmark parser/chunking | P0 | 5 | Y | Q | W04 | `EP-03-S02/03` | Corpus khóa trước; expected structure/page/span mapping; báo coverage, lỗi và thời gian xử lý | IN PROGRESS |
 
 ## 5. Epic EP-04 — Hybrid Retrieval và Similarity Analysis
@@ -162,7 +188,7 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 | ID | User story/outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
 | `EP-06-S01` | Cảnh báo chất lượng diễn đạt/văn phong có vị trí | P1 | 5 | Y | Q | Sau W13 | `EP-03-S04`, core gates | Mỗi finding có type/severity/page/chunk/explanation; lecturer review; báo precision sample và limitation | ICEBOX |
-| `EP-06-S02` | Phát hiện bất nhất mục tiêu–phương pháp–kết quả–kết luận có evidence | P1 | 8 | Y | Q | Sau W13 | `EP-05-S06–08` | Finding trỏ evidence; thiếu căn cứ trả needs-verification; có test contradiction/missing support | ICEBOX |
+| `EP-06-S02` | Phát hiện bất nhất mục tiêu–phương pháp–kết quả–kết luận có evidence | P0 | 8 | Y | Q | Sau W13 | `EP-05-S06–08` | Finding trỏ evidence; thiếu căn cứ trả needs-verification; có test contradiction/missing support; thuộc P2 phải hoàn thành theo mô tả gốc | PLANNED |
 | `EP-06-S03` | Cảnh báo style anomaly/AI-writing ở mức hỗ trợ | P2 | 5 | Y | Q | W14 nếu core đạt | Dataset/ethics/gate core | Không có “% AI”; có vị trí/feature/disclaimer/bias limitation; không ảnh hưởng điểm tự động | ICEBOX |
 
 ## 8. Epic EP-07 — Kiểm chứng trích dẫn/tài liệu tham khảo (ngoài phạm vi đã chốt)
@@ -177,15 +203,15 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 
 | ID | User story/outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
-| `EP-08-S01` | Sinh câu hỏi có mục tiêu từ issue, similarity, evidence và rubric | P1 | 8 | Y | Q | W14 nếu `G-06` đúng forecast | `EP-04-S07/09`, `EP-05-S08` | Mỗi câu có type/question/reference answer/evidence/purpose/difficulty; evidence giả bị reject | CONDITIONAL |
-| `EP-08-S02` | Lecturer review, chỉnh sửa, loại bỏ và đánh giá câu hỏi | P1 | 5 | Y | Q | W14, W20 nếu enabled | `EP-08-S01`, `EP-02-S03/08` | Chỉ câu approved được dùng; audit before/after; rating relevance/grounding/answerability/usefulness xuất được | CONDITIONAL |
+| `EP-08-S01` | Sinh câu hỏi có mục tiêu từ issue, similarity, evidence và rubric | P1 | 8 | Y | Q | W14 — target baseline | `EP-04-S07/09`, `EP-05-S08` | Mỗi câu có type/question/reference answer/evidence/purpose/difficulty; evidence giả bị reject; hướng bổ sung phải hoàn thành, xếp sau output hai pipeline | PLANNED |
+| `EP-08-S02` | Lecturer review, chỉnh sửa, loại bỏ và đánh giá câu hỏi | P1 | 5 | Y | Q | W14, W20 — target baseline | `EP-08-S01`, `EP-02-S03/08` | Chỉ câu approved được dùng; audit before/after; rating relevance/grounding/answerability/usefulness xuất được; không bỏ theo cut-line cũ | PLANNED |
 
 ## 10. Epic EP-09 — Workflow, review workspace, feedback và export
 
 | ID | User story/outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
 | `EP-09-S01` | Job workflow có progress, retry, resume và partial result | P0 | 8 | Q | Y | W03–W05, W15–W16 | `EP-02-S02/06`, `EP-03-S01/06` | HTTP không block; state/checkpoint/idempotency test; worker restart không mất kết quả đã commit | IN PROGRESS |
-| `EP-09-S02` | Unified lecturer review workspace/dashboard cho similarity/assessment và question nếu enabled | P0 | 8 | Y | Q | W15 | `EP-04-S07`, `EP-05-S04/08`; `EP-08-S02` nếu enabled | Evidence mở đúng; filter/status/UX state; Accept/Edit/Reject nhất quán; unpublished result không lộ | PLANNED |
+| `EP-09-S02` | Unified lecturer review workspace/dashboard cho similarity/assessment và question | P0 | 8 | Y | Q | W15 | `EP-04-S07`, `EP-05-S04/08`; `EP-08-S02` cho phần câu hỏi | Evidence mở đúng; filter/status/UX state; Accept/Edit/Reject nhất quán; unpublished result không lộ; tích hợp câu hỏi khi đầu ra hợp lệ | PLANNED |
 | `EP-09-S03` | Final Report/Export có version và disclaimer | P0 | 5 | Q | Y | W15 | `EP-09-S02/07` | HTML/JSON tối thiểu có evidence/review status/version; PDF conditional; chỉ Lecturer publish; similarity ≠ plagiarism | PLANNED |
 | `EP-09-S04` | Observability, correlation ID và run/resource telemetry | P0 | 5 | Q | Y | W03–W21 | `EP-09-S01` | `request_id→job_id→run_id` xuyên API/worker/model/index/graph/evidence; structured log redacted PII/secret; stage latency, success/failure và resource truy vết được | IN PROGRESS |
 | `EP-09-S05` | Cohort/class analytics dashboard | P2 | 5 | Y | Q | Sau W21 | `G-09`, `EP-09-S06` | Chỉ aggregate đúng quyền; metric định nghĩa rõ; không suy diễn gian lận | ICEBOX |
@@ -207,7 +233,7 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 
 | ID | Outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
-| `EP-11-S01` | Test pyramid và CI quality/security gates | P0 | 8 | Q | Y | W03 initial; W16/W21 gates | `EP-02-S01/04` | Unit/integration/E2E; SAST/secret/dependency scan; Critical/High được sửa hoặc waiver có owner/expiry | PLANNED |
+| `EP-11-S01` | Test pyramid và CI quality/security gates | P0 | 8 | Q | Y | W03 initial; W16/W21 gates | `EP-02-S01/04` | Unit/integration/E2E; SAST/secret/dependency scan; Critical/High được sửa hoặc waiver có owner/expiry | IN PROGRESS |
 | `EP-11-S02` | Malicious upload, parser isolation và prompt-injection defense | P0 | 8 | Q | Y | W04, W10, W16 | `EP-02-S04`, `EP-03`, `EP-05` | MIME/path/zip/resource limit; tenant/report isolation; untrusted text không điều khiển tool; output sanitize/schema validate | PLANNED |
 | `EP-11-S03` | Performance/resilience/data-safety và backup-restore benchmark | P0 | 8 | Q | Y | W16, W21 | `EP-11-S05` | p50/p95, throughput, RAM/VRAM; timeout/restart/outage; restore drill và bottleneck evidence | PLANNED |
 | `EP-11-S04` | Release Candidate và Release 1.0 có thể cài lại | P0 | 8 | Q | Y | W16, W21, W23–W24 | `EP-11-S01–03/05` | Clean install/smoke; migration/rollback; release notes/known issues/checksum; không đóng gói dữ liệu nhạy cảm | PLANNED |
@@ -229,16 +255,16 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 |---:|---|---|---|
 | 1 | `EP-01-S03`, `EP-04-S05/06` — nguồn ngoài/provider | Change request được Q/Y/GVHD duyệt, đủ quyền/privacy/quota và không làm trễ core | `OUT OF SCOPE`; dùng kho nguồn nội bộ |
 | 2 | `EP-07-S01–03` — reference checker DOI/metadata/consistency | Change request được duyệt; không nhầm với citation/span mapping core `EP-03-S07` | `OUT OF SCOPE` |
-| 3 | `EP-06-S01/02` — writing/document logic | Assessment Engine và benchmark core ổn | `ICEBOX` |
+| 3 | `EP-06-S01` — cảnh báo diễn đạt/văn phong | Assessment Engine và benchmark core ổn; bất nhất liên phần `EP-06-S02` thuộc P2 bắt buộc, không ở bảng cắt này | `ICEBOX` |
 | 4 | `EP-06-S03` — style/AI-writing warning | Có dataset/ethics/disclaimer và không ảnh hưởng W14 | `ICEBOX` |
 | 5 | `EP-03-S05` — OCR | Corpus scan đủ lớn và parser core đạt | `ICEBOX` |
 | 6 | `EP-04-S08` — cross-language | Có labeled bilingual subset sau RQ1 | `ICEBOX` |
 | 7 | `EP-09-S05` — cohort dashboard | Release core, privacy và buffer đều đạt | `ICEBOX` |
-| 8 | `EP-08-S01/02` — Targeted Questions | Chỉ kéo nếu `G-06` đạt forecast và capacity W14–W20 còn đủ; nếu không, đánh giá lecturer-support không có question | `CONDITIONAL` |
 
-Khi trễ, cắt từ dưới lên trong bảng. Không cắt parser/provenance, Hybrid
-Similarity, LOCAL/GRAPH Assessment, lecturer review, benchmark hoặc
-reproducibility chỉ để giữ extension.
+Targeted Questions không còn nằm trong cut-line; thực hiện theo dependency
+của kế hoạch hiện hành. Khi trễ, ưu tiên lại các extension trong bảng;
+không cắt parser/provenance, Hybrid Similarity, LOCAL/GRAPH Assessment,
+lecturer review, câu hỏi, benchmark hoặc reproducibility.
 
 ## 15. Critical path và nhánh song song
 
@@ -266,10 +292,13 @@ Các nhánh được phép chạy song song:
 - Luận văn cập nhật theo increment từ W01.
 - Question UI dùng assessment/similarity fixture trước W14.
 
-## 16. Tổng hợp tải Product Backlog
+## 16. Tổng hợp tải Product Backlog — snapshot baseline trước đính chính 08/11
 
-Tải được tính theo owner của outcome, không tính effort review. Bảng này phải
-được cập nhật bằng script/kiểm tra khi thay owner hoặc SP.
+Tải được tính theo owner của outcome, không tính effort review. Bảng dưới
+giữ snapshot lịch sử, **không phải tải cam kết hiện hành**: `EP-06-S02`
+đã về P0/PLANNED, `EP-08-S01/02` đã về PLANNED theo đề cương. Không dùng
+hàng conditional/icebox cũ để loại các chức năng này khỏi phạm vi. Cần tính
+remaining work và sắp tải thực thi trong WBS; không tự cộng vượt trần tuần.
 
 | Phạm vi | Quý (SP) | Yến (SP) | Ghi chú |
 |---|---:|---:|---|
@@ -327,6 +356,10 @@ Tên issue:
 | 1.4 | 10/09/2026 | Bổ sung API Contract v1/OpenAPI draft cho `W2.3`; khóa auth/scope, resource, async job/run, evidence/review, error, pagination, idempotency và revision |
 | 1.5 | 16/09/2026 | Ghi nhận PR #6 `W2.2` đã được Yến approve và merge; bổ sung quan hệ `document_elements → chunks`; chuyển design item `EP-02-S02` sang `DONE` |
 | 1.6 | 20/10/2026 | Đồng bộ status với WBS v1.7 và repository: API/UX, local upload-worker app, parser golden benchmark, BM25/Dense/RRF/Cross-Encoder, Similarity technical slice, rubric compiler/LOCAL/GRAPH-v0 assessment, output contracts và experiment manifest chuyển `IN PROGRESS`; không nâng `DONE` khi còn thiếu production persistence/security hoặc gold evaluation |
+| 1.7 | 22/10/2026 | Dẫn chiếu audit đủ 66 task theo WBS v1.8; citation/span mapping chuyển IN PROGRESS với adapter và runner artifact; ghi nhận Mongo replica-set/queue, vector generation, parser budgets, JSON Schema runtime, RRF/coverage/gold fixes trong PR #19. Các điều kiện rights/gold/production và gate chưa đạt vẫn mở |
+| 1.8 | 22/10/2026 | Theo WBS v1.9: thêm rubric API compiler adapter, migration/DB roles, browser E2E và quality/security/browser CI jobs; EP-11-S01 sang IN PROGRESS. Không tính database role là application RBAC hoặc adapter là HTTP implementation; các acceptance/gold gates giữ mở |
+| 1.9 | 23/10/2026 | Theo WBS v1.10, xác nhận CI5/5 trên code commit37c6277 với Mongo8.0.34/Ubuntu22.04 target, six live tests/restart/reapply, Chromium và quality/security gates; chưa nâng story DONE khi thiếu phần app integration hoặc review/gold |
+| 1.12 | 24/10/2026 | Theo WBS v1.13, bổ sung model-visible item review append-only và approved-gold freeze/evaluation runner trên nhánh riêng. Giữ gold/semantic/graph và human approval gates mở; không coi review đã nhìn predictions là nhãn độc lập |
 
 | Vai trò | Họ tên | Quyết định | Ngày |
 |---|---|---|---|
