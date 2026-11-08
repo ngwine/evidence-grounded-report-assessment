@@ -48,6 +48,8 @@ TABLE_CAPTIONS = [
     "Parent-annotation-balanced macro results on DEV0.",
     "Paired parent-cluster bootstrap contrasts on DEV0; delta is left method minus right method.",
     "Rank-transition groups used to explain fusion and reranking behavior.",
+    "Controlled A5/A6 input-construction comparison on DEV1; parent-balanced metrics with 95% parent-cluster intervals.",
+    "Within-paper paragraph evidence retrieval on 646 evaluable QASPER DEV questions.",
 ]
 
 
@@ -511,6 +513,10 @@ def widths_for_table(header: list[str]) -> list[float]:
         return [2.65] + [1.36] * 7
     if header and header[0] == "Transition group":
         return [4.0, 1.0, 7.2]
+    if header[:2] == ["Method", "Parent R@10 [95% CI]"]:
+        return [0.9, 3.2, 3.2, 3.2, 1.7]
+    if columns == 7 and header[:2] == ["Method", "Hit@1"]:
+        return [3.0, 1.4, 1.4, 1.4, 1.8, 1.7, 1.5]
     return [TEXT_WIDTH_CM / columns] * columns
 
 

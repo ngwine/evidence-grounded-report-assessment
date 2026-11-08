@@ -1,18 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1600" viewBox="0 -350 1600 1600">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <title>Evidence-grounded student-report assessment framework</title>
+  <desc>Versioned parsing feeds the similarity and rubric-assessment pipelines. Both return evidence for instructor review.</desc>
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
-    </marker>
     <style>
       .title { font: 700 38px Arial, sans-serif; fill: #0f172a; }
       .head { font: 700 25px Arial, sans-serif; fill: #0f172a; }
       .body { font: 22px Arial, sans-serif; fill: #334155; }
       .small { font: 19px Arial, sans-serif; fill: #475569; }
       .box { stroke-width: 3; rx: 18; }
-      .arrow { stroke: #334155; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .arrow { stroke: #334155; stroke-width: 3.5; stroke-linejoin: round; fill: none; }
+      .arrowhead { fill: #334155; }
     </style>
   </defs>
-  <rect x="0" y="-350" width="1600" height="1600" fill="#ffffff"/>
+  <rect x="0" y="0" width="1600" height="900" fill="#ffffff"/>
   <text x="800" y="58" text-anchor="middle" class="title">Evidence-grounded student-report assessment framework</text>
 
   <rect x="50" y="275" width="235" height="210" class="box" fill="#f1f5f9" stroke="#475569"/>
@@ -27,7 +27,8 @@
   <text x="512" y="375" text-anchor="middle" class="body">Typed elements and locators</text>
   <text x="512" y="415" text-anchor="middle" class="body">Stable chunks and raw spans</text>
   <text x="512" y="455" text-anchor="middle" class="body">Versioned analysis run</text>
-  <text x="512" y="495" text-anchor="middle" class="small">Authoritative metadata; rebuildable indexes</text>
+  <text x="512" y="490" text-anchor="middle" class="small">Authoritative metadata</text>
+  <text x="512" y="515" text-anchor="middle" class="small">Rebuildable indexes</text>
 
   <rect x="770" y="105" width="500" height="275" class="box" fill="#dcfce7" stroke="#16a34a"/>
   <text x="1020" y="158" text-anchor="middle" class="head">Pipeline 1 — Similarity analysis</text>
@@ -38,23 +39,38 @@
 
   <rect x="770" y="475" width="500" height="275" class="box" fill="#fef3c7" stroke="#d97706"/>
   <text x="1020" y="528" text-anchor="middle" class="head">Pipeline 2 — Rubric assessment</text>
-  <text x="1020" y="577" text-anchor="middle" class="body">Atomic checklist compiler</text>
+  <text x="1020" y="577" text-anchor="middle" class="body">Authored checklist compiler</text>
   <text x="1020" y="617" text-anchor="middle" class="body">LOCAL / GRAPH evidence routing</text>
-  <text x="1020" y="657" text-anchor="middle" class="body">Claim verification + explicit rules</text>
-  <text x="1020" y="697" text-anchor="middle" class="small">Design specified; empirical evaluation pending</text>
+  <text x="1020" y="657" text-anchor="middle" class="body">Phrase/context verification + rules</text>
+  <text x="1020" y="697" text-anchor="middle" class="small">Prototype; independent validation pending</text>
 
   <rect x="1340" y="275" width="215" height="210" class="box" fill="#fce7f3" stroke="#be185d"/>
   <text x="1448" y="330" text-anchor="middle" class="head">Instructor</text>
   <text x="1448" y="375" text-anchor="middle" class="body">Inspect evidence</text>
-  <text x="1448" y="412" text-anchor="middle" class="body">Accept / edit</text>
+  <text x="1448" y="412" text-anchor="middle" class="body">Record review</text>
   <text x="1448" y="449" text-anchor="middle" class="body">Final decision</text>
 
-  <path d="M285 380 L350 380" class="arrow"/>
-  <path d="M675 330 C715 330 725 245 770 245" class="arrow"/>
-  <path d="M675 430 C715 430 725 615 770 615" class="arrow"/>
-  <path d="M1270 245 C1310 245 1300 335 1340 335" class="arrow"/>
-  <path d="M1270 615 C1310 615 1300 425 1340 425" class="arrow"/>
+  <g aria-label="Input to parsing">
+    <path d="M289 380 H329" class="arrow"/>
+    <polygon points="328,374 342,380 328,386" class="arrowhead"/>
+  </g>
+  <g aria-label="Parsing to Pipeline 1">
+    <path d="M679 330 H695 Q710 330 710 315 V260 Q710 245 725 245 H749" class="arrow"/>
+    <polygon points="748,239 762,245 748,251" class="arrowhead"/>
+  </g>
+  <g aria-label="Parsing to Pipeline 2">
+    <path d="M679 430 H695 Q710 430 710 445 V600 Q710 615 725 615 H749" class="arrow"/>
+    <polygon points="748,609 762,615 748,621" class="arrowhead"/>
+  </g>
+  <g aria-label="Pipeline 1 to instructor review">
+    <path d="M1274 245 H1284 Q1300 245 1300 261 V319 Q1300 335 1316 335 H1319" class="arrow"/>
+    <polygon points="1318,329 1332,335 1318,341" class="arrowhead"/>
+  </g>
+  <g aria-label="Pipeline 2 to instructor review">
+    <path d="M1274 615 H1284 Q1300 615 1300 599 V441 Q1300 425 1316 425 H1319" class="arrow"/>
+    <polygon points="1318,419 1332,425 1318,431" class="arrowhead"/>
+  </g>
 
   <rect x="365" y="785" width="870" height="70" rx="16" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
-  <text x="800" y="828" text-anchor="middle" class="body">Fail closed: insufficient or incomparable evidence → CANNOT_ASSESS → human review</text>
+  <text x="800" y="828" text-anchor="middle" class="small">Insufficient / incomparable evidence → CANNOT_ASSESS → instructor review</text>
 </svg>
