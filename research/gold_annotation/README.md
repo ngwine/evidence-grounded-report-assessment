@@ -1,5 +1,61 @@
 # Gán nhãn độc lập và chốt gold data
 
+## Nhận phiếu Excel P2 mới — bước chuẩn bị, chưa freeze gold
+
+`p2_workbook_intake.py` nhận hai file XLSX của bộ 15 bài/45 mục, kiểm ID và
+version với packet gốc, giữ riêng bản trả về, kiểm quote/paragraph và tạo
+danh sách cần đối chiếu. Công cụ không đọc dự đoán model, điền nhãn hộ hoặc
+tự ghi người/ngày duyệt. Phiếu trống vẫn là `INCOMPLETE`, không được tính
+thành nhãn UNSURE hay gold đã hoàn tất.
+
+Dependency Excel là tùy chọn, tách khỏi môi trường inference:
+
+```sh
+.venv-research/bin/python -m pip install -r research/requirements-annotation.txt
+.venv-research/bin/python -m research.gold_annotation.p2_workbook_intake \
+  --packet-dir var/paper/p2-annotation-2026-11-05/v2 \
+  --quy-workbook path/to/PHIEU_GAN_NHAN_QUY.xlsx \
+  --yen-workbook path/to/PHIEU_GAN_NHAN_YEN.xlsx \
+  --output-dir var/paper/p2-return-new-version
+```
+
+Output gồm original XLSX chỉ đọc và receipts, `canonical_quy.json`,
+`canonical_yen.json`, `summary.json`, `review_items.json/csv`. Các cột quyết
+định cuối vẫn trống. Khác nhãn/evidence, UNSURE, thiếu dữ liệu hoặc khai báo
+phương thức/exposure cần làm rõ đều được giữ để người kiểm tra xử lý.
+Code trả exit 1 khi còn thiếu/bất đồng, exit 2 khi input không hợp lệ;
+exit 0 chỉ có nghĩa sẵn sàng cho bước review, không phải đã duyệt gold.
+
+Khi chủ động dùng **một người gán nhãn**, có thể nhận riêng phiếu đó, không
+cần tạo phiếu thứ hai hoặc sao chép nhãn:
+
+```sh
+.venv-research/bin/python -m research.gold_annotation.p2_workbook_intake \
+  --packet-dir var/paper/p2-annotation-2026-11-05/v2 \
+  --single-workbook path/to/PHIEU_GAN_NHAN_YEN.xlsx --recipient YEN \
+  --output-dir var/paper/p2-single-return-new-version
+```
+
+Chế độ này ghi `SINGLE_ANNOTATOR`, giữ nguyên khai báo AI hỗ trợ nếu có và
+để agreement/Cohen's kappa là `null` vì không áp dụng. Nó lưu bản XLSX gốc,
+receipt SHA-256, canonical của người gửi và các mục lỗi/chưa rõ; không tự
+sửa quote, đổi nhãn hay cấp trạng thái gold. Khai báo AI hỗ trợ vẫn được
+giữ là flag cần trình bày trong phương pháp. Đây là đường nhận phiếu cho
+đánh giá một người; quy trình gold-v1 hai người bên dưới giữ nguyên.
+
+[`assessment_evidence.py`](assessment_evidence.py) giữ các loại bằng chứng
+riêng: `SPAN_SET`, `DOCUMENT_ABSENCE`, `INSUFFICIENT_INPUT`, `UNRESOLVED`.
+Vắng nội dung phải có đúng report/version/body hash, phạm vi toàn bộ text
+đã cung cấp, xác nhận đọc toàn bài, mọi paragraph và lý do. Không tạo quote
+phản chứng giả hay xem một span set rỗng là bằng chứng vắng mặt.
+
+Span overlap và mức khớp phạm vi kiểm vắng nội dung được báo riêng; chúng
+không xác nhận lập luận ngữ nghĩa hoặc danh tính người duyệt. Không xuất
+record `DOCUMENT_ABSENCE` sang gold-v1 bằng một `evidence_span_ids` giả:
+format này là bổ sung có phiên bản, chưa thay đổi quy trình freeze/evaluate
+v1 dưới đây. Chốt guideline, bất đồng, provenance và hồ sơ pack vẫn phải
+hoàn tất trước một đánh giá chính thức.
+
 Công cụ này kiểm tra hai phiếu CSV sau khi Quý và Yến gán nhãn độc lập. Nó
 kiểm tra ID/version, nhãn, evidence bắt buộc, tính agreement và Cohen's kappa,
 rồi kiểm tra quyết định adjudication. Công cụ không sinh nhãn hộ người gán và

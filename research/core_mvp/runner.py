@@ -180,6 +180,8 @@ def run_core_mvp(
     pipeline: str = "both",
     encoder: Encoder | None = None,
     reranker: PairScorer | None = None,
+    semantic_verifier: Any | None = None,
+    llm_verifier: Any | None = None,
 ) -> dict[str, Any]:
     """Execute the selected core pipelines and write reproducible artifacts."""
 
@@ -269,6 +271,28 @@ def run_core_mvp(
         encoder = _load_encoder(model_config)
     if needs_reranker and reranker is None:
         reranker = _load_reranker(model_config)
+    semantic_policy = _object(pipeline1_config.get("semantic_verification", {}), "pipeline1.semantic_verification")
+    if (selected_pipeline in {"similarity", "both"}
+            and semantic_policy.get("enabled", False) and semantic_verifier is None):
+        from .semantic_verification import load_semantic_verifier
+        semantic_verifier = load_semantic_verifier(
+            _object(model_config.get("semantic_verifier"), "models.semantic_verifier"),
+            semantic_policy,
+        )
+    llm_policy = _object(
+        pipeline2_config.get("llm_verification", {}), "pipeline2.llm_verification"
+    )
+    uses_llm_assessment = (
+        selected_pipeline in {"assessment", "both"}
+        and llm_policy.get("enabled", False) is True
+    )
+    if uses_llm_assessment and llm_verifier is None:
+        from .llm_assessment import load_llm_assessment_verifier
+
+        llm_verifier = load_llm_assessment_verifier(
+            _object(model_config.get("assessment_verifier"), "models.assessment_verifier"),
+            llm_policy,
+        )
     timings["model_load_seconds"] = time.perf_counter() - stage
 
     similarity_report: dict[str, Any] | None = None
@@ -288,6 +312,7 @@ def run_core_mvp(
             config=pipeline1_config,
             encoder=encoder,
             reranker=reranker,
+            **({"semantic_verifier": semantic_verifier} if semantic_verifier is not None else {}),
         )
         validate_similarity_report(similarity_report)
         validate_json_schema(similarity_report, kind="similarity")
@@ -304,6 +329,7 @@ def run_core_mvp(
             config=pipeline2_config,
             encoder=encoder,
             reranker=reranker,
+            **({"llm_verifier": llm_verifier} if uses_llm_assessment else {}),
         )
         validate_assessment_report(assessment_report)
         validate_json_schema(assessment_report, kind="assessment")
@@ -407,6 +433,10 @@ def run_core_mvp(
         "models": {
             "dense": deepcopy(getattr(encoder, "metadata", None)),
             "cross_encoder": deepcopy(getattr(reranker, "metadata", None)),
+            **({"semantic_verifier": deepcopy(semantic_verifier.metadata)}
+               if semantic_verifier is not None else {}),
+            **({"assessment_verifier": deepcopy(llm_verifier.metadata)}
+               if uses_llm_assessment else {}),
         },
         "timings_seconds": {key: round(value, 6) for key, value in timings.items()},
         "outputs": {

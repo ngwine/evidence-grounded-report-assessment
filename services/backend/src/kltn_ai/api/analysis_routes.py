@@ -53,7 +53,8 @@ def analysis_router(database, private_root: Path, *, transaction_mode: bool,
     @router.post("/workspaces/{workspace_id}/document-versions/{version_id}/index-generations", status_code=202)
     async def request_index(workspace_id: str, version_id: str, request: Request):
         body = await json_reader(request)
-        if (set(body) - {"config_id", "rebuild"} or body.get("config_id") not in {"bm25-smoke", "research-v0"}
+        if (set(body) - {"config_id", "rebuild"} or body.get("config_id") not in {
+                "bm25-smoke", "research-v0", "bm25-nli-v1", "rrf-nli-v1", "bm25-nli-v2", "rrf-nli-v2", "bm25-p2-llm-v1", "bm25-p2-llm-v2"}
                 or type(body.get("rebuild", False)) is not bool):
             raise DomainError(422, "VALIDATION_FAILED", "A supported index config_id is required")
         result = await run_in_threadpool(indexes().request, request.state.actor_id, workspace_id,

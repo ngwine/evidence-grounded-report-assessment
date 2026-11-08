@@ -1,0 +1,736 @@
+{
+  "schema_version": 1,
+  "pack_id": "authored-output-quality-dev-v1",
+  "split": "DEV",
+  "provenance": {
+    "classification": "SYNTHETIC_AUTHORED",
+    "author": "Codex output-quality case-pack agent",
+    "label_status": "ASSISTANT_AUTHORED_EXPECTATIONS",
+    "independent_human_gold": false,
+    "external_corpus_used": false,
+    "contains_personal_data": false,
+    "intended_use": "Local software/model development diagnostics only",
+    "offset_unit": "python_unicode_character_half_open",
+    "claim_limit": "No independent human annotation, statistical generalization, or scientific heldout accuracy is asserted."
+  },
+  "cases": [
+    {
+      "case_id": "dev-p1-01",
+      "task": "SIMILARITY",
+      "language": "en",
+      "category": "exact",
+      "report_text": "The orchard controller stores every moisture sample with a UTC timestamp and compares three consecutive dry readings before opening the irrigation valve.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "The orchard controller stores every moisture sample with a UTC timestamp and compares three consecutive dry readings before opening the irrigation valve."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "The project documents the equipment inventory, operator training and maintenance schedule. A separate section lists contact roles and storage locations."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "A museum records pottery colors and arranges photographs by the century in which each vase was produced."
+        }
+      ],
+      "expected": {
+        "relation": "VERBATIM",
+        "target_source_id": "target",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 153,
+            "quote": "The orchard controller stores every moisture sample with a UTC timestamp and compares three consecutive dry readings before opening the irrigation valve."
+          },
+          {
+            "leg": "source",
+            "start": 0,
+            "end": 153,
+            "quote": "The orchard controller stores every moisture sample with a UTC timestamp and compares three consecutive dry readings before opening the irrigation valve."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p1-02",
+      "task": "SIMILARITY",
+      "language": "en",
+      "category": "paraphrase",
+      "report_text": "After three successive dry readings, the controller starts watering. A later wet measurement causes it to stop the pump.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Irrigation begins when the sensor reports dry soil three times in a row. The pump is switched off once a subsequent sample indicates wet soil."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "The project documents the equipment inventory, operator training and maintenance schedule. A separate section lists contact roles and storage locations."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "A museum records pottery colors and arranges photographs by the century in which each vase was produced."
+        }
+      ],
+      "expected": {
+        "relation": "PARAPHRASE",
+        "target_source_id": "target",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 120,
+            "quote": "After three successive dry readings, the controller starts watering. A later wet measurement causes it to stop the pump."
+          },
+          {
+            "leg": "source",
+            "start": 0,
+            "end": 142,
+            "quote": "Irrigation begins when the sensor reports dry soil three times in a row. The pump is switched off once a subsequent sample indicates wet soil."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p1-03",
+      "task": "SIMILARITY",
+      "language": "en",
+      "category": "negation",
+      "report_text": "The archive rejects anonymous uploads and requires each contributor to sign in before sending a recording.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Recordings may be submitted without an account because the archive permits unauthenticated contributors to upload them."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "The project documents the equipment inventory, operator training and maintenance schedule. A separate section lists contact roles and storage locations."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "A museum records pottery colors and arranges photographs by the century in which each vase was produced."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-04",
+      "task": "SIMILARITY",
+      "language": "en",
+      "category": "number",
+      "report_text": "Each greenhouse station takes twelve temperature readings every hour and stores the observations for thirty days.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "The greenhouse retains measurements for ninety days; its stations sample temperature four times per hour."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "The project documents the equipment inventory, operator training and maintenance schedule. A separate section lists contact roles and storage locations."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "A museum records pottery colors and arranges photographs by the century in which each vase was produced."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-05",
+      "task": "SIMILARITY",
+      "language": "en",
+      "category": "entity",
+      "report_text": "The desktop client computes the file checksum, while the server only stores the submitted digest.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Checksum computation occurs on the server. The desktop application merely transmits the file for that calculation."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "The project documents the equipment inventory, operator training and maintenance schedule. A separate section lists contact roles and storage locations."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "A museum records pottery colors and arranges photographs by the century in which each vase was produced."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-06",
+      "task": "SIMILARITY",
+      "language": "en",
+      "category": "topic",
+      "report_text": "The camera estimates leaf area by counting purple calibration markers along the edge of a plant photograph.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "The greenhouse camera is mounted on an adjustable aluminum pole and receives power from a rooftop solar panel."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "The project documents the equipment inventory, operator training and maintenance schedule. A separate section lists contact roles and storage locations."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "A museum records pottery colors and arranges photographs by the century in which each vase was produced."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-07",
+      "task": "SIMILARITY",
+      "language": "vi",
+      "category": "exact",
+      "report_text": "Trạm quan trắc lưu mỗi mẫu độ ẩm kèm thời gian UTC và chỉ mở van tưới sau khi ghi nhận ba phép đo khô liên tiếp.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Trạm quan trắc lưu mỗi mẫu độ ẩm kèm thời gian UTC và chỉ mở van tưới sau khi ghi nhận ba phép đo khô liên tiếp."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "Dự án trình bày danh mục thiết bị, hướng dẫn vận hành và lịch bảo trì. Một phần khác liệt kê vai trò nhân sự và vị trí lưu trữ."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "Bảo tàng ghi lại màu men gốm và sắp xếp ảnh theo thế kỷ chế tác của từng chiếc bình."
+        }
+      ],
+      "expected": {
+        "relation": "VERBATIM",
+        "target_source_id": "target",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 112,
+            "quote": "Trạm quan trắc lưu mỗi mẫu độ ẩm kèm thời gian UTC và chỉ mở van tưới sau khi ghi nhận ba phép đo khô liên tiếp."
+          },
+          {
+            "leg": "source",
+            "start": 0,
+            "end": 112,
+            "quote": "Trạm quan trắc lưu mỗi mẫu độ ẩm kèm thời gian UTC và chỉ mở van tưới sau khi ghi nhận ba phép đo khô liên tiếp."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p1-08",
+      "task": "SIMILARITY",
+      "language": "vi",
+      "category": "paraphrase",
+      "report_text": "Sau khi nhận ba lần báo đất khô liên tục, bộ điều khiển bật máy bơm. Máy dừng khi lần đo tiếp theo cho biết đất đã ướt.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Máy bơm bắt đầu tưới nếu cảm biến ghi đất khô ba lượt liền nhau. Một mẫu đo ướt xuất hiện sau đó sẽ làm quá trình tưới ngừng lại."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "Dự án trình bày danh mục thiết bị, hướng dẫn vận hành và lịch bảo trì. Một phần khác liệt kê vai trò nhân sự và vị trí lưu trữ."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "Bảo tàng ghi lại màu men gốm và sắp xếp ảnh theo thế kỷ chế tác của từng chiếc bình."
+        }
+      ],
+      "expected": {
+        "relation": "PARAPHRASE",
+        "target_source_id": "target",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 119,
+            "quote": "Sau khi nhận ba lần báo đất khô liên tục, bộ điều khiển bật máy bơm. Máy dừng khi lần đo tiếp theo cho biết đất đã ướt."
+          },
+          {
+            "leg": "source",
+            "start": 0,
+            "end": 129,
+            "quote": "Máy bơm bắt đầu tưới nếu cảm biến ghi đất khô ba lượt liền nhau. Một mẫu đo ướt xuất hiện sau đó sẽ làm quá trình tưới ngừng lại."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p1-09",
+      "task": "SIMILARITY",
+      "language": "vi",
+      "category": "negation",
+      "report_text": "Kho tư liệu bắt buộc người gửi đăng nhập tài khoản trước khi tải bản ghi lên và từ chối yêu cầu ẩn danh.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Người dùng ẩn danh vẫn được phép đưa bản ghi vào kho mà không cần tạo tài khoản hay đăng nhập."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "Dự án trình bày danh mục thiết bị, hướng dẫn vận hành và lịch bảo trì. Một phần khác liệt kê vai trò nhân sự và vị trí lưu trữ."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "Bảo tàng ghi lại màu men gốm và sắp xếp ảnh theo thế kỷ chế tác của từng chiếc bình."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-10",
+      "task": "SIMILARITY",
+      "language": "vi",
+      "category": "number",
+      "report_text": "Mỗi giờ trạm nhà kính lấy mười hai mẫu nhiệt độ và giữ dữ liệu thu được trong ba mươi ngày.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Dữ liệu nhiệt độ được lưu chín mươi ngày; mỗi trạm nhà kính chỉ lấy bốn mẫu trong một giờ."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "Dự án trình bày danh mục thiết bị, hướng dẫn vận hành và lịch bảo trì. Một phần khác liệt kê vai trò nhân sự và vị trí lưu trữ."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "Bảo tàng ghi lại màu men gốm và sắp xếp ảnh theo thế kỷ chế tác của từng chiếc bình."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-11",
+      "task": "SIMILARITY",
+      "language": "vi",
+      "category": "entity",
+      "report_text": "Phần mềm máy khách tính mã kiểm tra của tệp, còn máy chủ chỉ ghi lại mã đã được gửi lên.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Việc tính mã kiểm tra diễn ra tại máy chủ sau khi ứng dụng khách truyền tệp đến để yêu cầu tính toán."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "Dự án trình bày danh mục thiết bị, hướng dẫn vận hành và lịch bảo trì. Một phần khác liệt kê vai trò nhân sự và vị trí lưu trữ."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "Bảo tàng ghi lại màu men gốm và sắp xếp ảnh theo thế kỷ chế tác của từng chiếc bình."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p1-12",
+      "task": "SIMILARITY",
+      "language": "vi",
+      "category": "topic",
+      "report_text": "Camera ước lượng diện tích lá bằng cách đếm những dấu chuẩn màu tím ở mép ảnh chụp cây.",
+      "sources": [
+        {
+          "source_id": "target",
+          "text": "Camera trong nhà kính được gắn lên cột nhôm có thể điều chỉnh độ cao và nhận điện từ tấm pin trên mái."
+        },
+        {
+          "source_id": "topic-distractor",
+          "text": "Dự án trình bày danh mục thiết bị, hướng dẫn vận hành và lịch bảo trì. Một phần khác liệt kê vai trò nhân sự và vị trí lưu trữ."
+        },
+        {
+          "source_id": "unrelated",
+          "text": "Bảo tàng ghi lại màu men gốm và sắp xếp ảnh theo thế kỷ chế tác của từng chiếc bình."
+        }
+      ],
+      "expected": {
+        "relation": "NONE",
+        "target_source_id": "target",
+        "evidence": []
+      }
+    },
+    {
+      "case_id": "dev-p2-01",
+      "task": "ASSESSMENT",
+      "language": "en",
+      "category": "completed",
+      "report_text": "The search pilot measured Recall at five on the locked query set. Results were retained in the experiment log.",
+      "rubric": {
+        "schema_version": 1,
+        "rubric_id": "dev-p2-01",
+        "version": "1.0.0",
+        "title": "Authored diagnostic criterion",
+        "max_score": 1.0,
+        "decision_rules": {
+          "rule_version": "authored-quality-v1",
+          "cannot_assess_count_threshold": 1,
+          "cannot_assess_ratio_threshold": 0.0,
+          "required_unmet_score": 0.0
+        },
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "title": "Evidence status",
+            "weight": 1.0,
+            "checklists": [
+              {
+                "checklist_id": "C1.1",
+                "statement": "The search pilot has completed measurement of Recall.",
+                "query": "The search pilot has completed measurement of Recall.",
+                "mode": "LOCAL",
+                "importance": "REQUIRED",
+                "requirements": [
+                  {
+                    "requirement_id": "req-1",
+                    "description": "The search pilot has completed measurement of Recall.",
+                    "any_of": [
+                      "search pilot measured Recall"
+                    ]
+                  }
+                ],
+                "contradiction_patterns": [
+                  "search pilot has not measured Recall"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "MET",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 110,
+            "quote": "The search pilot measured Recall at five on the locked query set. Results were retained in the experiment log."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p2-02",
+      "task": "ASSESSMENT",
+      "language": "en",
+      "category": "explicit_unmet",
+      "report_text": "The search pilot has not measured Recall because relevance labels are still awaiting review.",
+      "rubric": {
+        "schema_version": 1,
+        "rubric_id": "dev-p2-02",
+        "version": "1.0.0",
+        "title": "Authored diagnostic criterion",
+        "max_score": 1.0,
+        "decision_rules": {
+          "rule_version": "authored-quality-v1",
+          "cannot_assess_count_threshold": 1,
+          "cannot_assess_ratio_threshold": 0.0,
+          "required_unmet_score": 0.0
+        },
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "title": "Evidence status",
+            "weight": 1.0,
+            "checklists": [
+              {
+                "checklist_id": "C1.1",
+                "statement": "The search pilot has completed measurement of Recall.",
+                "query": "The search pilot has completed measurement of Recall.",
+                "mode": "LOCAL",
+                "importance": "REQUIRED",
+                "requirements": [
+                  {
+                    "requirement_id": "req-1",
+                    "description": "The search pilot has completed measurement of Recall.",
+                    "any_of": [
+                      "search pilot measured Recall"
+                    ]
+                  }
+                ],
+                "contradiction_patterns": [
+                  "search pilot has not measured Recall"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "UNMET",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 92,
+            "quote": "The search pilot has not measured Recall because relevance labels are still awaiting review."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p2-03",
+      "task": "ASSESSMENT",
+      "language": "en",
+      "category": "future_only",
+      "report_text": "The team plans to run the search pilot and measure Recall after collecting relevance labels.",
+      "rubric": {
+        "schema_version": 1,
+        "rubric_id": "dev-p2-03",
+        "version": "1.0.0",
+        "title": "Authored diagnostic criterion",
+        "max_score": 1.0,
+        "decision_rules": {
+          "rule_version": "authored-quality-v1",
+          "cannot_assess_count_threshold": 1,
+          "cannot_assess_ratio_threshold": 0.0,
+          "required_unmet_score": 0.0
+        },
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "title": "Evidence status",
+            "weight": 1.0,
+            "checklists": [
+              {
+                "checklist_id": "C1.1",
+                "statement": "The search pilot has completed measurement of Recall.",
+                "query": "The search pilot has completed measurement of Recall.",
+                "mode": "LOCAL",
+                "importance": "REQUIRED",
+                "requirements": [
+                  {
+                    "requirement_id": "req-1",
+                    "description": "The search pilot has completed measurement of Recall.",
+                    "any_of": [
+                      "search pilot measured Recall"
+                    ]
+                  }
+                ],
+                "contradiction_patterns": [
+                  "search pilot has not measured Recall"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "CANNOT_ASSESS",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 92,
+            "quote": "The team plans to run the search pilot and measure Recall after collecting relevance labels."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p2-04",
+      "task": "ASSESSMENT",
+      "language": "vi",
+      "category": "completed",
+      "report_text": "Nhóm đã đo WER trên bản chép lời tham chiếu của tập kiểm tra và lưu kết quả vào nhật ký.",
+      "rubric": {
+        "schema_version": 1,
+        "rubric_id": "dev-p2-04",
+        "version": "1.0.0",
+        "title": "Authored diagnostic criterion",
+        "max_score": 1.0,
+        "decision_rules": {
+          "rule_version": "authored-quality-v1",
+          "cannot_assess_count_threshold": 1,
+          "cannot_assess_ratio_threshold": 0.0,
+          "required_unmet_score": 0.0
+        },
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "title": "Evidence status",
+            "weight": 1.0,
+            "checklists": [
+              {
+                "checklist_id": "C1.1",
+                "statement": "Nhóm đã hoàn thành phép đo WER.",
+                "query": "Nhóm đã hoàn thành phép đo WER.",
+                "mode": "LOCAL",
+                "importance": "REQUIRED",
+                "requirements": [
+                  {
+                    "requirement_id": "req-1",
+                    "description": "Nhóm đã hoàn thành phép đo WER.",
+                    "any_of": [
+                      "đã đo WER"
+                    ]
+                  }
+                ],
+                "contradiction_patterns": [
+                  "chưa đo WER"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "MET",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 88,
+            "quote": "Nhóm đã đo WER trên bản chép lời tham chiếu của tập kiểm tra và lưu kết quả vào nhật ký."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p2-05",
+      "task": "ASSESSMENT",
+      "language": "vi",
+      "category": "explicit_unmet",
+      "report_text": "Nhóm chưa đo WER vì bản chép lời tham chiếu vẫn đang chờ người kiểm tra.",
+      "rubric": {
+        "schema_version": 1,
+        "rubric_id": "dev-p2-05",
+        "version": "1.0.0",
+        "title": "Authored diagnostic criterion",
+        "max_score": 1.0,
+        "decision_rules": {
+          "rule_version": "authored-quality-v1",
+          "cannot_assess_count_threshold": 1,
+          "cannot_assess_ratio_threshold": 0.0,
+          "required_unmet_score": 0.0
+        },
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "title": "Evidence status",
+            "weight": 1.0,
+            "checklists": [
+              {
+                "checklist_id": "C1.1",
+                "statement": "Nhóm đã hoàn thành phép đo WER.",
+                "query": "Nhóm đã hoàn thành phép đo WER.",
+                "mode": "LOCAL",
+                "importance": "REQUIRED",
+                "requirements": [
+                  {
+                    "requirement_id": "req-1",
+                    "description": "Nhóm đã hoàn thành phép đo WER.",
+                    "any_of": [
+                      "đã đo WER"
+                    ]
+                  }
+                ],
+                "contradiction_patterns": [
+                  "chưa đo WER"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "UNMET",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 72,
+            "quote": "Nhóm chưa đo WER vì bản chép lời tham chiếu vẫn đang chờ người kiểm tra."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "dev-p2-06",
+      "task": "ASSESSMENT",
+      "language": "vi",
+      "category": "missing",
+      "report_text": "Báo cáo mô tả màn hình xem video và các nút điều khiển tốc độ phát.",
+      "rubric": {
+        "schema_version": 1,
+        "rubric_id": "dev-p2-06",
+        "version": "1.0.0",
+        "title": "Authored diagnostic criterion",
+        "max_score": 1.0,
+        "decision_rules": {
+          "rule_version": "authored-quality-v1",
+          "cannot_assess_count_threshold": 1,
+          "cannot_assess_ratio_threshold": 0.0,
+          "required_unmet_score": 0.0
+        },
+        "criteria": [
+          {
+            "criterion_id": "C1",
+            "title": "Evidence status",
+            "weight": 1.0,
+            "checklists": [
+              {
+                "checklist_id": "C1.1",
+                "statement": "Nhóm đã hoàn thành phép đo WER.",
+                "query": "Nhóm đã hoàn thành phép đo WER.",
+                "mode": "LOCAL",
+                "importance": "REQUIRED",
+                "requirements": [
+                  {
+                    "requirement_id": "req-1",
+                    "description": "Nhóm đã hoàn thành phép đo WER.",
+                    "any_of": [
+                      "đã đo WER"
+                    ]
+                  }
+                ],
+                "contradiction_patterns": [
+                  "chưa đo WER"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "expected": {
+        "outcome": "CANNOT_ASSESS",
+        "evidence": [
+          {
+            "leg": "report",
+            "start": 0,
+            "end": 67,
+            "quote": "Báo cáo mô tả màn hình xem video và các nút điều khiển tốc độ phát."
+          }
+        ]
+      }
+    }
+  ]
+}

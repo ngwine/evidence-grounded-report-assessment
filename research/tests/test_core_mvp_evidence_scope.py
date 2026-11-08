@@ -143,6 +143,82 @@ def test_versioned_evidence_requires_raw_source_spans():
         _run([chunk])
 
 
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        (10000, 20000),
+        (-1, 5),
+        (0, 10000),
+        (5, 5),
+        (5, 2),
+        (True, 5),
+        (0, False),
+        ("0", 5),
+        (0, 5.0),
+        (None, 5),
+        (0, None),
+    ],
+)
+def test_invalid_canonical_span_bounds_are_rejected_before_verification(
+    monkeypatch, start, end
+):
+    chunk = _chunk()
+    chunk["source_spans"][0].update(
+        chunk_normalized_char_start=start, chunk_normalized_char_end=end
+    )
+
+    def must_not_verify(*_args, **_kwargs):
+        pytest.fail("Invalid source coordinates reached the verifier")
+
+    monkeypatch.setattr(assessment, "_verify", must_not_verify)
+    with pytest.raises(ValueError, match="Invalid evidence source span bounds"):
+        _run([chunk])
+
+
+@pytest.mark.parametrize("missing_field", [
+    "chunk_normalized_char_start", "chunk_normalized_char_end",
+])
+def test_missing_canonical_span_bounds_cannot_use_alignment_defaults(missing_field):
+    chunk = _chunk()
+    del chunk["source_spans"][0][missing_field]
+    with pytest.raises(ValueError, match="Invalid evidence source span bounds"):
+        _run([chunk])
+
+
+@pytest.mark.parametrize("gap", ["prefix", "middle", "suffix"])
+def test_in_bounds_spans_cannot_leave_report_text_without_provenance(gap):
+    chunk = _chunk()
+    first = chunk["source_spans"][0]
+    if gap == "prefix":
+        first["chunk_normalized_char_start"] = 8
+    elif gap == "suffix":
+        first["chunk_normalized_char_end"] = 12
+    else:
+        last = deepcopy(first)
+        first["chunk_normalized_char_end"] = 7
+        last["chunk_normalized_char_start"] = 13
+        chunk["source_spans"].append(last)
+    with pytest.raises(ValueError, match="Unmapped evidence text"):
+        _run([chunk])
+
+
+def test_whitespace_join_between_authoritative_source_spans_is_allowed():
+    chunk = _chunk()
+    first = chunk["source_spans"][0]
+    last = deepcopy(first)
+    first["chunk_normalized_char_end"] = 7
+    last["chunk_normalized_char_start"] = 8
+    chunk["source_spans"].append(last)
+
+    [checklist] = _run([chunk])["checklist_results"]
+    assert checklist["checklist_outcome"] == "MET"
+    [hit] = checklist["matched_evidence_spans"]
+    assert hit["span"]["text"] == "BM25"
+    [source] = hit["span"]["source_spans"]
+    assert source["matched_chunk_normalized_start"] == 8
+    assert source["matched_chunk_normalized_end"] == 12
+
+
 def test_evidence_version_can_use_document_version_id_field():
     chunk = _chunk()
     chunk["document_version_id"] = chunk.pop("document_version")

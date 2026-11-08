@@ -119,9 +119,11 @@ class MongoAnalysisWorker:
                     raise DomainError(409, "PROVENANCE_INVALID", "Similarity output contains an invalid chunk reference")
                 key = f"similarity:{report['chunk_id']}:{source['chunk_id']}"
                 exact = match["classification_status"] == "EVIDENCE_BACKED_EXACT_MATCH"
+                semantic = match["classification_status"] == "MODEL_SUPPORTED_SEMANTIC_MATCH"
                 record("SIMILARITY", key, report, source, None, match,
-                       "SUPPORTED" if exact else "INSUFFICIENT",
-                       "EXACT_ALIGNED_TEXT" if exact else "UNVERIFIED_RETRIEVAL_CANDIDATE")
+                       "SUPPORTED" if exact or semantic else "INSUFFICIENT",
+                       "EXACT_ALIGNED_TEXT" if exact else "MODEL_SENTENCE_EQUIVALENCE_REQUIRES_REVIEW"
+                       if semantic else "UNVERIFIED_RETRIEVAL_CANDIDATE")
         assessment = output.get("assessment")
         if assessment is not None:
             for checklist in assessment["checklist_results"]:
@@ -133,7 +135,9 @@ class MongoAnalysisWorker:
                     record("ASSESSMENT", key, chunk, None, checklist["checklist_id"],
                         {"retrieved_evidence": evidence, "checklist_outcome": checklist["checklist_outcome"],
                          "matched_evidence_spans": checklist["matched_evidence_spans"],
-                         "negated_evidence_spans": checklist["negated_evidence_spans"]},
+                         "negated_evidence_spans": checklist["negated_evidence_spans"],
+                         "non_asserted_evidence_spans": checklist.get("non_asserted_evidence_spans", []),
+                         "withheld_contradiction_spans": checklist.get("withheld_contradiction_spans", [])},
                         checklist["verification_relation"], checklist["reason_code"])
         if len(records) > 3000 or len({item["_id"] for item in records}) != len(records):
             raise DomainError(409, "ANALYSIS_OUTPUT_LIMIT", "Evidence output exceeds the local analysis budget")

@@ -34,7 +34,7 @@ export type JobRecord = {
   id: string; job_type: string; state: string; attempt: number; max_attempts: number;
   progress: { step: string; completed: number; total: number }; error_code: string | null;
 };
-export type AnalysisConfigId = 'bm25-smoke' | 'research-v0';
+export type AnalysisConfigId = 'bm25-smoke' | 'research-v0' | 'bm25-nli-v1' | 'rrf-nli-v1' | 'bm25-nli-v2' | 'rrf-nli-v2' | 'bm25-p2-llm-v1' | 'bm25-p2-llm-v2';
 export type UploadAuthorization = { id: string; name: string; rights_basis: string; allowed_purposes: string[]; valid_until: string | null; resource_id: string; classification: string };
 export type UploadDeclarationBody = {
   kind: DocumentKind; filename: string; content_sha256: string; rights_basis: 'SELF_AUTHORED';

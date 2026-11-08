@@ -39,8 +39,45 @@
           "selected_for_manual_review": {"type": "boolean"},
           "selected_for_document_coverage": {"type": "boolean"},
           "similarity_type": {"type": ["string", "null"]},
-          "alignment": {"type": "object"}
-        }
+          "alignment": {"type": "object"},
+          "semantic_verification_status": {"type": "string"},
+          "semantic_verification": {"type": "object"},
+          "semantic_evidence": {
+            "type": "array",
+            "items": {
+              "type": "object", "required": ["kind", "report", "source", "forward", "reverse"],
+              "properties": {
+                "kind": {"const": "MODEL_COMPARED_SENTENCE_PAIR"},
+                "report": {"$ref": "#/$defs/semanticRange"},
+                "source": {"$ref": "#/$defs/semanticRange"},
+                "forward": {"type": "object"}, "reverse": {"type": "object"}
+              }
+            }
+          }
+        },
+        "allOf": [{
+          "if": {"properties": {"similarity_type": {"const": "PARAPHRASE"}}, "required": ["similarity_type"]},
+          "then": {
+            "required": ["semantic_verification_status", "semantic_verification", "semantic_evidence"],
+            "properties": {
+              "classification_status": {"const": "MODEL_SUPPORTED_SEMANTIC_MATCH"},
+              "semantic_verification_status": {"const": "PARAPHRASE_SUPPORTED"},
+              "selected_for_document_coverage": {"const": false},
+              "semantic_evidence": {"minItems": 1}
+            }
+          }
+        }]
+      }
+    }
+  },
+  "$defs": {
+    "semanticRange": {
+      "type": "object", "required": ["text", "normalized_start", "normalized_end", "source_spans"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1},
+        "normalized_start": {"type": "integer", "minimum": 0},
+        "normalized_end": {"type": "integer", "minimum": 1},
+        "source_spans": {"type": "array"}
       }
     }
   }

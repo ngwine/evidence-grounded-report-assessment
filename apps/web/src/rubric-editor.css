@@ -84,13 +84,14 @@
 .rubric-alternative-row { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
 .rubric-alternative-row > span { flex: none; width: 26px; color: #92a2af; font-size: 9px; text-align: center; }
 .rubric-visual-editor .rubric-alternative-row input { width: 100%; padding: 8px 9px; font-size: 10px; }
-.rubric-visual-editor .rubric-text-button { display: inline-flex; align-items: center; justify-content: start; gap: 5px; min-height: 30px; padding: 5px 0; border: 0; border-radius: 4px; color: #34827d; background: transparent; font-size: 9px; font-weight: 650; }
-.rubric-visual-editor .rubric-text-button:hover:not(:disabled) { color: #0c5e59; text-decoration: underline; }
-.rubric-alternative-row + .rubric-text-button { margin: 4px 0 0 34px; }
+.rubric-visual-editor .rubric-text-button { display: inline-flex; align-items: center; justify-content: start; gap: 5px; max-width: 100%; min-height: 34px; padding: 7px 10px; border: 1px solid #c2d9ce; border-radius: 5px; color: #2a7561; background: #f0f7f3; font-size: 10px; font-weight: 700; text-align: left; overflow-wrap: anywhere; }
+.rubric-visual-editor .rubric-text-button:hover:not(:disabled) { border-color: #8cb6a1; color: #185c46; background: #e4f0e8; }
+.rubric-alternative-row + .rubric-text-button { max-width: calc(100% - 34px); margin: 7px 0 0 34px; }
 .rubric-add-requirement { margin-top: 10px; }
-.rubric-visual-editor .rubric-add-checklist { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 14px; min-height: 38px; padding: 9px 12px; border: 1px dashed #cbdde0; border-radius: 6px; background: #f8fbfb; color: #4b8581; font-size: 10px; font-weight: 650; }
-.rubric-visual-editor .rubric-add-criterion { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; margin-top: 18px; padding: 12px 16px; border: 1px dashed #afcecf; border-radius: 8px; background: #f3faf9; color: #237e76; font-size: 11px; font-weight: 700; }
-.rubric-visual-editor .rubric-add-criterion:hover:not(:disabled), .rubric-visual-editor .rubric-add-checklist:hover:not(:disabled) { border-color: #58a49e; background: #eaf7f4; }
+.rubric-visual-editor .rubric-add-checklist { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; margin-top: 14px; min-height: 42px; padding: 10px 12px; border: 1px solid #abcbbd; border-radius: 6px; background: #edf6f0; color: #2d7560; font-size: 11px; font-weight: 700; }
+.rubric-visual-editor .rubric-add-criterion { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; margin-top: 18px; padding: 12px 16px; border: 1px solid #7dad98; border-radius: 8px; background: #e4f2e9; color: #1d6e50; font-size: 12px; font-weight: 750; box-shadow: 0 2px 5px #1c735310; }
+.rubric-visual-editor .rubric-add-criterion:hover:not(:disabled), .rubric-visual-editor .rubric-add-checklist:hover:not(:disabled) { border-color: #5d9e7f; background: #d8ebdf; color: #185a3e; }
+.rubric-visual-editor button:focus-visible { outline: 3px solid #83b6a3; outline-offset: 3px; }
 .rubric-scoring-note { margin: 13px 3px 0; color: #91a0ab; font-size: 9px; line-height: 1.7; }
 .rubric-advanced { margin-top: 25px; border-top: 1px solid #e4ebf0; }
 .rubric-advanced > summary { padding: 16px 1px; color: #6c8192; font-size: 10px; font-weight: 650; cursor: pointer; }

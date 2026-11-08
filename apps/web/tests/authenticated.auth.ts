@@ -188,7 +188,7 @@ const CHECKLIST_ITEM = '2'.repeat(64);
 const REPORT_SPAN = 'a'.repeat(64);
 const SOURCE_SPAN = 'b'.repeat(64);
 
-async function mockItemReviewApi(page: Page, options: { holdItems?: boolean; failFirstSave?: boolean } = {}) {
+async function mockItemReviewApi(page: Page, options: { holdItems?: boolean; failFirstSave?: boolean; results?: Record<string, unknown> } = {}) {
   const calls: Array<{ path: string; method: string; headers: Record<string, string>; body: Record<string, unknown> | null }> = [];
   const annotations: Array<Record<string, unknown>> = [];
   let revision = 1;
@@ -229,7 +229,7 @@ async function mockItemReviewApi(page: Page, options: { holdItems?: boolean; fai
       report_version_id: VERSION, source_version_ids: [VERSION], index_generation_ids: [], rubric_version_id: VERSION,
       config_id: 'bm25-smoke', job_id: 'synthetic-job', revision, created_at: '2026-10-24T00:00:00Z',
       completed_at: '2026-10-24T00:00:01Z', failure_code: null, review_state: 'UNREVIEWED' });
-    if (path.endsWith('/results')) return reply({ similarity: null, assessment: null });
+    if (path.endsWith('/results')) return reply(options.results ?? { similarity: null, assessment: null });
     if (path.endsWith('/evidence')) return reply(makePage([]));
     if (path.endsWith('/annotation-items')) {
       if (options.holdItems) await heldItems;
@@ -271,6 +271,47 @@ async function openReviewRun(page: Page) {
   await page.getByRole('button', { name: 'Mở lượt chạy', exact: true }).click();
   await page.getByText('Review chi tiết từng cặp đoạn / checklist', { exact: false }).click();
 }
+
+test('mocked API: negative-only similarity pairs remain visible without claiming a clean report', async ({ page }) => {
+  const matches = ['MODEL_REJECTED_EQUIVALENCE', 'NO_SIMILARITY_HYPOTHESIS'].map((classification_status, index) => ({
+    classification_status, report_chunk_id: `negative-report-${index}`, source_chunk_id: `negative-source-${index}`,
+    source_document_id: `source-${index}`, source_name: `Negative source ${index + 1}`, similarity_type: 'NONE',
+    selected_for_manual_review: false, selected_for_document_coverage: false,
+    alignment: { report: { text: `Negative report passage ${index + 1}` }, source: { text: `Negative source passage ${index + 1}` } },
+  }));
+  await mockItemReviewApi(page, { results: { similarity: { matches, exact_match_coverage_percentage: 0, semantic_classifier_available: true }, assessment: null } });
+  await openReviewRun(page);
+  const results = page.getByRole('region', { name: 'Pipeline 1 kết quả', exact: true });
+  const negative = results.getByRole('button', { name: 'Không đề xuất tương đồng 2', exact: true });
+  await expect(negative).toHaveAttribute('aria-pressed', 'true');
+  await expect(results.locator('.comparison-card')).toHaveCount(2);
+  await expect(results).toContainText('Negative report passage 1');
+  await expect(results).toContainText('Negative report passage 2');
+  await expect(results).toContainText('không chứng minh toàn báo cáo không có nội dung tương đồng');
+  await expect(results).toContainText('chưa phải xác nhận không có sao chép');
+  await expect(results.getByRole('button', { name: /^Chưa xác định/ })).toHaveCount(0);
+  await results.getByRole('button', { name: 'Khớp nguyên văn 0', exact: true }).click();
+  await expect(results.locator('.comparison-card')).toHaveCount(0);
+  await negative.click();
+  await expect(results.locator('.comparison-card')).toHaveCount(2);
+});
+
+test('mocked API: unknown similarity status stays inspectable as unresolved', async ({ page }) => {
+  await mockItemReviewApi(page, { results: { similarity: { matches: [{
+    classification_status: 'FUTURE_REVIEW_STATUS', report_chunk_id: 'future-report', source_chunk_id: 'future-source',
+    source_document_id: 'future-document', source_name: 'Future source', selected_for_manual_review: true,
+    selected_for_document_coverage: false, alignment: { report: { text: 'Future report passage' }, source: { text: 'Future source passage' } },
+  }], exact_match_coverage_percentage: 0 }, assessment: null } });
+  await openReviewRun(page);
+  const results = page.getByRole('region', { name: 'Pipeline 1 kết quả', exact: true });
+  await expect(results.getByRole('button', { name: 'Chưa xác định 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(results.locator('.comparison-card')).toHaveCount(1);
+  await expect(results).toContainText('Future report passage');
+  await expect(results.locator('.finding-badge')).toHaveText('Chưa xác định');
+  await expect(results.getByRole('button', { name: /^Không đề xuất tương đồng/ })).toHaveCount(0);
+  await results.getByText('Vị trí và chi tiết đối chiếu', { exact: true }).click();
+  await expect(results.locator('.auth-evidence-json')).toContainText('FUTURE_REVIEW_STATUS');
+});
 
 test('mocked API: item review loading, retry, immutable correction and conflict preserve draft and CAS', async ({ page }) => {
   const api = await mockItemReviewApi(page, { holdItems: true, failFirstSave: true });

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "experiment_id": "p2-comparison-one-step-v1",
+  "seed": 20261013,
+  "documents": {
+    "max_tokens": 220,
+    "min_tokens": 30
+  },
+  "models": {
+    "assessment_verifier": {
+      "backend": "ollama",
+      "model": "qwen3.5:4b-q4_K_M",
+      "digest": "sha256:d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04",
+      "endpoint": "http://127.0.0.1:11435"
+    }
+  },
+  "pipeline1": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 3,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": false,
+    "reranker_enabled": false,
+    "classification": {
+      "verbatim_query_coverage": 0.72,
+      "verbatim_exact_char_ratio": 0.45,
+      "semantic_similarity": 0.72,
+      "semantic_min_lexical": 0.05,
+      "cross_encoder_min_score": 0.0,
+      "lexical_paraphrase_coverage": 0.32,
+      "summary_length_ratio": 0.65,
+      "minimum_alignment_chars": 24
+    }
+  },
+  "pipeline2": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 5,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": false,
+    "reranker_enabled": false,
+    "graph": {
+      "seed_depth": 8,
+      "iterations": 20,
+      "damping": 0.85,
+      "minimum_shared_terms": 2,
+      "maximum_term_degree": 30
+    },
+    "llm_verification": {
+      "enabled": true,
+      "num_ctx": 32768,
+      "num_predict": 768,
+      "timeout_seconds": 120,
+      "seed": 0,
+      "max_checklists": 12,
+      "citation_mode": "source_units",
+      "citation_audit": false,
+      "max_citations_per_requirement": 3
+    },
+    "evidence_context": {
+      "strategy": "all_parsed_chunks_if_bounded",
+      "max_chars": 14000,
+      "max_utf8_bytes": 20000,
+      "max_chunks": 32
+    }
+  },
+  "config_id": "p2-compare-one-step-v1",
+  "limits": {
+    "max_report_chunks": 500,
+    "max_source_chunks": 2000,
+    "max_total_text_chars": 1000000,
+    "max_result_bytes": 8388608,
+    "wall_seconds": 900
+  }
+}

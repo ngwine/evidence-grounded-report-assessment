@@ -31,6 +31,12 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 CONFIG_FILES = {
     "bm25-smoke": REPO_ROOT / "services/backend/configs/bm25-smoke.json",
     "research-v0": REPO_ROOT / "research/configs/core-mvp-v0.json",
+    "bm25-nli-v1": REPO_ROOT / "services/backend/configs/bm25-nli-v1.json",
+    "rrf-nli-v1": REPO_ROOT / "services/backend/configs/rrf-nli-v1.json",
+    "bm25-nli-v2": REPO_ROOT / "services/backend/configs/bm25-nli-v2.json",
+    "rrf-nli-v2": REPO_ROOT / "services/backend/configs/rrf-nli-v2.json",
+    "bm25-p2-llm-v1": REPO_ROOT / "services/backend/configs/bm25-p2-llm-v1.json",
+    "bm25-p2-llm-v2": REPO_ROOT / "services/backend/configs/bm25-p2-llm-v2.json",
 }
 MAX_ARTIFACT_BYTES = 64 * 1024 * 1024
 
@@ -48,6 +54,17 @@ def locked_config(config_id: str) -> tuple[dict[str, Any], str]:
         raise DomainError(422, "INVALID_CONFIG", "Unknown server configuration")
     payload = CONFIG_FILES[config_id].read_bytes()
     return json.loads(payload), hashlib.sha256(payload).hexdigest()
+
+
+def dense_index_required(config: dict[str, Any]) -> bool:
+    """A locked pipeline's Dense flag determines vector requirements.
+
+    Profile names do not describe which models are actually needed. Source
+    generations cover both pipelines; a Dense view in either one requires
+    the locked model vectors before that generation can be reused.
+    """
+    return any(config[name].get("dense_enabled", True)
+               for name in ("pipeline1", "pipeline2"))
 
 
 def _json_value(value: Any) -> Any:
@@ -277,15 +294,19 @@ class IndexService:
                 or len(chunks) != generation["chunk_count"]):
             raise DomainError(409, "INDEX_INTEGRITY_FAILED", "Index content locks failed")
         vectors = payload.get("vectors")
-        if generation["config_id"] == "research-v0":
+        if dense_index_required(config):
             expected = {chunk["chunk_id"] for chunk in chunks}
             if (not isinstance(vectors, dict) or set(vectors) != expected or generation["dense_dimension"] != 384
                     or payload.get("model") != generation["model"]
+                    or not isinstance(payload.get("model"), dict)
+                    or payload["model"].get("model") != config["models"]["dense"]["model"]
+                    or payload["model"].get("revision") != config["models"]["dense"]["revision"]
                     or any(not isinstance(row, list) or len(row) != 384 for row in vectors.values())
                     or any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
                            for row in vectors.values() for value in row)):
                 raise DomainError(409, "INDEX_INTEGRITY_FAILED", "Dense artifact integrity failed")
-        elif vectors is not None or generation["dense_dimension"] is not None:
+        elif (vectors is not None or generation["dense_dimension"] is not None
+              or payload.get("model") is not None or generation["model"] is not None):
             raise DomainError(409, "INDEX_INTEGRITY_FAILED", "Unexpected dense artifact")
         return {"generation": generation, "document": document, "version": version, "chunks": chunks,
                 "config": config, "vectors": vectors, "model": payload.get("model"), "lexical": payload["lexical"]}

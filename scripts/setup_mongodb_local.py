@@ -22,12 +22,100 @@ from pymongo.errors import PyMongoError
 ROOT = Path(__file__).resolve().parents[1]
 SECRET_ROOT = ROOT / "var/infra/mongodb"
 sys.path.insert(0, str(ROOT))
-from services.backend.src.kltn_ai.db.migrations import MigrationError, apply_schema_v1  # noqa: E402
+from services.backend.src.kltn_ai.db.migrations import (  # noqa: E402
+    MigrationError, _check_indexes, apply_schema_v1, schema_checksum,
+)
 from services.backend.src.kltn_ai.db.application_schema import apply_schema_v2  # noqa: E402
 from services.backend.src.kltn_ai.db.document_schema import apply_schema_v3  # noqa: E402
-from services.backend.src.kltn_ai.db.analysis_schema import apply_schema_v4  # noqa: E402
+from services.backend.src.kltn_ai.db.analysis_schema import (  # noqa: E402
+    INDEXES_V4, VALIDATORS_V4, apply_schema_v4,
+)
 from services.backend.src.kltn_ai.db.annotation_schema import apply_schema_v5  # noqa: E402
+from services.backend.src.kltn_ai.db.semantic_analysis_schema import (  # noqa: E402
+    INDEXES_V6, MIGRATION_ID_V6, VALIDATORS_V6, apply_schema_v6,
+)
+from services.backend.src.kltn_ai.db.semantic_runtime_schema import (  # noqa: E402
+    INDEXES_V7, MIGRATION_ID_V7, VALIDATORS_V7, apply_schema_v7,
+)
+from services.backend.src.kltn_ai.db.llm_assessment_schema import (  # noqa: E402
+    INDEXES_V8, MIGRATION_ID_V8, VALIDATORS_V8, apply_schema_v8,
+)
+from services.backend.src.kltn_ai.db.llm_assessment_v2_schema import (  # noqa: E402
+    INDEXES_V9, MIGRATION_ID_V9, VALIDATORS_V9, apply_schema_v9,
+)
 from services.backend.src.kltn_ai.db.roles import provision_roles  # noqa: E402
+
+
+_V4_MIGRATION_ID = "004-index-and-analysis-results-v1"
+
+
+def _verify_applied_entry(database, migration_id: str, validators, indexes) -> None:
+    entry = database.schema_migrations.find_one({"_id": migration_id})
+    if (entry is None or entry.get("kind") != "ENTRY" or entry.get("status") != "APPLIED"
+            or entry.get("checksum") != schema_checksum(validators, indexes)):
+        raise MigrationError("Applied migration ledger identity/checksum does not match its locked catalog")
+
+
+def _verify_catalog(database, validators, indexes) -> None:
+    """Read current document/validator/index state without reinstalling an old catalog."""
+    names = set(database.list_collection_names())
+    for name, validator in validators.items():
+        if name not in names:
+            raise MigrationError(f"Missing expected collection in {name}")
+        collection = database[name]
+        if collection.find_one({"$nor": [validator]}, projection={"_id": 1}, max_time_ms=30000) is not None:
+            raise MigrationError(f"Existing documents fail validator in {name}; no automatic repair")
+        options = collection.options()
+        if (options.get("validator") != validator or options.get("validationLevel") != "strict"
+                or options.get("validationAction") != "error"):
+            raise MigrationError(f"Validator read-back failed in {name}")
+        _check_indexes(database, name, require_all=True, indexes=indexes)
+
+
+def apply_schema_chain(database, *, code_commit: str, applied_by: str):
+    """Apply schemas without narrowing an already-applied V6/V7/V8/V9 successor.
+
+    V6 only expands three V4 config enums. Reinstalling V4 would reject current
+    NLI/RRF documents or temporarily narrow their validators. Its original
+    catalog and ledger remain immutable: verify the predecessor identity, then
+    use the latest effective catalog for those three collections. V7 likewise
+    supersedes V6 for separately locked runtime profiles, and V8 adds local
+    LLM assessment. V9 adds its bounded-context opt-in successor. Other V4
+    collections retain full document/validator/index verification.
+    """
+    has_v6 = database.schema_migrations.find_one({"_id": MIGRATION_ID_V6}) is not None
+    has_v7 = database.schema_migrations.find_one({"_id": MIGRATION_ID_V7}) is not None
+    has_v8 = database.schema_migrations.find_one({"_id": MIGRATION_ID_V8}) is not None
+    has_v9 = database.schema_migrations.find_one({"_id": MIGRATION_ID_V9}) is not None
+    if has_v6 or has_v7 or has_v8 or has_v9:
+        # Fail before any DDL if the successor or predecessor is not an exact
+        # completed migration. A partial/unknown ledger is not a skip token.
+        _verify_applied_entry(database, _V4_MIGRATION_ID, VALIDATORS_V4, INDEXES_V4)
+        _verify_applied_entry(database, MIGRATION_ID_V6, VALIDATORS_V6, INDEXES_V6)
+        if has_v7 or has_v8 or has_v9:
+            _verify_applied_entry(database, MIGRATION_ID_V7, VALIDATORS_V7, INDEXES_V7)
+        if has_v8 or has_v9:
+            _verify_applied_entry(database, MIGRATION_ID_V8, VALIDATORS_V8, INDEXES_V8)
+        if has_v9:
+            _verify_applied_entry(database, MIGRATION_ID_V9, VALIDATORS_V9, INDEXES_V9)
+    outcome = apply_schema_v1(database, code_commit=code_commit, applied_by=applied_by)
+    apply_schema_v2(database, code_commit=code_commit, applied_by=applied_by)
+    apply_schema_v3(database, code_commit=code_commit, applied_by=applied_by)
+    if has_v6 or has_v7 or has_v8 or has_v9:
+        unchanged = {name: value for name, value in VALIDATORS_V4.items() if name not in VALIDATORS_V6}
+        _verify_catalog(database, unchanged, {name: INDEXES_V4[name] for name in unchanged})
+    else:
+        apply_schema_v4(database, code_commit=code_commit, applied_by=applied_by)
+    apply_schema_v5(database, code_commit=code_commit, applied_by=applied_by)
+    if not has_v7 and not has_v8 and not has_v9:
+        apply_schema_v6(database, code_commit=code_commit, applied_by=applied_by)
+    if not has_v8 and not has_v9:
+        apply_schema_v7(database, code_commit=code_commit, applied_by=applied_by)
+    if not has_v9:
+        apply_schema_v8(database, code_commit=code_commit, applied_by=applied_by)
+    latest = apply_schema_v9(database, code_commit=code_commit, applied_by=applied_by)
+    _verify_catalog(database, {**VALIDATORS_V4, **VALIDATORS_V9}, {**INDEXES_V4, **INDEXES_V9})
+    return outcome, latest
 
 
 def _private_read(path: Path) -> str:
@@ -94,11 +182,7 @@ def setup(*, database_name: str, operator: str) -> None:
             connection_uris[name] = runtime_uri
     with MongoClient(connection_uris["migration_app"], serverSelectionTimeoutMS=5000,
                      timeoutMS=30000, tz_aware=True) as migrator:
-        outcome = apply_schema_v1(migrator[database_name], code_commit=commit, applied_by=operator)
-        apply_schema_v2(migrator[database_name], code_commit=commit, applied_by=operator)
-        latest = apply_schema_v3(migrator[database_name], code_commit=commit, applied_by=operator)
-        latest = apply_schema_v4(migrator[database_name], code_commit=commit, applied_by=operator)
-        latest = apply_schema_v5(migrator[database_name], code_commit=commit, applied_by=operator)
+        outcome, latest = apply_schema_chain(migrator[database_name], code_commit=commit, applied_by=operator)
     print(f"Verified {outcome['migration_id']} through {latest['migration_id']} in {database_name}; validator/index read-back passed.")
     print("API/worker/migration URI files are private under ignored var/infra/mongodb; credentials not displayed.")
 

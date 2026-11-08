@@ -1,0 +1,3 @@
+# Optional local Excel intake tools; not needed by API/worker inference.
+openpyxl==3.1.5
+et-xmlfile==2.0.0

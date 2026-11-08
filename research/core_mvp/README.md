@@ -88,6 +88,14 @@ decomposition still require separate evaluation. Any `CANNOT_ASSESS` checklist
 withholds its criterion and total proposed score; `assessable_subtotal` is only
 a diagnostic for the parts that could be assessed.
 
+The optional `bm25-p2-llm-v1` profile adds a local Qwen3.5 4B requirement
+verifier, separately from the phrase/context V4 baseline. A digest-locked
+loopback Ollama service proposes relations and exact evidence quotations;
+code checks proof and computes labels/scores. Invalid or unavailable model
+responses abstain. See the [runtime and usage guide](../../docs/architecture/p2-local-llm-verifier.md).
+Real-model synthetic smoke checks establish executable integration, not
+independent rubric-grading accuracy.
+
 ## Run
 
 Install the research dependencies in the Python 3.12 environment, then point

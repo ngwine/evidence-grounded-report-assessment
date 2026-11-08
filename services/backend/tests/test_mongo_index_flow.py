@@ -155,8 +155,9 @@ def test_pending_index_revocation_does_not_load_model_or_publish(state):
     assert not list(state["service"].artifacts.iterdir())
 
 
-def test_missing_dense_model_fails_explicitly_without_silent_bm25_fallback(state):
-    records = request(state, config="research-v0")
+@pytest.mark.parametrize("profile", ["research-v0", "rrf-nli-v1"])
+def test_missing_dense_model_fails_explicitly_without_silent_bm25_fallback(state, profile):
+    records = request(state, config=profile)
     def unavailable(*args, **kwargs):
         raise EmbeddingRejected("DENSE_MODEL_UNAVAILABLE")
     build(state, encoder=unavailable)
@@ -165,6 +166,44 @@ def test_missing_dense_model_fails_explicitly_without_silent_bm25_fallback(state
     assert generation["state"] == "FAILED" and generation["failure_code"] == "DENSE_MODEL_UNAVAILABLE"
     assert job["state"] == "FAILED_FINAL" and state["db"].index_heads.find_one({})["active_generation_id"] is None
     assert not list(state["service"].artifacts.iterdir())
+
+
+def test_rrf_nli_profile_builds_and_reuses_locked_dense_vectors(state):
+    records = request(state, config="rrf-nli-v1")
+    calls = []
+    def encoder(texts, model, **options):
+        calls.append((texts, model, options))
+        return {"vectors": [[1.0] + [0.0] * 383 for _ in texts],
+                "metadata": {"model": model["model"], "revision": model["revision"]}}
+    build(state, encoder=encoder)
+    snapshot = state["service"].get_active_snapshot(
+        state["actor"], state["workspace"], state["created"]["version"]["_id"], "rrf-nli-v1")
+    assert len(calls) == 1 and calls[0][2]["mode"] == "document"
+    assert snapshot["generation"]["_id"] == records["generation"]["_id"]
+    assert snapshot["generation"]["dense_dimension"] == 384
+    assert set(snapshot["vectors"]) == {c["chunk_id"] for c in snapshot["chunks"]}
+    assert snapshot["model"]["revision"] == calls[0][1]["revision"]
+    assert request(state, token="reuse-rrf-profile", config="rrf-nli-v1")["generation"]["_id"] == records["generation"]["_id"]
+
+
+def test_rrf_nli_snapshot_rejects_missing_dense_content_even_after_checksum_recomputed(state):
+    records = request(state, config="rrf-nli-v1")
+    def encoder(texts, model, **options):
+        return {"vectors": [[1.0] + [0.0] * 383 for _ in texts],
+                "metadata": {"model": model["model"], "revision": model["revision"]}}
+    build(state, encoder=encoder)
+    generation = state["db"].index_generations.find_one({"_id": records["generation"]["_id"]})
+    path = state["service"].artifacts / generation["artifact_key"]
+    payload = json.loads(path.read_bytes())
+    payload["vectors"] = None
+    content = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    path.write_bytes(content)
+    state["db"].index_generations.update_one({"_id": generation["_id"]}, {"$set": {
+        "artifact_sha256": hashlib.sha256(content).hexdigest(), "dense_dimension": None,
+    }})
+    with pytest.raises(DomainError) as error:
+        state["service"].get_snapshot(state["actor"], state["workspace"], generation["_id"])
+    assert error.value.code == "INDEX_INTEGRITY_FAILED"
 
 
 def test_stale_cancelled_attempt_cannot_activate(state):

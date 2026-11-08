@@ -1,9 +1,12 @@
 # RQ3 – Sinh câu hỏi có mục tiêu dựa trên vấn đề được phát hiện
 
-> Trạng thái: **CONDITIONAL**. Protocol này chỉ được kích hoạt sau khi RQ1/RQ2
-> đạt core gate, dữ liệu có issue/evidence hợp lệ và phần việc không ảnh hưởng
-> tiến độ hai pipeline chính. Kết quả phải được giảng viên review/edit/reject
-> trước khi export; hệ thống không triển khai luồng sinh viên trả lời trực tuyến.
+> Trạng thái: **PLANNED — thuộc phạm vi phải hoàn thành** theo chỉ đạo giữ
+> đúng đề cương ngày 08/11/2026. Thực hiện sau khi RQ1/RQ2 cung cấp issue/
+> evidence hợp lệ; không loại bỏ hướng này theo cut-line cũ. Kết quả phải
+> được giảng viên review/edit/reject trước khi sử dụng/export. Hiện chưa có
+> generator/API/đánh giá chạy thật; README này không phải bằng chứng đã làm.
+> Xem [kế hoạch toàn phạm vi](../../../docs/planning/KE_HOACH_HOAN_THANH_PHAM_VI_DE_TAI.md),
+> gói Q1/E3. Không bổ sung luồng sinh viên trả lời trực tuyến.
 
 ## Mô tả
 

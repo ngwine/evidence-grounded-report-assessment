@@ -11,6 +11,21 @@
   "properties": {
     "schema_version": {"const": 1},
     "pipeline": {"type": "string", "minLength": 1},
+    "verification_method": {"type": "string", "description": "Versioned verification policy; absent on older stored results."},
+    "verification_metadata": {
+      "type": "object",
+      "description": "Locked local model, prompt, output schema and policy provenance for the opt-in LLM verifier.",
+      "properties": {
+        "backend": {"const": "ollama"},
+        "model": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "prompt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "output_schema_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "required": ["backend", "model", "digest", "prompt_sha256", "output_schema_sha256", "policy_sha256"]
+    },
+    "human_review_required_before_publication": {"type": "boolean"},
     "compiled_rubric": {"type": "object"},
     "checklist_results": {
       "type": "array",
@@ -27,6 +42,8 @@
           "checklist_outcome": {"enum": ["MET", "UNMET", "CANNOT_ASSESS"]},
           "reason_code": {"type": "string", "minLength": 1},
           "rationale": {"type": "string", "minLength": 1},
+          "non_asserted_evidence_spans": {"type": "array", "items": {"type": "object"}, "description": "Prospective, pending or conditional mentions withheld from support, with context reason and exact source span."},
+          "withheld_contradiction_spans": {"type": "array", "items": {"type": "object"}, "description": "Hypothetical, prospective or externally negated authored counterclaims withheld from actual contradictions."},
           "evidence_pack": {
             "type": "array",
             "items": {"$ref": "evidence-v1.schema.json"}
@@ -38,5 +55,12 @@
     "proposed_total_score": {"type": ["number", "null"]},
     "max_score": {"type": "number", "exclusiveMinimum": 0},
     "requires_lecturer_review": {"type": "boolean"}
-  }
+  },
+  "allOf": [{
+    "if": {"properties": {"verification_method": {"const": "LOCAL_LLM_REQUIREMENT_VERIFIER_V1"}}, "required": ["verification_method"]},
+    "then": {
+      "required": ["verification_metadata", "human_review_required_before_publication"],
+      "properties": {"human_review_required_before_publication": {"const": true}}
+    }
+  }]
 }

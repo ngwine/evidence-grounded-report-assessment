@@ -16,6 +16,7 @@ import AuthenticatedItemAnnotations from './AuthenticatedItemAnnotations';
 const TERMINAL = new Set(['SUCCEEDED', 'FAILED', 'FAILED_FINAL', 'CANCELLED', 'READY', 'ACTIVE', 'SUPERSEDED', 'REVOKED', 'INVALIDATED', 'TOMBSTONED']);
 const PARSED = new Set(['PARSED', 'INDEXING', 'READY']);
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const configLabel = (id: AnalysisConfigId) => id === 'bm25-smoke' ? 'BM25 baseline' : id === 'bm25-p2-llm-v2' ? 'LLM · đọc đủ báo cáo ngắn' : id === 'bm25-p2-llm-v1' ? 'LLM · phiên bản 1' : id.startsWith('bm25-nli-') ? 'BM25 + kiểm tra ngữ nghĩa' : id.startsWith('rrf-nli-') ? 'RRF + kiểm tra ngữ nghĩa' : 'Hybrid + Cross-Encoder';
 
 type DocumentWithKind = DocumentRecord & { kind: DocumentKind };
 type ParseOperation = { uploadId: string; versionId: string; job: JobRecord | null };
@@ -98,6 +99,8 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
   const [reviewReason, setReviewReason] = useState('');
   const [authorizations, setAuthorizations] = useState<Page<UploadAuthorization> | null>(null);
   const [recentRuns, setRecentRuns] = useState<Page<AnalysisRun> | null>(null);
+  const [loadingRecentRuns, setLoadingRecentRuns] = useState(false);
+  const recentRunsSelection = useRef(0);
   const [preparing, setPreparing] = useState(false);
   const [preparationStep, setPreparationStep] = useState('');
   const stopPreparation = useRef(false);
@@ -156,9 +159,15 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
   }, [workspaceId, uploadKind, canUploadReport, canUploadSource, fail]);
 
   useEffect(() => {
-    if (!selectedReportId || !canReadRuns) { setRecentRuns(null); return; }
+    const selection = ++recentRunsSelection.current;
+    setRecentRuns(null);
+    if (!selectedReportId || !canReadRuns) { setLoadingRecentRuns(false); return; }
     let cancelled = false;
-    listAnalysisRuns(workspaceId, selectedReportId).then((page) => { if (!cancelled && active.current) setRecentRuns(page); }).catch((cause) => { if (!cancelled) fail(cause); });
+    setLoadingRecentRuns(true);
+    listAnalysisRuns(workspaceId, selectedReportId)
+      .then((page) => { if (!cancelled && active.current && selection === recentRunsSelection.current) setRecentRuns(page); })
+      .catch((cause) => { if (!cancelled && selection === recentRunsSelection.current) fail(cause); })
+      .finally(() => { if (!cancelled && active.current && selection === recentRunsSelection.current) setLoadingRecentRuns(false); });
     return () => { cancelled = true; };
   }, [workspaceId, selectedReportId, canReadRuns, run?.state, fail]);
 
@@ -351,15 +360,42 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
     finally { if (active.current) { setBusy(false); setPreparing(false); setPreparationStep(''); } }
   }
 
-  async function openRun(event: FormEvent) {
-    event.preventDefault();
+  function selectReport(document: DocumentRecord | undefined, versionId = document?.current_version_id ?? '') {
+    setSelectedReportId(document?.id ?? '');
+    setReportVersionId(versionId);
+    if ((document?.id ?? '') === selectedReportId) return;
+    recentRunsSelection.current += 1;
+    runSelection.current += 1;
+    setRecentRuns(null); setLoadingRecentRuns(false);
+    setRun(null); setRunLookup(''); setResults(null); setEvidence(null); setLoadingResults(false);
+    setReviewReason(''); setError(null); setRequestId(null);
+  }
+
+  async function loadRun(runId: string) {
     const selection = ++runSelection.current;
     setRun(null); setResults(null); setEvidence(null); setBusy(true); setError(null); setRequestId(null);
     try {
-      const value = await getAnalysisRun(workspaceId, runLookup.trim());
-      if (active.current && selection === runSelection.current) setRun(value);
-    } catch (cause) { fail(cause); }
+      const value = await getAnalysisRun(workspaceId, runId);
+      if (active.current && selection === runSelection.current) { setRun(value); setRunLookup(value.id); setReviewReason(''); }
+    } catch (cause) { if (selection === runSelection.current) fail(cause); }
     finally { if (active.current) setBusy(false); }
+  }
+
+  async function openRun(event: FormEvent) {
+    event.preventDefault();
+    await loadRun(runLookup.trim());
+  }
+
+  async function moreRuns() {
+    if (loadingRecentRuns || !recentRuns?.page.has_more) return;
+    const selection = recentRunsSelection.current;
+    const previous = recentRuns;
+    setLoadingRecentRuns(true);
+    try {
+      const page = await listAnalysisRuns(workspaceId, selectedReportId, previous.page.next_cursor);
+      if (active.current && selection === recentRunsSelection.current) setRecentRuns({ ...page, items: [...previous.items, ...page.items] });
+    } catch (cause) { if (selection === recentRunsSelection.current) fail(cause); }
+    finally { if (active.current && selection === recentRunsSelection.current) setLoadingRecentRuns(false); }
   }
 
   async function exportRun() {
@@ -413,7 +449,7 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
           <div className="auth-actions">
             <a className="subtle-button" href={documentFileUrl(workspaceId, document.current_version_id)} target="_blank" rel="noreferrer">Mở tài liệu ↗</a>
             <button className="subtle-button" disabled={busy} onClick={() => { void openHistory({ ...document, kind }); }}>Xem phiên bản</button>
-            {kind === 'REPORT' && canRun && <button className="secondary-button" disabled={busy || !current || !PARSED.has(current.processing_state)} onClick={() => { setSelectedReportId(document.id); setReportVersionId(document.current_version_id); onViewChange('analysis'); }}>Phân tích báo cáo →</button>}
+            {kind === 'REPORT' && canRun && <button className="secondary-button" disabled={busy || !current || !PARSED.has(current.processing_state)} onClick={() => { selectReport(document); onViewChange('analysis'); }}>Phân tích báo cáo →</button>}
             {canRun && current && <details className="technical-details"><summary>Công cụ nâng cao</summary><button className="secondary-button" disabled={busy || !PARSED.has(current.processing_state) || !!generation && !TERMINAL.has(generation.state)} onClick={() => { void index(current); }}>Index {document.document_key}</button><code>{document.current_version_id}</code></details>}
           </div>
         </li>;
@@ -448,7 +484,7 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
         {!uploadExistingId && <><details className="technical-details"><summary>Mã tài liệu tự tạo · có thể chỉnh</summary><label className="field-label" htmlFor="document-key">Mã tài liệu</label><input id="document-key" required pattern="[A-Za-z0-9][A-Za-z0-9_.:\-]*" maxLength={128} value={documentKey} disabled={busy} onChange={(event) => setDocumentKey(event.target.value)} /></details>
           <div><label className="field-label" htmlFor="document-title">Tên tài liệu</label><input id="document-title" required maxLength={256} value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} /></div></>}
         <div><label className="field-label" htmlFor="upload-rights-mode">Cách xác nhận quyền sử dụng</label><select id="upload-rights-mode" value={authorizationMode} disabled={busy} onChange={(event) => { setAuthorizationMode(event.target.value as typeof authorizationMode); resetDeclaration(); }}><option value="SELF_AUTHORED">Khai báo tài liệu của tôi/nhóm</option><option value="PREAPPROVED">Dùng hồ sơ quyền đã có</option></select></div>
-        <div className="upload-file-area"><label className="field-label" htmlFor="document-file">File tài liệu</label><input ref={fileInput} id="document-file" type="file" required accept=".pdf,.docx,.txt,.md" disabled={busy} onChange={(event) => { const chosen = event.target.files?.[0] ?? null; setFile(chosen); resetDeclaration(); if (chosen && !uploadExistingId) { setDocumentKey(`doc-${crypto.randomUUID().slice(0, 12)}`); setTitle((current) => current || chosen.name.replace(/\.[^.]+$/, '')); } }} /><small className="field-help">PDF, DOCX, TXT hoặc Markdown · Tối đa 20 MB. Tài liệu được xử lý trên máy local.</small></div>
+        <div className="upload-file-area"><label className="field-label" htmlFor="document-file">File tài liệu</label><input ref={fileInput} id="document-file" type="file" required accept=".pdf,.docx,.txt,.md" disabled={busy} onChange={(event) => { const chosen = event.target.files?.[0] ?? null; setFile(chosen); resetDeclaration(); if (chosen && !uploadExistingId) { setDocumentKey(`doc-${crypto.randomUUID().slice(0, 12)}`); setTitle((current) => current || chosen.name.replace(/\.[^.]+$/, '')); } }} /><small className="field-help">PDF, DOCX, TXT hoặc Markdown · Tối đa 20 MB.</small></div>
         {authorizationMode === 'PREAPPROVED' && <div className="auth-form-full"><label className="field-label" htmlFor="upload-authorization">Quyền sử dụng tài liệu</label><select id="upload-authorization" value={governanceId} disabled={busy || authorizations === null} onChange={(event) => setGovernanceId(event.target.value)}><option value="">{authorizations === null ? 'Đang tải hồ sơ quyền…' : 'Chọn hồ sơ đã được duyệt'}</option>{authorizations?.items.map((item, i) => <option key={item.id} value={item.id}>Hồ sơ {i + 1} · {item.name}</option>)}{governanceId && !authorizations?.items.some((item) => item.id === governanceId) && <option value={governanceId}>Hồ sơ được nhập thủ công</option>}</select>
           {authorizations?.items.length === 0 && <p className="field-help">Chưa có hồ sơ cho tài liệu mới. Người phụ trách cần xác nhận quyền sử dụng; ứng dụng không tự cấp quyền.</p>}
           {authorizations?.page.has_more && <button type="button" className="subtle-button" onClick={async () => { try { const page = await listUploadAuthorizations(workspaceId, uploadKind, authorizations.page.next_cursor); if (active.current) setAuthorizations({ ...page, items: [...authorizations.items, ...page.items] }); } catch (cause) { fail(cause); } }}>Tải thêm hồ sơ quyền</button>}
@@ -466,7 +502,7 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
         {item.failure_code && <p className="auth-failure">{item.failure_code}</p>}
         {canRun && <div className="auth-actions"><button className="secondary-button" disabled={busy || !PARSED.has(item.processing_state)} onClick={() => { void index(item); }}>Index v{item.version_no}</button>
           <button className="subtle-button" disabled={busy || !PARSED.has(item.processing_state)} onClick={() => {
-            if (detail.kind === 'REPORT') { setSelectedReportId(detail.id); setReportVersionId(item.id); }
+            if (detail.kind === 'REPORT') selectReport(detail, item.id);
             else setSourceVersions((current) => ({ ...current, [detail.id]: item.id }));
             setNotice(`Đã chọn ${detail.document_key} v${item.version_no} cho lượt chạy tiếp theo.`);
           }}>Chọn {detail.document_key} v{item.version_no} để chạy</button></div>}
@@ -481,9 +517,9 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
     {canRun && <section className="panel auth-analysis-panel">
       <div className="panel-section-heading"><span className="step-number">01</span><div><h2>Thiết lập phân tích</h2><p>Chọn đầu vào. Hệ thống chuẩn bị index và chạy các bước còn lại.</p></div></div>
       <form onSubmit={startRun} className="auth-form-grid">
-        <details className="technical-details"><summary>Cấu hình phân tích · {configId === 'bm25-smoke' ? 'BM25 nhanh' : 'Hybrid + reranker'}</summary><label className="field-label" htmlFor="analysis-config">Config retrieval/index</label><select id="analysis-config" value={configId} disabled={busy} onChange={(event) => setConfigId(event.target.value as AnalysisConfigId)}><option value="bm25-smoke">BM25 · chạy thử luồng nhanh</option><option value="research-v0">Hybrid · BM25 + E5 + Cross-Encoder</option></select><p className="field-help">BM25 là baseline. Hybrid cần model trong cache; không tự chuyển cấu hình khi lỗi.</p></details>
+        <details className="technical-details"><summary>Cấu hình phân tích · {configLabel(configId)}</summary><label className="field-label" htmlFor="analysis-config">Config retrieval/index</label><select id="analysis-config" value={configId} disabled={busy} onChange={(event) => setConfigId(event.target.value as AnalysisConfigId)}><option value="bm25-smoke">BM25 · chạy thử luồng nhanh</option><option value="research-v0">Hybrid · BM25 + E5 + Cross-Encoder</option><option value="bm25-p2-llm-v2">LLM · đọc đủ báo cáo ngắn</option><option value="bm25-p2-llm-v1">LLM · phiên bản 1</option><option value="bm25-nli-v2">BM25 + kiểm tra ngữ nghĩa từng cặp đoạn</option><option value="rrf-nli-v2">BM25 + E5 + RRF, kiểm tra ngữ nghĩa từng cặp đoạn</option></select><p className="field-help">BM25 là baseline. Chế độ LLM cần model local đã khóa; khi thiếu bằng chứng hệ thống có thể chưa kết luận được.</p></details>
         <div><label className="field-label" htmlFor="analysis-type">Pipeline cần chạy</label><select id="analysis-type" value={runType} disabled={busy} onChange={(event) => setRunType(event.target.value as AnalysisRun['run_type'])}><option value="BOTH">Cả hai pipeline</option><option value="SIMILARITY">Pipeline 1 · Similarity</option><option value="ASSESSMENT">Pipeline 2 · Assessment</option></select></div>
-        <div><label className="field-label" htmlFor="analysis-report">Báo cáo để phân tích</label><select id="analysis-report" required value={selectedReportId} disabled={busy} onChange={(event) => { const item = reports?.items.find((candidate) => candidate.id === event.target.value); setSelectedReportId(item?.id ?? ''); setReportVersionId(item?.current_version_id ?? ''); }}><option value="">Chọn báo cáo</option>{reports?.items.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.document_key}</option>)}</select></div>
+        <div><label className="field-label" htmlFor="analysis-report">Báo cáo để phân tích</label><select id="analysis-report" required value={selectedReportId} disabled={busy} onChange={(event) => selectReport(reports?.items.find((item) => item.id === event.target.value))}><option value="">Chọn báo cáo</option>{reports?.items.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.document_key}</option>)}</select></div>
         <p className="selection-caption">{chosenReportVersion ? `Phiên bản ${chosenReportVersion.version_no} · ${chosenReportVersion.chunk_count} đoạn · ${PARSED.has(chosenReportVersion.processing_state) ? 'Đã xử lý' : 'Đang xử lý'}` : 'Chưa có báo cáo? Thêm tài liệu vào kho trước khi phân tích.'}<button type="button" className="text-action" onClick={() => onViewChange('documents')}>Mở kho tài liệu ↗</button></p>
         {runType !== 'ASSESSMENT' && <fieldset className="auth-form-full auth-source-choices"><legend>Nguồn đối chứng được chọn</legend>
           {sources?.items.length === 0 && <p>Upload và index ít nhất một nguồn đã được cấp quyền.</p>}
@@ -503,11 +539,21 @@ export default function AuthenticatedReports({ actor, workspaceId, rubricRefresh
     </section>}
     {canReadRuns && <section className="panel auth-run-panel">
       <div className="panel-section-heading"><span className="step-number">02</span><div><h2>Kết quả & bằng chứng</h2><p>Đọc nhận xét cùng đoạn văn và nguồn được đối chiếu.</p></div></div>
-      {recentRuns && recentRuns.items.length > 0 && <div className="recent-analysis"><label className="field-label" htmlFor="recent-analysis">Lượt phân tích đã lưu</label><select id="recent-analysis" value={run?.id ?? ''} disabled={busy} onChange={async (event) => { if (!event.target.value) return; const selection = ++runSelection.current; setBusy(true); setResults(null); setEvidence(null); try { const value = await getAnalysisRun(workspaceId, event.target.value); if (active.current && selection === runSelection.current) { setRun(value); setRunLookup(value.id); } } catch (cause) { fail(cause); } finally { if (active.current) setBusy(false); } }}><option value="">Chọn một lượt phân tích</option>{recentRuns.items.map((item) => <option value={item.id} key={item.id}>{new Date(item.created_at).toLocaleString('vi-VN')} · {item.config_id === 'bm25-smoke' ? 'BM25' : 'Hybrid'} · {item.state === 'SUCCEEDED' ? 'Hoàn tất' : item.state}</option>)}</select>{recentRuns.page.has_more && <button className="text-action" onClick={async () => { try { const page = await listAnalysisRuns(workspaceId, selectedReportId, recentRuns.page.next_cursor); if (active.current) setRecentRuns({ ...page, items: [...recentRuns.items, ...page.items] }); } catch (cause) { fail(cause); } }}>Xem thêm lượt đã lưu</button>}</div>}
+      <div className="recent-analysis">
+        <div className="recent-analysis-controls">
+          {canReadReports && <div><label className="field-label" htmlFor="results-report">Xem kết quả của báo cáo</label><select id="results-report" value={selectedReportId} disabled={busy || loading} onChange={(event) => selectReport(reports?.items.find((item) => item.id === event.target.value))}>
+            <option value="">{loading ? 'Đang tải báo cáo…' : 'Chọn báo cáo để xem kết quả'}</option>{reports?.items.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
+          </select>{reports?.page.has_more && <button className="text-action" disabled={busy} onClick={() => { void moreDocuments('REPORT'); }}>Tải thêm báo cáo</button>}</div>}
+          <div><label className="field-label" htmlFor="recent-analysis">Lượt phân tích đã lưu</label><select id="recent-analysis" value={run && recentRuns?.items.some((item) => item.id === run.id) ? run.id : ''} disabled={busy || loadingRecentRuns || !recentRuns?.items.length} onChange={(event) => { if (event.target.value) void loadRun(event.target.value); }}>
+            <option value="">{!selectedReportId ? 'Chọn báo cáo để xem các lượt đã lưu' : loadingRecentRuns ? 'Đang tải các lượt đã lưu…' : recentRuns === null ? 'Chưa tải được các lượt đã lưu' : recentRuns.items.length === 0 ? 'Chưa có lượt phân tích đã lưu' : 'Chọn một lượt phân tích'}</option>{recentRuns?.items.map((item) => <option value={item.id} key={item.id}>{new Date(item.created_at).toLocaleString('vi-VN')} · {configLabel(item.config_id)} · {item.state === 'SUCCEEDED' ? 'Hoàn tất' : item.state}</option>)}
+          </select>{recentRuns?.page.has_more && <button className="text-action" disabled={busy || loadingRecentRuns} onClick={() => { void moreRuns(); }}>Xem thêm lượt đã lưu</button>}</div>
+        </div>
+        {!selectedReportId && <p className="selection-caption">{canReadReports ? 'Chọn báo cáo tại đây để mở lại kết quả đã lưu.' : 'Nhập mã lượt phân tích bên dưới để mở kết quả.'}</p>}
+      </div>
       <details className="technical-details"><summary>Mở lượt phân tích bằng mã</summary><form className="auth-run-lookup" onSubmit={openRun}><label className="field-label" htmlFor="analysis-run-id">Mở lượt chạy theo ID</label><div><input id="analysis-run-id" pattern="[0-9a-fA-F]{24}" maxLength={24} required value={runLookup} onChange={(event) => setRunLookup(event.target.value)} /><button className="secondary-button" disabled={busy}>Mở lượt chạy</button></div></form></details>
-      {!run && <div className="analysis-empty"><div className="empty-paper" aria-hidden="true">▤<span>✓</span></div><span className="eyebrow">SẴN SÀNG KHI BẠN SẴN SÀNG</span><h3>Mỗi kết luận bắt đầu<br />từ một bằng chứng.</h3><p>Chọn báo cáo, nguồn và rubric ở bên trái. Hai pipeline sẽ trả kết quả tại đây.</p><div className="empty-flow"><span>Đối chiếu nguồn</span><span>Đánh giá rubric</span><span>Review</span></div></div>}
+      {!run && <div className="analysis-empty"><div className="empty-paper" aria-hidden="true">▤<span>✓</span></div><span className="eyebrow">SẴN SÀNG KHI BẠN SẴN SÀNG</span><h3>Mỗi kết luận bắt đầu<br />từ một bằng chứng.</h3><p>Mở một lượt đã lưu ở trên, hoặc chọn báo cáo, nguồn và rubric ở bên trái để phân tích mới.</p><div className="empty-flow"><span>Đối chiếu nguồn</span><span>Đánh giá rubric</span><span>Review</span></div></div>}
       {run && <>
-        <div className="analysis-run-heading"><div><h3>{run.state === 'SUCCEEDED' ? 'Phân tích hoàn tất' : run.state === 'FAILED' ? 'Chưa thể hoàn tất' : 'Đang phân tích báo cáo'}</h3><small>{new Date(run.created_at).toLocaleString('vi-VN')} · {run.config_id === 'bm25-smoke' ? 'BM25 baseline' : 'Hybrid + Cross-Encoder'}</small></div><span className={`status-tag ${run.state === 'SUCCEEDED' ? 'status-ready' : ''}`} role="status">{run.state === 'SUCCEEDED' ? 'Hoàn tất' : run.state === 'FAILED' ? 'Lỗi xử lý' : 'Đang xử lý'}</span></div>
+        <div className="analysis-run-heading"><div><h3>{run.state === 'SUCCEEDED' ? 'Phân tích hoàn tất' : run.state === 'FAILED' ? 'Chưa thể hoàn tất' : 'Đang phân tích báo cáo'}</h3><small>{new Date(run.created_at).toLocaleString('vi-VN')} · {configLabel(run.config_id)}</small></div><span className={`status-tag ${run.state === 'SUCCEEDED' ? 'status-ready' : ''}`} role="status">{run.state === 'SUCCEEDED' ? 'Hoàn tất' : run.state === 'FAILED' ? 'Lỗi xử lý' : 'Đang xử lý'}</span></div>
         <details className="technical-details"><summary>Thông tin kỹ thuật của lượt phân tích</summary><code>{run.id}</code><dl className="auth-run-provenance"><dt>Config / pipeline</dt><dd>{run.config_id} · {run.run_type}</dd><dt>Report version</dt><dd>{run.report_version_id}</dd><dt>Source versions</dt><dd>{run.source_version_ids.join(', ') || 'Không dùng'}</dd><dt>Index generations</dt><dd>{run.index_generation_ids.join(', ') || 'Không có'}</dd><dt>Rubric version</dt><dd>{run.rubric_version_id ?? 'Không dùng'}</dd><dt>Job</dt><dd>{run.job_id}</dd></dl></details>
         {run.failure_code && <p className="notice notice-error" role="alert">Worker chưa tạo được kết quả: {run.failure_code}. Không có kết luận cho lượt này.</p>}
         {!TERMINAL.has(run.state) && <p role="status">Đang chờ worker hoặc xử lý. Cấu hình Research v0 cần model đã chuẩn bị trên máy worker.</p>}

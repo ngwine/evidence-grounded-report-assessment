@@ -10,7 +10,7 @@ from services.backend.src.kltn_ai.db.mongo_jobs import MongoJobQueue
 from services.backend.src.kltn_ai.domain.audit import append_event
 from services.backend.src.kltn_ai.domain.documents import _options
 from services.backend.src.kltn_ai.domain.errors import DomainError
-from services.backend.src.kltn_ai.domain.indexes import IndexService, build_lexical, locked_config
+from services.backend.src.kltn_ai.domain.indexes import IndexService, build_lexical, dense_index_required, locked_config
 from services.backend.src.kltn_ai.integrations.local_ai.bounded_embeddings import EmbeddingRejected, encode_bounded
 from .mongo_worker import LeaseLost
 
@@ -175,7 +175,7 @@ class MongoIndexWorker:
             _workspace, _document, version = self.indexes._version(job["created_by"], job["workspace_id"], generation["document_version_id"])
             chunks = self.indexes._chunks(version)
             vectors = model = None
-            if generation["config_id"] == "research-v0":
+            if dense_index_required(generation["config"]):
                 encoded = self.encoder([chunk["text"] for chunk in chunks], generation["config"]["models"]["dense"],
                                        mode="document", timeout_seconds=120)
                 vectors = {chunk["chunk_id"]: vector for chunk, vector in zip(chunks, encoded["vectors"], strict=True)}
