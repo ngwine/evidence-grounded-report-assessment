@@ -1,5 +1,15 @@
 # WBS VÀ PHÂN CÔNG NHÂN SỰ
 
+**Đính chính kế hoạch 08/11/2026:** giữ nguyên
+[phạm vi đăng ký](MO_TA_DE_TAI_GOC.md), hoàn thiện theo
+[đối chiếu và thứ tự thực hiện hiện hành](KE_HOACH_HOAN_THANH_PHAM_VI_DE_TAI.md).
+GRAPH quan hệ, mức đánh giá rubric, classifier bốn dạng, giảng viên chốt
+điểm và câu hỏi đều cần hoàn thành. Phương án cũ thu hẹp GRAPH thành pilot
+hoặc bỏ câu hỏi không còn là tiêu chí hoàn thành. Chọn cấu hình tốt hơn làm
+mặc định sau so sánh, không ép GRAPH/hai bước chạy mọi checklist.
+Các ngày, SP và actual lịch sử bên dưới giữ để truy vết; việc sửa kế hoạch
+không tạo bằng chứng DONE hoặc chữ ký xác nhận mới.
+
 ## Evidence-Grounded Plagiarism Checking and Student Report Assessment
 
 | Thuộc tính | Giá trị |
@@ -260,7 +270,7 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
 | `W11.5` | TODO | 0% | Chưa có claim/entity/relation extraction | Structured extraction kèm model/prompt/confidence/source span |
 | `W11.6` | TODO | 0% | Structure/term PPR hiện chỉ kiểm thử thuật toán xếp hạng, chưa tạo sample claim graph | Chờ `W11.2/W11.5`, sau đó manual QA, precision sample và extraction error analysis |
 
-### 6.3. Quy tắc recovery v1.7
+### 6.3. Quy tắc recovery v1.7 — đính chính cut-line ngày 08/11
 
 - Không cộng carry-over vào tuần mới mà vẫn giữ nguyên 13 SP/người. Owner phải
   ước lượng `remaining SP`; `remaining carry-over + committed work ≤ 13 SP`.
@@ -269,14 +279,15 @@ giữ dấu vết trễ lịch dù task đã có một phần artifact.
   feature khi một mắt xích bắt buộc của hai pipeline còn thiếu.
 - `DEV0` chỉ dùng để chẩn đoán. `DEV1` chỉ được dùng chọn phương pháp sau khi
   governance được duyệt; `TEST0` giữ sealed đến khi phương pháp/config đã khóa.
-- OCR, AI-writing, cross-language, Targeted Questions, cohort dashboard, full
+- OCR, AI-writing, cross-language, cohort dashboard, full
   Docling/GROBID, Neo4j optimization, PDF export và UI polish nằm dưới cut-line.
-  Chỉ giữ export/review fixture tối thiểu cho E2E.
+  Review/export fixture dùng cho kiểm thử, không thay luồng giảng viên web.
+  Targeted Questions và mức/rule rubric phải hoàn thành theo dependency.
 - Không được cắt provenance, rights/consent, negative/no-source cases,
   annotation/adjudication, leakage audit, reproducibility hoặc human review.
-- Nếu GRAPH trễ sau W14, LOCAL vẫn phải hoàn chỉnh; GRAPH thu hẹp thành pilot
-  component có limitation thay vì hy sinh verifier/scorer, W16 E2E hay W17
-  dataset freeze.
+- GRAPH phải triển khai/đánh giá quan hệ thực; có thể giữ LOCAL làm mặc định
+  nếu chất lượng tốt hơn hoặc route chọn lọc. Không thu hẹp yêu cầu nghiên
+  cứu thành structure/term pilot; giữ verifier/scorer và đánh giá có căn cứ.
 
 ---
 
@@ -509,16 +520,17 @@ W02.
 
 | ID | Backlog | Work package | Owner | Review | SP | Phụ thuộc | Đầu ra/DoD riêng | Trạng thái |
 |---|---|---|---|---|---:|---|---|---|
-| `W14.1` | `EP-08-S01` | Findings adapter từ similarity/rubric/evidence | Q | Y | 5 | `W8.3`, `W13.1`, điều kiện cut-line | Chuẩn hóa issue/criterion/evidence/severity/source cho generator | CONDITIONAL |
-| `W14.2` | `EP-08-S01/02` | Question API, provenance, version và audit | Q | Y | 5 | `W14.1/4` | Câu liên kết issue/evidence/purpose; create/edit/approve audit đầy đủ | CONDITIONAL |
+| `W14.1` | `EP-08-S01` | Findings adapter từ similarity/rubric/evidence | Q | Y | 5 | `W8.3`, `W13.1` | Chuẩn hóa issue/criterion/evidence/severity/source cho generator; phải hoàn thành theo chỉ đạo 08/11 | TODO |
+| `W14.2` | `EP-08-S01/02` | Question API, provenance, version và audit | Q | Y | 5 | `W14.1/4` | Câu liên kết issue/evidence/purpose; create/edit/approve audit đầy đủ | TODO |
 | `W14.3` | `EP-01-S04` | Go/no-go decision cho auxiliary style/AI-writing warning | Q | Y | 3 | `G-04`, `G-06` | Ghi capacity/data/ethics decision; `EP-06-S03` vẫn ICEBOX nếu không Go; nếu mở phải tách khỏi điểm, có disclaimer và limitation | CONDITIONAL |
-| `W14.4` | `EP-08-S01` | Grounded question schema/prompt và generation | Y | Q | 5 | `W5.1/3`, `W14.1` | Câu có purpose/answerability/evidence; output ngoài schema bị loại | CONDITIONAL |
-| `W14.5` | `EP-08-S02` | Lecturer question review/edit UI | Y | Q | 5 | `W14.2/4` | Xem căn cứ, edit/reject/approve; draft chưa duyệt không được dùng | CONDITIONAL |
-| `W14.6` | `EP-08-S02`, `EP-10-S04` | Question quality test set và pilot | Y | Q | 3 | `W14.4/5` | Chấm relevance/grounding/answerability/usefulness; lưu accept/edit/reject | CONDITIONAL |
+| `W14.4` | `EP-08-S01` | Grounded question schema/prompt và generation | Y | Q | 5 | `W5.1/3`, `W14.1` | Câu có purpose/answerability/evidence; output ngoài schema bị loại | TODO |
+| `W14.5` | `EP-08-S02` | Lecturer question review/edit UI | Y | Q | 5 | `W14.2/4` | Xem căn cứ, edit/reject/approve; draft chưa duyệt không được dùng | TODO |
+| `W14.6` | `EP-08-S02`, `EP-10-S04` | Question quality test set và pilot | Y | Q | 3 | `W14.4/5` | Chấm relevance/grounding/answerability/usefulness; lưu accept/edit/reject | TODO |
 
-**Capacity envelope:** tối đa Q = 13 SP, Y = 13 SP. Trong đó Question là
-conditional; nếu no-go, không để trống capacity mà kéo Graph/Assessment
-recovery theo mục 11.
+**Capacity envelope baseline:** tối đa Q = 13 SP, Y = 13 SP. Câu hỏi thuộc
+phần phải hoàn thành theo đính chính 08/11; nếu dependency chưa sẵn sàng thì
+làm Graph/Assessment trước rồi quay lại câu hỏi, không quyết định bỏ hướng.
+Chỉ auxiliary style/AI warning ở `W14.3` còn là quyết định có/không mở.
 
 ### Tuần 15 — 14/11 đến 20/11/2026
 
@@ -823,6 +835,13 @@ baseline; mỗi người vẫn tối đa 13 SP/tuần.
 | **W16 — 21–27/11** | Offline E2E orchestration, retry/cache/failure và system tests `W16.1–W16.3` (13) | E2E/UAT, regression/adversarial suite và defect triage `W16.5–W16.7` (13) | Research RC1: PDF/DOCX→parse/chunk→Pipeline 1 + Pipeline 2→reviewable JSON/HTML chạy từ clean config; feature freeze |
 | **W17 — 28/11–04/12** | Metric/statistics tests, leakage audit, clean reproduction và similarity adjudication `W17.2–W17.5` (13) | Manifest/rights/split, assessment annotation freeze, inter-rater QA và data card `W17.1`, `W17.6–W17.8` (13) | `G-08`: dataset/protocol/metric được version/checksum/freeze; TEST0 chỉ được mở theo protocol sau gate |
 
+**Kiểm tra W12 ngày 01/11:** LOCAL path đã có orchestration, retrieval,
+three-state verifier, scorer và persistence/API tests. Bổ sung kiểm tra bounds/
+coverage của source span và proof→Evidence Pack tại runtime; xem
+[đối chiếu W10.1–W10.6 và phần còn thiếu](../benchmarks/local-assessment-w12-readiness-2026-11-01.md).
+`G-05` vẫn OPEN; hai phiếu SEFORA hiện chưa có nhãn, còn cần chốt checklist,
+gán nhãn độc lập, phân xử và pilot được duyệt. Không đổi các task sang DONE.
+
 ### 11.1. Definition of Done của hai pipeline trong reforecast
 
 **Pipeline 1 — Similarity:** một lệnh phải thực hiện được
@@ -854,17 +873,18 @@ không được dùng offline RC1 để tuyên bố đã đạt đầy đủ pro
 - Không có approval thì chỉ được báo kết quả synthetic/component; không được
   ghi `G-04/G-05/G-06/G-08 PASS` hoặc đưa claim end-to-end vào bài báo.
 
-### 11.3. Cut-line
+### 11.3. Cut-line — đính chính theo chỉ đạo giữ đủ phạm vi ngày 08/11
 
-Trong W10–W17, tạm hoãn toàn bộ `W14.1–W14.6` Targeted Questions,
-`W8.6/W9.6/W15.1–W15.6` product UI/dashboard đầy đủ, AI-writing warning, OCR,
-full Docling/GROBID, Neo4j optimization và PDF export. Review/export tối thiểu
-được thực hiện bằng fixture JSON/Markdown/HTML trong `W8.3/W13.1/W16.1`.
+Chỉ hoãn extension như AI-writing warning, OCR, full Docling/GROBID,
+Neo4j optimization, PDF export và polish không cần cho luồng sử dụng.
+Rubric UI đủ mức/rule, review sửa/duyệt điểm, final report và câu hỏi thuộc
+phần phải hoàn thành, không thay bằng fixture offline cho nghiệm thu web.
 
-Nếu GRAPH trễ sau W14, giữ LOCAL là đường hoàn chỉnh và thu hẹp GRAPH thành
-component pilot có limitation; không cắt provenance, verifier/scorer,
-rights/consent, annotation review, leakage audit, reproducibility, W17 freeze
-hoặc hạn nộp 23/01/2027.
+GRAPH cần triển khai và đánh giá quan hệ nhiều phần. Nếu LOCAL tốt hơn thì
+giữ LOCAL cho luồng chính hoặc router chọn lọc; không thu hẹp yêu cầu GRAPH
+thành chunk adjacency/PPR pilot để coi như hoàn thành nghiên cứu.
+Không tự tăng tải trên trần tuần hoặc sửa ngày baseline; sắp lại extension
+và dependency theo kế hoạch hiện hành, ghi rõ remaining work thực tế.
 
 ## 12. Change Log và phê duyệt
 

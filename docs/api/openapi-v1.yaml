@@ -2470,7 +2470,7 @@ components:
           $ref: '#/components/schemas/Revision'
     RuntimeConfigId:
       type: string
-      enum: [bm25-smoke, research-v0]
+      enum: [bm25-smoke, research-v0, bm25-nli-v1, rrf-nli-v1, bm25-nli-v2, rrf-nli-v2, bm25-p2-llm-v1, bm25-p2-llm-v2]
       description: Server-locked config; no client-selected model/path/prompt is accepted.
     IndexGeneration:
       type: object

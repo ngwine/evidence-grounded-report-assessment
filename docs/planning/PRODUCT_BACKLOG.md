@@ -1,5 +1,13 @@
 # PRODUCT BACKLOG
 
+Theo chỉ đạo 08/11, **giữ nguyên phạm vi đề tài và hoàn thiện cho đủ**.
+Ưu tiên hiện hành theo [đối chiếu yêu cầu và các gói thực hiện](KE_HOACH_HOAN_THANH_PHAM_VI_DE_TAI.md),
+song song [xử lý phản biện bài báo](../paper/KE_HOACH_XU_LY_PHAN_BIEN.md).
+Không đổi đề tài thành diagnostics; GRAPH và hướng câu hỏi không được bỏ
+theo cut-line cũ. Chọn cấu hình tốt hơn trên DEV làm luồng chính, giữ
+phương pháp đối chứng và đo trên tập chưa dùng sửa code sau khi khóa.
+Không tự đóng story hoặc đổi lịch baseline từ việc sửa kế hoạch này.
+
 ## Evidence-Grounded Plagiarism Checking and Student Report Assessment
 
 | Thuộc tính | Giá trị |
@@ -10,7 +18,7 @@
 | Product Owner/nhóm trưởng | Nguyễn Trần Ngọc Quý — 523H0087 |
 | Thành viên | Nguyễn Trần Ngọc Quý — 523H0087 (Q), Võ Thị Kim Yến — 52200229 (Y) |
 | GVHD | Vũ Đình Hồng |
-| Nguồn phạm vi | [`README.md`](../../README.md) và mô tả đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung (Targeted Questions) |
+| Nguồn phạm vi | [Mô tả đăng ký người phụ trách gửi lại](MO_TA_DE_TAI_GOC.md): 2 hướng chính (Similarity, Evidence-grounded Assessment) + 1 hướng bổ sung phải hoàn thành (Targeted Questions) |
 | Hồ sơ trước rebaseline | `docs/week-01/W1-03-dac-ta-yeu-cau-v1.md`; `docs/week-01/W1-04-bo-use-case.md` — chỉ dùng chi tiết không mâu thuẫn phạm vi mới |
 | Nguồn lịch | `Schedule_KLTN_Evidence_Grounded.xlsx` — 24 tuần, 08/08/2026–22/01/2027; SHA-256 `548f068bdc71d022e29f8def983b10f689d14606cc0db6d33c0783189f318984` |
 | Kế hoạch thực thi | [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md) |
@@ -21,6 +29,24 @@
 Các cột `Tuần` dưới đây giữ target baseline để truy vết. Forecast hiện hành và
 schedule variance được quản lý trong [`WBS_VA_PHAN_CONG.md`](./WBS_VA_PHAN_CONG.md),
 phiên bản 1.13; không đổi target backlog để che độ trễ.
+
+Ưu tiên 28/10 tập trung bản bài báo được cập nhật ngày 08/11: bắt đầu sửa
+bằng chứng P2 và mức đánh giá rubric, chuẩn bị dữ liệu trong miền song song;
+hoàn thiện GRAPH, classifier bốn dạng, review điểm và câu hỏi theo dependency.
+[Bài báo](../paper/KE_HOACH_HOAN_THIEN_BAI_BAO.md) viết song song và phản ánh
+kết quả thật, không thay việc hoàn thiện hệ thống bằng thu hẹp claim.
+
+Đối chứng đầu vào ngắn A5/A6 trên DEV1 đã hoàn tất và được đưa vào bài báo:
+[kết quả và audit](../benchmarks/pan-pc-11-short-evidence-dev1-result.md).
+A6 bỏ truncation bổ sung nhưng chưa cải thiện Recall@10; TEST0 vẫn giữ kín.
+Đây là tiến độ thực nghiệm thành phần, chưa đóng các story cần holdout/gold.
+
+Cập nhật triển khai 29/10: đã thêm P1 NLI theo span, P2 verifier từ vựng/ngữ
+cảnh V4 và [bộ ca kiểm tra đầu ra](../benchmarks/output-quality-development-2026-10-29.md).
+Challenge đầu tiên ở `7aa249f` và cohort sửa guard citation ở `a2a3d885`
+được giữ riêng; cohort sau không cải thiện kết quả 8/16. Nhãn do trợ lý soạn,
+chưa phải gold độc lập. SUMMARY, calibration, đánh giá P2 trên corpus độc lập
+và PAN TEST0 vẫn còn mở; không nâng story lên DONE từ các ca phát triển này.
 
 ## 1. Quy ước backlog
 
@@ -162,7 +188,7 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 | ID | User story/outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
 | `EP-06-S01` | Cảnh báo chất lượng diễn đạt/văn phong có vị trí | P1 | 5 | Y | Q | Sau W13 | `EP-03-S04`, core gates | Mỗi finding có type/severity/page/chunk/explanation; lecturer review; báo precision sample và limitation | ICEBOX |
-| `EP-06-S02` | Phát hiện bất nhất mục tiêu–phương pháp–kết quả–kết luận có evidence | P1 | 8 | Y | Q | Sau W13 | `EP-05-S06–08` | Finding trỏ evidence; thiếu căn cứ trả needs-verification; có test contradiction/missing support | ICEBOX |
+| `EP-06-S02` | Phát hiện bất nhất mục tiêu–phương pháp–kết quả–kết luận có evidence | P0 | 8 | Y | Q | Sau W13 | `EP-05-S06–08` | Finding trỏ evidence; thiếu căn cứ trả needs-verification; có test contradiction/missing support; thuộc P2 phải hoàn thành theo mô tả gốc | PLANNED |
 | `EP-06-S03` | Cảnh báo style anomaly/AI-writing ở mức hỗ trợ | P2 | 5 | Y | Q | W14 nếu core đạt | Dataset/ethics/gate core | Không có “% AI”; có vị trí/feature/disclaimer/bias limitation; không ảnh hưởng điểm tự động | ICEBOX |
 
 ## 8. Epic EP-07 — Kiểm chứng trích dẫn/tài liệu tham khảo (ngoài phạm vi đã chốt)
@@ -177,15 +203,15 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 
 | ID | User story/outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
-| `EP-08-S01` | Sinh câu hỏi có mục tiêu từ issue, similarity, evidence và rubric | P1 | 8 | Y | Q | W14 nếu `G-06` đúng forecast | `EP-04-S07/09`, `EP-05-S08` | Mỗi câu có type/question/reference answer/evidence/purpose/difficulty; evidence giả bị reject | CONDITIONAL |
-| `EP-08-S02` | Lecturer review, chỉnh sửa, loại bỏ và đánh giá câu hỏi | P1 | 5 | Y | Q | W14, W20 nếu enabled | `EP-08-S01`, `EP-02-S03/08` | Chỉ câu approved được dùng; audit before/after; rating relevance/grounding/answerability/usefulness xuất được | CONDITIONAL |
+| `EP-08-S01` | Sinh câu hỏi có mục tiêu từ issue, similarity, evidence và rubric | P1 | 8 | Y | Q | W14 — target baseline | `EP-04-S07/09`, `EP-05-S08` | Mỗi câu có type/question/reference answer/evidence/purpose/difficulty; evidence giả bị reject; hướng bổ sung phải hoàn thành, xếp sau output hai pipeline | PLANNED |
+| `EP-08-S02` | Lecturer review, chỉnh sửa, loại bỏ và đánh giá câu hỏi | P1 | 5 | Y | Q | W14, W20 — target baseline | `EP-08-S01`, `EP-02-S03/08` | Chỉ câu approved được dùng; audit before/after; rating relevance/grounding/answerability/usefulness xuất được; không bỏ theo cut-line cũ | PLANNED |
 
 ## 10. Epic EP-09 — Workflow, review workspace, feedback và export
 
 | ID | User story/outcome | Pri. | SP | Owner | Review | Tuần | Dependency | Acceptance criteria/DoD | Status |
 |---|---|---:|---:|---|---|---|---|---|---|
 | `EP-09-S01` | Job workflow có progress, retry, resume và partial result | P0 | 8 | Q | Y | W03–W05, W15–W16 | `EP-02-S02/06`, `EP-03-S01/06` | HTTP không block; state/checkpoint/idempotency test; worker restart không mất kết quả đã commit | IN PROGRESS |
-| `EP-09-S02` | Unified lecturer review workspace/dashboard cho similarity/assessment và question nếu enabled | P0 | 8 | Y | Q | W15 | `EP-04-S07`, `EP-05-S04/08`; `EP-08-S02` nếu enabled | Evidence mở đúng; filter/status/UX state; Accept/Edit/Reject nhất quán; unpublished result không lộ | PLANNED |
+| `EP-09-S02` | Unified lecturer review workspace/dashboard cho similarity/assessment và question | P0 | 8 | Y | Q | W15 | `EP-04-S07`, `EP-05-S04/08`; `EP-08-S02` cho phần câu hỏi | Evidence mở đúng; filter/status/UX state; Accept/Edit/Reject nhất quán; unpublished result không lộ; tích hợp câu hỏi khi đầu ra hợp lệ | PLANNED |
 | `EP-09-S03` | Final Report/Export có version và disclaimer | P0 | 5 | Q | Y | W15 | `EP-09-S02/07` | HTML/JSON tối thiểu có evidence/review status/version; PDF conditional; chỉ Lecturer publish; similarity ≠ plagiarism | PLANNED |
 | `EP-09-S04` | Observability, correlation ID và run/resource telemetry | P0 | 5 | Q | Y | W03–W21 | `EP-09-S01` | `request_id→job_id→run_id` xuyên API/worker/model/index/graph/evidence; structured log redacted PII/secret; stage latency, success/failure và resource truy vết được | IN PROGRESS |
 | `EP-09-S05` | Cohort/class analytics dashboard | P2 | 5 | Y | Q | Sau W21 | `G-09`, `EP-09-S06` | Chỉ aggregate đúng quyền; metric định nghĩa rõ; không suy diễn gian lận | ICEBOX |
@@ -229,16 +255,16 @@ Các item trong Epic này không được dùng độc lập để kết luận 
 |---:|---|---|---|
 | 1 | `EP-01-S03`, `EP-04-S05/06` — nguồn ngoài/provider | Change request được Q/Y/GVHD duyệt, đủ quyền/privacy/quota và không làm trễ core | `OUT OF SCOPE`; dùng kho nguồn nội bộ |
 | 2 | `EP-07-S01–03` — reference checker DOI/metadata/consistency | Change request được duyệt; không nhầm với citation/span mapping core `EP-03-S07` | `OUT OF SCOPE` |
-| 3 | `EP-06-S01/02` — writing/document logic | Assessment Engine và benchmark core ổn | `ICEBOX` |
+| 3 | `EP-06-S01` — cảnh báo diễn đạt/văn phong | Assessment Engine và benchmark core ổn; bất nhất liên phần `EP-06-S02` thuộc P2 bắt buộc, không ở bảng cắt này | `ICEBOX` |
 | 4 | `EP-06-S03` — style/AI-writing warning | Có dataset/ethics/disclaimer và không ảnh hưởng W14 | `ICEBOX` |
 | 5 | `EP-03-S05` — OCR | Corpus scan đủ lớn và parser core đạt | `ICEBOX` |
 | 6 | `EP-04-S08` — cross-language | Có labeled bilingual subset sau RQ1 | `ICEBOX` |
 | 7 | `EP-09-S05` — cohort dashboard | Release core, privacy và buffer đều đạt | `ICEBOX` |
-| 8 | `EP-08-S01/02` — Targeted Questions | Chỉ kéo nếu `G-06` đạt forecast và capacity W14–W20 còn đủ; nếu không, đánh giá lecturer-support không có question | `CONDITIONAL` |
 
-Khi trễ, cắt từ dưới lên trong bảng. Không cắt parser/provenance, Hybrid
-Similarity, LOCAL/GRAPH Assessment, lecturer review, benchmark hoặc
-reproducibility chỉ để giữ extension.
+Targeted Questions không còn nằm trong cut-line; thực hiện theo dependency
+của kế hoạch hiện hành. Khi trễ, ưu tiên lại các extension trong bảng;
+không cắt parser/provenance, Hybrid Similarity, LOCAL/GRAPH Assessment,
+lecturer review, câu hỏi, benchmark hoặc reproducibility.
 
 ## 15. Critical path và nhánh song song
 
@@ -266,10 +292,13 @@ Các nhánh được phép chạy song song:
 - Luận văn cập nhật theo increment từ W01.
 - Question UI dùng assessment/similarity fixture trước W14.
 
-## 16. Tổng hợp tải Product Backlog
+## 16. Tổng hợp tải Product Backlog — snapshot baseline trước đính chính 08/11
 
-Tải được tính theo owner của outcome, không tính effort review. Bảng này phải
-được cập nhật bằng script/kiểm tra khi thay owner hoặc SP.
+Tải được tính theo owner của outcome, không tính effort review. Bảng dưới
+giữ snapshot lịch sử, **không phải tải cam kết hiện hành**: `EP-06-S02`
+đã về P0/PLANNED, `EP-08-S01/02` đã về PLANNED theo đề cương. Không dùng
+hàng conditional/icebox cũ để loại các chức năng này khỏi phạm vi. Cần tính
+remaining work và sắp tải thực thi trong WBS; không tự cộng vượt trần tuần.
 
 | Phạm vi | Quý (SP) | Yến (SP) | Ghi chú |
 |---|---:|---:|---|
