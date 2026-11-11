@@ -1,0 +1,254 @@
+.admin-users__filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.admin-users__filters .search-input {
+  margin-bottom: 0;
+}
+
+.admin-users__status-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.admin-users__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-users__name {
+  font-weight: 600;
+}
+
+.admin-users__email {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.admin-users__toggle-btn {
+  white-space: nowrap;
+}
+
+.admin-users__error {
+  color: var(--status-danger-text);
+}
+
+/* Dung selector ket hop ".data-table th/td" de thang duoc specificity
+   cua .data-table th/.data-table td (sharedUI.css) -- 1 class rieng se
+   thua vi .data-table th/td co them element selector (xem bug CSS
+   specificity da gap nhieu lan truoc do trong du an nay). */
+.data-table th.admin-users__action-cell,
+.data-table td.admin-users__action-cell {
+  text-align: right;
+}
+
+.admin-subnav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-subnav__item {
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+
+.admin-subnav__item:hover {
+  color: var(--color-text);
+}
+
+.admin-subnav__item--active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.admin-members__role--lecturer {
+  color: var(--status-danger-text);
+}
+
+.admin-user-combobox {
+  position: relative;
+}
+
+.admin-user-combobox .search-input {
+  margin-bottom: 0;
+  min-width: 260px;
+  width: 100%;
+}
+
+.admin-user-combobox__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.admin-user-combobox__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-user-combobox__option:hover {
+  background: var(--color-bg);
+}
+
+.admin-user-combobox__empty {
+  padding: 8px 10px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.admin-workspaces__form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Popup "Thêm thành viên" -- dung chung kieu modal da co san trong app
+   (xem features/workspaces/UploadReportModal.css) de dong bo UI, thay vi
+   form noi lien ngay tren bang nhu truoc -- Yen phan anh 2026-10-29 nhin
+   kho hieu khi dat canh o tim kiem thanh vien. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+
+.modal {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 30px rgba(17, 24, 39, 0.2);
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal__close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.modal__field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.modal__label {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+
+.modal__select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.modal__field .admin-user-combobox {
+  width: 100%;
+}
+
+.modal__field .admin-user-combobox .search-input {
+  width: 100%;
+}
+
+/* UC-14/15/17 (man "Giam sat hang doi" / "Nguon doi chieu" / "Vong doi
+   du lieu") -- "Xoa vinh vien" can noi bat mau danh, dung selector gop
+   (combined-specificity) de khong bi .btn-secondary trong sharedUI.css
+   de mau lai (xem ghi chu pattern o review.css). */
+.btn-secondary.admin-lifecycle__purge-btn {
+  border-color: var(--status-danger-text);
+  color: var(--status-danger-text);
+}
+.btn-secondary.admin-lifecycle__purge-btn:hover {
+  background: var(--status-danger-bg);
+}
+
+/* Man "Admin / System health" (UC-11) -- 3 so lieu tong quan dang the
+   (card) dat canh nhau, phia tren bang chi tiet theo chang. */
+.system-health__overview {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.system-health__metric {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.system-health__metric-value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.system-health__metric-label {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}

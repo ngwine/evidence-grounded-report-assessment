@@ -1,0 +1,21 @@
+.file-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.file-type-badge--pdf {
+  background: var(--filetype-pdf-bg);
+  color: var(--filetype-pdf-text);
+}
+
+.file-type-badge--docx {
+  background: var(--filetype-docx-bg);
+  color: var(--filetype-docx-text);
+}

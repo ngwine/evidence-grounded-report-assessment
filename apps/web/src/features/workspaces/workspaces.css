@@ -1,0 +1,21 @@
+/* Style rieng cua feature workspaces (bang mo rong phien ban bao cao).
+   Style dung chung (panel, data-table, search-input, btn, chevron mo
+   rong dong...) nam o src/components/sharedUI.css. */
+
+.doc-row__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.doc-row__count {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  font-size: 12px;
+}
+
+.doc-row__file-size {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}

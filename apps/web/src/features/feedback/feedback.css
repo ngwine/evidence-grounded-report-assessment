@@ -1,0 +1,11 @@
+/** Style rieng cho feature "feedback" (Feedback Log, FR-REV-04). */
+
+.feedback-log__item-label {
+  display: block;
+}
+
+.feedback-log__reason {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}

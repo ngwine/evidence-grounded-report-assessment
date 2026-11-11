@@ -1,0 +1,54 @@
+/**
+ * Style rieng cho feature "operator" (UC-12, Experiment Operator) --
+ * tach rieng khoi admin.css du dang chung mot vai pattern (filter/
+ * identity 2 dong) de giu feature folder doc lap theo README.md.
+ */
+
+.operator-run-list__filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.operator-run-list__status-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.operator-run-list__dataset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.operator-run-list__dataset-key {
+  font-weight: 600;
+}
+
+.operator-run-list__dataset-version {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.operator-run-detail__manifest {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 24px;
+}
+
+.operator-run-detail__field dt {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.operator-run-detail__field dd {
+  margin: 0;
+  font-size: 14px;
+}

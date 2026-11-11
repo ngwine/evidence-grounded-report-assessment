@@ -1,0 +1,277 @@
+/**
+ * Style rieng cho feature "similarity" (UC-05) -- tach ra khoi
+ * features/review/review.css theo dung features/README.md (sua lai
+ * 2026-11-08, Rilakkuma yeu cau "dọn code"). Cac class review-decision__*
+ * / review-list__* dung cho Accept/Edit/Reject duoc LAP LAI (khong import
+ * review.css) de giu feature nay doc lap -- cung quy uoc da dung cho
+ * features/questions/questions.css.
+ */
+
+.report-detail__rerun-btn {
+  margin-top: 12px;
+}
+
+.report-detail__similarity-results {
+  margin-top: 16px;
+}
+
+.report-detail__similarity-empty {
+  font-style: italic;
+}
+
+.report-detail__similarity-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.report-detail__similarity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.report-detail__similarity-table th,
+.report-detail__similarity-table td {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.report-detail__similarity-table thead th {
+  background: var(--color-bg-muted, #eef0f4);
+  font-weight: 600;
+}
+
+.report-detail__similarity-excerpt,
+.report-detail__similarity-excerpt-text {
+  white-space: normal;
+  max-width: 320px;
+  color: var(--color-primary);
+}
+
+.report-detail__similarity-excerpt {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.report-detail__similarity-excerpt a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.report-detail__similarity-excerpt a:hover {
+  text-decoration: underline;
+}
+
+.report-detail__similarity-excerpt-text {
+  color: var(--color-text);
+}
+
+.report-detail__similarity-footnote {
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Popup "Chi tiet doan nghi van" (SimilarityMatchModal) -- dung chung
+   khung .modal-overlay/.modal (sharedUI/UploadReportModal.css, bundle
+   chung toan app) nhung can rong hon nen them modifier .modal--wide. */
+.modal.modal--wide {
+  max-width: 720px;
+}
+
+.similarity-modal__stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.similarity-modal__col-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.similarity-modal__col-header--source {
+  margin-top: 16px;
+}
+
+.similarity-modal__col-title {
+  font-size: 14px;
+}
+
+.similarity-modal__col-subtitle {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.similarity-modal__context-box {
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--color-bg-muted, #f4f6fa);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  height: 180px;
+  overflow-y: auto;
+}
+
+.similarity-modal__highlight {
+  background: var(--status-warning-bg);
+  color: inherit;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.similarity-modal__source-box {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--color-bg-muted, #f4f6fa);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.similarity-modal__source-box a {
+  color: var(--color-primary);
+}
+
+.similarity-modal__meta-box {
+  margin-top: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.similarity-modal__footnote {
+  margin-top: 16px;
+  text-align: center;
+  font-style: italic;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* Khu vuc Accept/Edit/Reject TRONG SimilarityMatchModal (UC-05) -- them
+   vien tren de tach voi phan noi dung popup o tren. */
+.review-decision--similarity {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Accept/Edit/Reject (dung chung bo khung voi ReviewPanel o
+   features/review, nhung lap lai o day de giu feature doc lap). */
+.review-decision {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-decision__row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.review-decision__row button {
+  min-width: 90px;
+}
+
+.btn-secondary.review-decision__accept-btn {
+  color: var(--status-success-text);
+  border-color: var(--status-success-text);
+}
+
+.btn-secondary.review-decision__accept-btn:hover {
+  background: var(--status-success-bg, #dcfce7);
+}
+
+.btn-secondary.review-decision__edit-btn {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-secondary.review-decision__edit-btn:hover {
+  background: var(--color-primary-bg, #eef2ff);
+}
+
+.btn-secondary.report-detail__reject-btn {
+  color: var(--status-danger-text);
+  border-color: var(--status-danger-text);
+}
+
+.btn-secondary.report-detail__reject-btn:hover {
+  background: var(--status-danger-bg);
+}
+
+.review-decision__loading {
+  margin: 0;
+}
+
+.review-list__conflict {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--status-danger-bg);
+  color: var(--status-danger-text);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-list__conflict p {
+  margin: 0;
+}
+
+.review-list__reason {
+  margin: 8px 0 0;
+}
+
+.review-list__form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-list__form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.review-list__form-field textarea,
+.review-list__form-field input {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.review-list__required {
+  color: var(--status-danger-text);
+}
+
+.review-list__form-actions {
+  display: flex;
+  gap: 8px;
+}

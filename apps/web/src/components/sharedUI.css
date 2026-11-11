@@ -1,0 +1,186 @@
+/**
+ * Style UI dung chung giua nhieu feature (panel, bang du lieu, o tim
+ * kiem, link, nut...) -- theo dung quy uoc trong features/README.md
+ * ("UI that su dung chung sang src/components"). Import 1 lan duy nhat
+ * o main.tsx, khong can import lai tung feature.
+ */
+
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+}
+
+.panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.panel__title {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.panel__subtitle {
+  margin: 0 0 16px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.panel__section-title {
+  margin: 24px 0 12px;
+  font-size: 16px;
+}
+
+/* Dong tieu de + nut hanh dong lien quan (vd "Rubric cua lop" + nut
+   "+ Tao rubric") -- dung chung khi can 1 h2 kem 1 nut ngay ben phai,
+   thay vi dat nut rieng o panel__header nhu truoc (Yen yeu cau 2026-10-26). */
+.panel__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 24px 0 12px;
+}
+
+.panel__section-header .panel__section-title {
+  margin: 0;
+}
+
+.panel__hint {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.breadcrumb {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.breadcrumb a {
+  text-decoration: none;
+  color: var(--color-primary);
+}
+
+.search-input {
+  width: 280px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 10px 12px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table__row--clickable {
+  cursor: pointer;
+}
+
+.data-table__row--clickable:hover {
+  background: var(--color-bg);
+}
+
+.link-cell {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-primary:hover {
+  filter: brightness(1.05);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--color-bg);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Chevron mo rong dong + dong con thut le, dung chung cho moi bang 2 cap
+   (vd: Student bao cao->phien ban, Lecturer sinh vien->bao cao). */
+.doc-row__chevron {
+  display: inline-block;
+  width: 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.doc-row__chevron-spacer {
+  display: inline-block;
+  width: 12px;
+}
+
+.doc-row__version-row {
+  background: var(--color-bg);
+}
+
+.doc-row__version-title {
+  padding-left: 32px !important;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}

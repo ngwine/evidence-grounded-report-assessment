@@ -1,0 +1,544 @@
+.student-row__name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-row__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.student-row__name {
+  font-weight: 500;
+}
+
+.student-row__student-id {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.class-detail__toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Danh sach rubric da tao cho lop (LecturerClassDetailPage) -- Yen yeu
+   cau 2026-10-25 de GV xac nhan truc quan la rubric da luu, dan toi
+   RubricDetailPage xem chi tiet. */
+.rubric-list {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rubric-list__item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Thoi diem tao rubric, hien canh ten rubric trong danh sach (Yen yeu
+   cau 2026-10-27). */
+.rubric-list__created-at {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.rubric-list__link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.rubric-list__link:hover {
+  text-decoration: underline;
+}
+
+/* O hien khi lop chua co rubric nao -- thay the dong panel__hint truoc do,
+   style giong 1 the trong danh sach cho nhat quan (Yen yeu cau 2026-10-26). */
+.rubric-list__item--empty {
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* .search-input (sharedUI.css) co margin-bottom de dung rieng 1 dong
+   (vd man Workspace List) -- o day no nam chung hang voi nut/select nen
+   phai bo margin do, khong thi bi lech hang do margin-box khi can giua. */
+.class-detail__toolbar .search-input {
+  margin-bottom: 0;
+}
+
+/* Container moi cho o tim SV + loc trang thai, dat ngay tren bang bao cao
+   (doi xuong tu class-detail__toolbar -- xem LecturerClassDetailPage.tsx). */
+.class-detail__filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.class-detail__filters .search-input {
+  margin-bottom: 0;
+}
+
+.class-detail__status-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* Dong chua link "Targeted Questions" (UC-08) + selector phien ban, o
+   panel__header cua LecturerReportDetailPage -- them 2026-11-08. */
+.report-detail__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.student-row__count-header {
+  text-align: center !important;
+}
+
+.student-row__count-cell {
+  text-align: center;
+  font-weight: 600;
+}
+
+.student-row__count-zero {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/*
+ * Dong "mo rong" 1 bao cao (chip trang thai + ten bao cao + meta) --
+ * dung flex + 1 slot co CHIEU RONG CO DINH cho chip trang thai, de ten
+ * bao cao luon bat dau THANG HANG giua cac dong, du chip ngan ("Lỗi")
+ * hay dai ("Đang xử lý") -- truoc day dung margin-left co dinh nen ten
+ * bao cao bi lech theo do dai chip.
+ */
+.student-row__version-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-row__status-slot {
+  display: inline-flex;
+  width: 96px;
+  flex-shrink: 0;
+}
+
+.student-row__report-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.student-row__report-meta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ===== Man "Lecturer / Report" (LecturerReportDetailPage) ===== */
+
+.report-detail__old-version-hint {
+  margin-top: -8px;
+}
+
+.report-detail__stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.report-detail__stage {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.report-detail__stage-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.report-detail__stage-title {
+  flex: 1;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.report-detail__stage-chevron {
+  width: auto;
+  transition: transform 0.15s ease;
+}
+
+.report-detail__stage-chevron--open {
+  transform: rotate(90deg);
+}
+
+.report-detail__stage-body {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.report-detail__step-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  /* Khong con gap o day -- duong noi (connector) can lap day het
+     khoang trong giua 2 buoc, xem .report-detail__step-connector. */
+}
+
+.report-detail__step {
+  display: flex;
+  /* stretch (mac dinh) thay vi center -- de cot icon gian het chieu cao
+     cua dong (vd khi nhan 2 dong "label" + "timeLabel"), duong noi moi
+     keo dai dung toi icon buoc ke tiep (Yen yeu cau 2026-10-28, giong
+     anh mau: cham tron noi voi nhau bang 1 duong thang). */
+  align-items: stretch;
+  gap: 10px;
+}
+
+.report-detail__step-icon-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.report-detail__step-connector {
+  width: 2px;
+  flex: 1;
+  min-height: 14px;
+  margin: 2px 0;
+  background: var(--color-border);
+}
+
+.report-detail__step-connector--done {
+  background: var(--status-success-text, #1a7f37);
+}
+
+.report-detail__step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.report-detail__step-icon--done {
+  background: var(--status-success-text, #1a7f37);
+}
+
+.report-detail__step-icon--running {
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  animation: report-detail-spin 0.8s linear infinite;
+}
+
+.report-detail__step-icon--pending {
+  border: 2px solid var(--color-border);
+}
+
+@keyframes report-detail-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.report-detail__step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* Thay the cho .report-detail__step-list { gap } da bo -- giu khoang
+     cach giua cac dong, de duong noi du dai de nhin thay ro. */
+  padding-bottom: 14px;
+}
+
+.report-detail__step:last-child .report-detail__step-text {
+  padding-bottom: 0;
+}
+
+.report-detail__step-label {
+  font-size: 14px;
+}
+
+.report-detail__step-time {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.report-detail__cancel-btn {
+  color: var(--status-danger-text);
+}
+
+.report-detail__start-btn {
+  margin-top: 12px;
+}
+
+.report-detail__not-started {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-detail__placeholder {
+  margin: 0;
+}
+
+/* Man "Duyet" (chang REVIEW) -- danh sach de xuat + form Edit/Reject mo
+   rong tai cho + nut "Công bố" (Yen yeu cau 2026-10-28). Chua co
+   wireframe rieng -- bo cuc GIA DINH, doi lai neu Yen gui wireframe sau. */
+.report-detail__review {
+  margin-top: 4px;
+  /* can display:flex o day thi align-self:flex-end tren nut "Công bố"
+     (.report-detail__publish-btn) moi co tac dung -- thieu dong nay la
+     ly do lan truoc Yen bao "chưa thấy". */
+  display: flex;
+  flex-direction: column;
+}
+
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review-list__item {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.review-list__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.review-list__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.review-list__kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.review-list__title {
+  font-size: 14px;
+}
+
+.review-list__detail,
+.review-list__proposed {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.review-list__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Accept = hanh dong chinh (dam), Edit = phu (vien xam nhat), Reject =
+   canh bao (vien + chu do) -- Yen phan anh 2026-10-28, 3 nut giong het
+   nhau truoc do nhin "ki qua". */
+.review-decision {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-decision__row {
+  display: flex;
+  align-items: center;
+  /* Yen phan anh 2026-10-28: 3 nut dinh sat nhau nhin "1 cuc" -- tang
+     khoang cach cho thoang hon. */
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.review-decision__row button {
+  min-width: 90px;
+}
+
+.btn-secondary.review-decision__accept-btn {
+  color: var(--status-success-text);
+  border-color: var(--status-success-text);
+}
+
+.btn-secondary.review-decision__accept-btn:hover {
+  background: var(--status-success-bg, #dcfce7);
+}
+
+/* .btn-secondary + modifier (combined selector, specificity cao hon 1
+   class don) -- tranh bi .btn-secondary trong sharedUI.css de mau lai
+   (dung loi CSS specificity da gap nhieu lan truoc do trong file nay). */
+.btn-secondary.review-decision__edit-btn {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-secondary.review-decision__edit-btn:hover {
+  background: var(--color-primary-bg, #eef2ff);
+}
+
+.btn-secondary.report-detail__reject-btn {
+  color: var(--status-danger-text);
+  border-color: var(--status-danger-text);
+}
+
+.btn-secondary.report-detail__reject-btn:hover {
+  background: var(--status-danger-bg);
+}
+
+.review-decision__loading {
+  margin: 0;
+}
+
+.review-list__loading {
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.review-list__conflict {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--status-danger-bg);
+  color: var(--status-danger-text);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-list__conflict p {
+  margin: 0;
+}
+
+.review-list__reason {
+  margin: 8px 0 0;
+}
+
+.review-list__form {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-list__form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.review-list__form-field textarea,
+.review-list__form-field input {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+}
+
+.review-list__required {
+  color: var(--status-danger-text);
+}
+
+.review-list__form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.report-detail__publish-btn {
+  margin-top: 16px;
+  /* Yen yeu cau 2026-10-28: day nut "Công bố" qua ben phai. */
+  align-self: flex-end;
+}
+
+/* Man "Lecturer / Nguon doi chieu cua lop" (UC-15, LecturerCorpusPage). */
+.corpus-list__filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.corpus-list__status-select {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.corpus-list__error {
+  color: var(--status-danger-text);
+}
+.corpus-list__action-btn {
+  white-space: nowrap;
+}
+.data-table th.corpus-list__action-cell,
+.data-table td.corpus-list__action-cell {
+  text-align: right;
+}
+.corpus-list__form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}

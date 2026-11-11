@@ -1,0 +1,570 @@
+.rubric-form__error {
+  background: var(--status-danger-bg);
+  color: var(--status-danger-text);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.rubric-criterion-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 16px;
+  background: var(--color-bg);
+}
+
+.rubric-criterion-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.rubric-criterion-card__collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  min-width: 0;
+}
+
+.rubric-criterion-card__collapse-toggle .doc-row__chevron {
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.rubric-criterion-card__collapse-toggle .doc-row__chevron--open {
+  transform: rotate(90deg);
+}
+
+.rubric-criterion-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+.rubric-criterion-card__weight {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+button.rubric-criterion-card__remove {
+  color: var(--status-danger-text);
+}
+
+.rubric-criterion-card__row {
+  display: flex;
+  gap: 12px;
+}
+
+.rubric-criterion-card__title-field {
+  flex: 1;
+}
+
+.rubric-criterion-card__weight-field {
+  width: 120px;
+}
+
+.rubric-level-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rubric-level-row__score {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.rubric-level-row__description {
+  flex: 1;
+}
+
+.rubric-level-row__remove {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.rubric-form__add-criterion {
+  margin-bottom: 20px;
+}
+
+.rubric-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Nut "Quay lai chinh tieu chi" doi len dau trang (canh tieu de/subtitle),
+   khong con o cuoi trang nua -- Yen yeu cau 2026-10-26 (xem RubricCreatePage.tsx). */
+.rubric-form__back-top {
+  display: inline-block;
+  margin-bottom: 16px;
+}
+
+.rubric-checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.rubric-checklist-row__index {
+  flex-shrink: 0;
+  width: 20px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  text-align: right;
+}
+
+.rubric-checklist-row__condition {
+  flex: 1;
+}
+
+.rubric-checklist-row__remove {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.rubric-checklist-row__remove:hover {
+  color: var(--status-danger-text);
+}
+
+.rubric-checklist-row__add {
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+/* Man xem chi tiet rubric (RubricDetailPage) -- checklist CHI DOC, khong
+   co input/select, chi hien chu + badge. */
+.rubric-checklist-row--readonly .rubric-checklist-row__condition {
+  color: var(--color-text);
+}
+
+.rubric-checklist-row__mode {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* Hang dau Buoc 1: Tieu de rubric (trai) + So muc do (phai), 2 cot --
+   thay cho bo cuc doc dai truoc do. Nhan "So muc do..." dai hon, xuong 2
+   dong -- align-items: stretch (mac dinh) lam 2 cot cao bang nhau, va
+   .modal__field duoc ep thanh flex-column + justify-content: flex-end de
+   2 o input/select LUON nam ngang hang nhau o DAY, bat ke nhan may dong
+   (Yen phan anh 2026-10-25 la 2 cot dang lech nhau). */
+.rubric-header-row {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.rubric-header-row .modal__field {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.rubric-header-row__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.rubric-header-row__level-count {
+  width: 240px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .rubric-header-row {
+    flex-direction: column;
+  }
+
+  .rubric-header-row__level-count {
+    width: 100%;
+  }
+}
+
+/* Ten mac dang "pill" nam ngang 1 hang, co mui ten chi huong tu muc cao
+   nhat xuong thap nhat -- thay cho hang input thuong truoc do. */
+.rubric-level-pills {
+  margin-bottom: 16px;
+}
+
+.rubric-level-pills__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.rubric-level-pill {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  min-width: 90px;
+  background: var(--color-bg-muted, #f4f4f5);
+}
+
+.rubric-level-pill:focus {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 1px;
+  background: var(--color-bg);
+}
+
+.rubric-level-pills__arrow {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* Badge noi bat cho tong trong so -- CHI de GV de theo doi, khong gan
+   dieu kien dung/sai vi tong trong so khong co dinh (xem
+   docs/rubric/rubric-notes-ui-data.md). */
+.rubric-total-weight-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted, #f4f4f5);
+  margin-bottom: 16px;
+}
+
+.rubric-total-weight-badge__label {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.rubric-total-weight-badge__value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.rubric-level-input-table__hint {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+/* Bang ma tran "Khoang diem tung muc" -- xem RubricLevelMatrix trong
+   RubricCreatePage.tsx. */
+.rubric-level-input-table {
+  border-collapse: collapse;
+  margin-bottom: 8px;
+  table-layout: fixed;
+}
+
+.rubric-level-input-table th {
+  border: 1px solid var(--color-border);
+  padding: 4px 6px 6px;
+  background: var(--color-bg-muted, #f4f4f5);
+  text-align: center;
+  width: 140px;
+}
+
+.rubric-level-input-table__name {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.rubric-level-input-table__range {
+  display: block;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.rubric-level-input-table__cell {
+  border: 1px solid var(--color-border);
+  padding: 4px 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Rong du cho so 2 chu so + 1 so thap phan (vd "37.5") -- truoc do 44px
+   bi cat chu khi trong so lon (Yen phan anh 2026-10-25). An mui ten tang
+   giam cua input number de danh het cho chu so. */
+input.rubric-level-input-table__input {
+  width: 60px;
+  box-sizing: border-box;
+  padding: 4px 2px;
+  text-align: center;
+  font-size: 13px;
+  -moz-appearance: textfield;
+}
+
+.rubric-level-input-table__input::-webkit-inner-spin-button,
+.rubric-level-input-table__input::-webkit-outer-spin-button {
+  margin: 0;
+  width: 10px;
+}
+
+/* O dang hien GIA TRI GOI Y (GV chua tu go) -- CHI mau chu nhat de phan
+   biet voi o GV da tu nhap, xem RubricLevelMatrix -- font/chu thuong
+   (khong in nghieng) va can giua, giong het o nhap binh thuong, vi Yen
+   phan anh 2026-10-25 la in nghieng nhin la (nen trang da sua o lan
+   truoc, theo phan anh truoc do nua). */
+input.rubric-level-input-table__input--suggested {
+  color: var(--color-text-muted);
+  font-style: normal;
+  text-align: center;
+}
+
+.rubric-level-input-table__fixed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  box-sizing: border-box;
+  padding: 4px 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted, #f4f4f5);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.rubric-level-input-table__dash {
+  color: var(--color-text-muted);
+  margin: 0 2px;
+  font-size: 13px;
+}
+
+.rubric-review-table-wrap {
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.rubric-review-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.rubric-review-table th,
+.rubric-review-table td {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.rubric-review-table th:first-child,
+.rubric-review-table td:first-child {
+  text-align: left;
+  white-space: normal;
+  min-width: 160px;
+}
+
+.rubric-review-table thead th {
+  background: var(--color-bg-muted, #f4f4f5);
+  font-weight: 600;
+}
+
+.rubric-review-table tfoot td {
+  font-weight: 600;
+  background: var(--color-bg-muted, #f4f4f5);
+}
+
+/* Bang khoang diem o trang xem chi tiet rubric (RubricDetailPage) -- CHI co
+   cac cot muc do (khong co cot ten tieu chi nhu bang xem truoc o
+   RubricCreatePage), nen muon cac cot deu nhau chu khong lech trai nhu
+   .rubric-review-table th:first-child o tren -- Yen phan anh 2026-10-26. */
+.rubric-review-table--even {
+  table-layout: fixed;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.rubric-review-table--even th,
+.rubric-review-table--even td,
+.rubric-review-table--even th:first-child,
+.rubric-review-table--even td:first-child {
+  width: auto;
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+}
+
+.rubric-review-table--even tbody td {
+  background: var(--color-surface);
+}
+
+.rubric-review-table--even thead th {
+  background: var(--color-bg-muted, #eef0f4);
+}
+
+/* Cot ten tieu chi trong bang ma tran rubric o RubricDetailPage -- can trai
+   va cho rong hon vi la text dai, khac voi cac cot diem (can giua, co dinh
+   roi deu nhau o .rubric-review-table--even). */
+.rubric-review-table--even td.rubric-review-table__criterion-name {
+  text-align: left;
+  white-space: normal;
+  min-width: 180px;
+  width: 220px;
+}
+
+/* Khung chua StatusBadge + nut "Sua" o dau trang xem chi tiet rubric
+   (RubricDetailPage) -- Yen yeu cau 2026-10-27. */
+.rubric-detail__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ===== Hien thi "Ket qua cham diem" + "Chi tiet bang chung" cho 1 bao
+   cao cu the (RubricScoreDisplay.tsx) -- tach ra khoi
+   features/review/review.css, sua lai 2026-11-08. Dung o CA chang
+   Rubric (LecturerReportDetailPage) VA chang Duyet (ReviewPanel). ===== */
+
+.report-detail__rubric-score {
+  margin-top: 16px;
+}
+
+.report-detail__rubric-score-title {
+  font-size: 16px;
+  margin: 0 0 2px;
+}
+
+.report-detail__rubric-score-footnote {
+  margin-top: 8px;
+  font-style: italic;
+}
+
+.rubric-score-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.rubric-score-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.rubric-score-table th,
+.rubric-score-table td {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.rubric-score-table thead th {
+  background: var(--color-bg-muted, #eef0f4);
+  font-weight: 600;
+}
+
+.rubric-score-table__criterion-row {
+  font-weight: 600;
+}
+
+.rubric-score-table__toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.rubric-score-table__checklist-row {
+  background: var(--color-bg-muted, #f8f9fb);
+}
+
+.rubric-score-table__checklist-condition {
+  padding-left: 32px;
+  font-weight: 400;
+}
+
+.rubric-score-table__total-row {
+  font-weight: 700;
+  background: var(--color-bg-muted, #eef0f4);
+}
+
+.rubric-score-table__total-row td:last-child {
+  text-align: left;
+}
+
+/* Popup "Chi tiet bang chung" (EvidenceDetailModal). */
+.evidence-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.evidence-modal__item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.evidence-modal__item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.evidence-modal__quote {
+  margin: 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-bg-muted, #f4f6fa);
+  font-size: 14px;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+.rubric-score-evidence__subtitle {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
