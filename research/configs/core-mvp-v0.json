@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "experiment_id": "two-pipeline-core-mvp-feasibility-v0",
+  "seed": 20261013,
+  "documents": {
+    "max_tokens": 220,
+    "min_tokens": 30
+  },
+  "models": {
+    "dense": {
+      "backend": "sentence_transformers",
+      "model": "intfloat/multilingual-e5-small",
+      "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+      "device": "cpu",
+      "batch_size": 16,
+      "query_prefix": "query: ",
+      "document_prefix": "passage: "
+    },
+    "cross_encoder": {
+      "backend": "sentence_transformers_cross_encoder",
+      "model": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+      "revision": "1427fd652930e4ba29e8149678df786c240d8825",
+      "device": "cpu",
+      "batch_size": 8,
+      "max_length": 512,
+      "score_output": "raw_logit"
+    }
+  },
+  "pipeline1": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 3,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": true,
+    "reranker_enabled": true,
+    "classification": {
+      "verbatim_query_coverage": 0.72,
+      "verbatim_exact_char_ratio": 0.45,
+      "semantic_similarity": 0.72,
+      "semantic_min_lexical": 0.05,
+      "cross_encoder_min_score": 0.0,
+      "lexical_paraphrase_coverage": 0.32,
+      "summary_length_ratio": 0.65,
+      "minimum_alignment_chars": 24
+    }
+  },
+  "pipeline2": {
+    "candidate_depth": 12,
+    "rerank_depth": 8,
+    "top_k": 5,
+    "bm25_k1": 1.2,
+    "bm25_b": 0.75,
+    "rrf_k": 60,
+    "dense_enabled": true,
+    "reranker_enabled": true,
+    "graph": {
+      "seed_depth": 8,
+      "iterations": 20,
+      "damping": 0.85,
+      "minimum_shared_terms": 2,
+      "maximum_term_degree": 30
+    }
+  }
+}

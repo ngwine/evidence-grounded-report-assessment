@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "rubric_id": "weekly-progress-feasibility-v0",
+  "version": "0.1.0",
+  "title": "Rubric thử luồng evidence-grounded assessment trên báo cáo tiến độ",
+  "max_score": 10.0,
+  "decision_rules": {
+    "rule_version": "core-mvp-proportional-v0",
+    "cannot_assess_count_threshold": 2,
+    "cannot_assess_ratio_threshold": 0.4,
+    "required_unmet_score": 0.0
+  },
+  "criteria": [
+    {
+      "criterion_id": "C1",
+      "title": "Dữ liệu và kế hoạch đánh giá",
+      "weight": 3.0,
+      "checklists": [
+        {
+          "checklist_id": "C1.1",
+          "statement": "Báo cáo xác định benchmark cho kiểm tra tương đồng.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "dataset benchmark kiểm tra tương đồng PAN-PC-11 PAN13",
+          "requirements": [
+            {
+              "requirement_id": "benchmark-source-retrieval",
+              "description": "Nêu PAN-PC-11 cho source retrieval",
+              "any_of": ["PAN-PC-11"]
+            },
+            {
+              "requirement_id": "benchmark-span-alignment",
+              "description": "Nêu PAN13 cho span alignment",
+              "any_of": ["PAN13"]
+            }
+          ],
+          "contradiction_patterns": [
+            "chưa xác định dataset cho kiểm tra tương đồng"
+          ]
+        },
+        {
+          "checklist_id": "C1.2",
+          "statement": "Benchmark source retrieval được nối với metric retrieval phù hợp.",
+          "mode": "GRAPH",
+          "importance": "REQUIRED",
+          "query": "PAN-PC-11 source retrieval Recall@K MRR nDCG",
+          "requirements": [
+            {
+              "requirement_id": "dataset",
+              "description": "Nêu PAN-PC-11",
+              "any_of": ["PAN-PC-11"]
+            },
+            {
+              "requirement_id": "retrieval-metric",
+              "description": "Nêu ít nhất một retrieval metric",
+              "any_of": ["Recall@K", "MRR", "nDCG@K"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    },
+    {
+      "criterion_id": "C2",
+      "title": "Provenance và evidence",
+      "weight": 4.0,
+      "checklists": [
+        {
+          "checklist_id": "C2.1",
+          "statement": "Báo cáo mô tả chuỗi provenance từ file đến chunk.",
+          "mode": "LOCAL",
+          "importance": "CORE",
+          "query": "File Version Element Chunk provenance",
+          "requirements": [
+            {
+              "requirement_id": "file-version",
+              "description": "Liên kết File và Version",
+              "any_of": ["File → Version", "File -> Version"]
+            },
+            {
+              "requirement_id": "element-chunk",
+              "description": "Liên kết Element và Chunk",
+              "any_of": ["Element → Chunk", "Element -> Chunk"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "C2.2",
+          "statement": "Evidence có thể truy ngược đến phiên bản, vị trí và analysis run.",
+          "mode": "GRAPH",
+          "importance": "REQUIRED",
+          "query": "evidence file version vị trí index analysis run provenance",
+          "requirements": [
+            {
+              "requirement_id": "file-version-location",
+              "description": "Nêu file version và vị trí",
+              "any_of": ["file version"]
+            },
+            {
+              "requirement_id": "analysis-run",
+              "description": "Nêu analysis run",
+              "any_of": ["analysis run"]
+            },
+            {
+              "requirement_id": "index-generation",
+              "description": "Nêu index generation",
+              "any_of": ["index generation"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    },
+    {
+      "criterion_id": "C3",
+      "title": "Tính trung thực về trạng thái triển khai",
+      "weight": 3.0,
+      "checklists": [
+        {
+          "checklist_id": "C3.1",
+          "statement": "Báo cáo nêu rõ phần code hiện chạy được.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "phần code chạy được parser chunker",
+          "requirements": [
+            {
+              "requirement_id": "parser",
+              "description": "Nêu parser",
+              "any_of": ["parser"]
+            },
+            {
+              "requirement_id": "chunker",
+              "description": "Nêu chunker",
+              "any_of": ["chunker"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "C3.2",
+          "statement": "MongoDB, API, worker và index đã được nối thành luồng hoàn chỉnh.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "MongoDB API worker index luồng hoàn chỉnh trạng thái triển khai",
+          "requirements": [
+            {
+              "requirement_id": "integrated-runtime",
+              "description": "Xác nhận luồng runtime hoàn chỉnh",
+              "any_of": ["đã được nối thành một luồng hoàn chỉnh"]
+            }
+          ],
+          "contradiction_patterns": [
+            "chưa được nối thành một luồng hoàn chỉnh"
+          ]
+        }
+      ]
+    }
+  ]
+}

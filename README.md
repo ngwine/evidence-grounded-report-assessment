@@ -24,20 +24,25 @@ viên theo hướng **local-first**, **evidence-first** và **human-in-the-loop*
 
 ## Trạng thái
 
-Project hiện ở giai đoạn **scaffold**, chưa phải MVP chạy được.
+Đã có [bản app chạy local](apps/web/README.md) nối web → API → worker →
+[core MVP hai pipeline](research/core_mvp/README.md). Đây là một luồng tích hợp
+để kiểm tra tính khả thi, **chưa** phải ứng dụng production: chưa có tài khoản,
+MongoDB, RBAC hay công bố kết quả. Chất lượng của hai pipeline cũng chưa được
+xác nhận đủ để chấm điểm hoặc kết luận đạo văn.
 
 | Hạng mục                                  | Trạng thái                                                                                                      |
 | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | Phạm vi đề tài                          | Đã chốt: 2 hướng chính (Similarity, Evidence-grounded Assessment) + Targeted Questions `CONDITIONAL` |
 | SRS/Use Case tuần 1                        | Baseline v2.0 đã đồng bộ phạm vi; chờ review chéo và GVHD xác nhận                          |
-| Product Backlog/WBS                         | Baseline v1.2 cập nhật actual/evidence ngày 03/09/2026; chờ Q/Y review/ký                                      |
+| Product Backlog/WBS                         | Baseline v1.5 cập nhật actual/evidence đến 16/09/2026; chờ Q/Y review/ký                                      |
 | C4/trust boundary/threat model (`W2.1`) | Đã review và merge vào `main` qua PR #5 |
 | Cơ sở dữ liệu                           | Đã chọn MongoDB                                                                                                |
 | MongoDB/provenance (`W2.2`) | Đã review và merge [ADR-001](docs/adr/ADR-001-mongodb-provenance-storage.md) cùng [data dictionary](docs/architecture/data-dictionary.md) qua PR #6 |
+| API contract (`W2.3`) | Có [API Contract v1](docs/api/API_CONTRACT_V1.md) và [OpenAPI draft](docs/api/openapi-v1.yaml); YAML/$ref đã kiểm tra, chờ Yến review |
 | Search/Vector Search | Baseline không phụ thuộc MongoDB Search; engine chỉ được chọn sau benchmark `G-03/W5` |
-| Frontend, API, worker                       | Mới tạo cấu trúc                                                                                              |
-| Parser và chunking | Prototype PDF/DOCX đã merge vào `main`; chờ worker integration, stable provenance, real/golden corpus và benchmark chất lượng |
-| Model local | Chờ benchmark tại `G-03` |
+| Frontend, API, worker                       | Đã có bản demo local: upload → job worker → hai báo cáo evidence → ghi nhận review; chưa có auth/MongoDB/publish |
+| Parser và chunking | Parser PDF/DOCX/TXT và chunker provenance đã được nối vào worker demo; vẫn cần golden benchmark trên corpus đủ đại diện |
+| Model local | `research-v0` chạy E5 và mMARCO revision đã khóa từ cache local; hiệu quả tổng quát vẫn cần đánh giá trên tập nhãn độc lập |
 | Search Provider bên ngoài                 | `OUT OF SCOPE`; chỉ mở lại bằng change request được Q/Y/GVHD duyệt                                      |
 
 ## Kiến trúc dự kiến
@@ -141,23 +146,21 @@ flowchart LR
 
 ## Thiết lập
 
-Hiện chưa có manifest cho toàn bộ ứng dụng hoặc `compose.yaml`. Riêng prototype
-Parsing/Chunking có dependency phát triển tại
-`services/backend/requirements-dev.txt`. Bước cấu hình đầu tiên:
+Chưa có `compose.yaml` hoặc môi trường production. Để chạy bản demo local, cài
+dependency Python và web từ thư mục repo:
 
 ```bash
-cp .env.example .env
-python3 -m venv .venv
-./.venv/bin/pip install -r services/backend/requirements-dev.txt
-./.venv/bin/python -m pytest services/backend/tests/test_pdf_docx_parsing.py -v
+python3.12 -m venv .venv-research
+.venv-research/bin/python -m pip install -r research/requirements-research.txt
+.venv-research/bin/python -m pip install -r services/backend/requirements-app.txt
+npm --prefix apps/web ci
 ```
 
-Sau khi hoàn thành scaffold tiếp theo, phần này sẽ có các lệnh đã kiểm thử để:
-
-1. khởi động MongoDB và dịch vụ nền;
-2. chạy FastAPI và worker;
-3. chạy React/Vite;
-4. kiểm tra health endpoint và smoke test.
+Sau đó xem [cách phê duyệt nguồn và chạy API/worker](services/backend/README.md),
+[cách mở giao diện](apps/web/README.md). API chỉ bind `127.0.0.1:8001`, web
+chỉ bind `127.0.0.1:5173`; nguồn chưa xác nhận quyền dùng local bị chặn trước
+khi tạo job. `bm25-smoke` kiểm tra luồng tích hợp nhanh, còn `research-v0` cần
+các model revision đã khóa trong cache `var/models/hf-home`.
 
 ## Quy ước chính
 

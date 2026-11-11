@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1600" viewBox="0 -350 1600 1600">
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .title { font: 700 38px Arial, sans-serif; fill: #0f172a; }
+      .head { font: 700 24px Arial, sans-serif; fill: #0f172a; }
+      .body { font: 21px Arial, sans-serif; fill: #334155; }
+      .small { font: 18px Arial, sans-serif; fill: #475569; }
+      .metric { font: 700 21px Arial, sans-serif; fill: #991b1b; }
+      .box { stroke-width: 3; rx: 16; }
+      .arrow { stroke: #334155; stroke-width: 4; fill: none; marker-end: url(#arrow2); }
+    </style>
+  </defs>
+  <rect x="0" y="-350" width="1600" height="1600" fill="#ffffff"/>
+  <text x="800" y="58" text-anchor="middle" class="title">Locked A1–A5 source-retrieval diagnostic</text>
+
+  <rect x="45" y="315" width="220" height="170" class="box" fill="#f1f5f9" stroke="#475569"/>
+  <text x="155" y="365" text-anchor="middle" class="head">Oracle query</text>
+  <text x="155" y="405" text-anchor="middle" class="body">Suspicious-span</text>
+  <text x="155" y="440" text-anchor="middle" class="body">window</text>
+
+  <rect x="340" y="145" width="300" height="210" class="box" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="490" y="195" text-anchor="middle" class="head">A1: lexical view</text>
+  <text x="490" y="240" text-anchor="middle" class="body">Fixed windows</text>
+  <text x="490" y="278" text-anchor="middle" class="body">BM25 (k1=1.2, b=0.75)</text>
+  <text x="490" y="316" text-anchor="middle" class="small">Top 100 source documents</text>
+
+  <rect x="340" y="500" width="300" height="210" class="box" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="490" y="550" text-anchor="middle" class="head">A2: semantic view</text>
+  <text x="490" y="595" text-anchor="middle" class="body">Structure-aware chunks</text>
+  <text x="490" y="633" text-anchor="middle" class="body">multilingual E5-small</text>
+  <text x="490" y="671" text-anchor="middle" class="small">Top 100 source documents</text>
+
+  <rect x="735" y="315" width="250" height="170" class="box" fill="#ede9fe" stroke="#7c3aed"/>
+  <text x="860" y="365" text-anchor="middle" class="head">A3: RRF</text>
+  <text x="860" y="405" text-anchor="middle" class="body">Equal weight</text>
+  <text x="860" y="440" text-anchor="middle" class="body">k = 60</text>
+
+  <rect x="1090" y="265" width="300" height="270" class="box" fill="#fee2e2" stroke="#dc2626"/>
+  <text x="1240" y="315" text-anchor="middle" class="head">A4 / A5: reranking</text>
+  <text x="1240" y="355" text-anchor="middle" class="body">Cross-Encoder top 50</text>
+  <text x="1240" y="393" text-anchor="middle" class="body">max length = 512</text>
+  <text x="1240" y="438" text-anchor="middle" class="metric">97.5% pairs truncated</text>
+  <text x="1240" y="478" text-anchor="middle" class="small">Support passage controls what</text>
+  <text x="1240" y="505" text-anchor="middle" class="small">the reranker is allowed to see</text>
+
+  <rect x="1450" y="315" width="120" height="170" class="box" fill="#f8fafc" stroke="#475569"/>
+  <text x="1510" y="365" text-anchor="middle" class="head">Ranked</text>
+  <text x="1510" y="400" text-anchor="middle" class="head">sources</text>
+  <text x="1510" y="445" text-anchor="middle" class="small">+ spans</text>
+
+  <path d="M265 370 C300 370 300 250 340 250" class="arrow"/>
+  <path d="M265 430 C300 430 300 605 340 605" class="arrow"/>
+  <path d="M640 250 C690 250 690 365 735 365" class="arrow"/>
+  <path d="M640 605 C690 605 690 435 735 435" class="arrow"/>
+  <path d="M985 400 L1090 400" class="arrow"/>
+  <path d="M1390 400 L1450 400" class="arrow"/>
+
+  <rect x="320" y="770" width="1000" height="82" rx="16" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+  <text x="820" y="807" text-anchor="middle" class="body">Hard gate: 36 Dense Top-10 hits are demoted by RRF; median gold rank = 57.5,</text>
+  <text x="820" y="837" text-anchor="middle" class="body">outside the top-50 reranking stage.</text>
+</svg>

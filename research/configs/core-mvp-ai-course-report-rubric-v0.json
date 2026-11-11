@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "rubric_id": "ai-course-three-tasks-feasibility",
+  "version": "0.1.0",
+  "title": "Pilot evidence rubric for the hill climbing, Go and Sudoku report",
+  "max_score": 10.0,
+  "decision_rules": {
+    "rule_version": "core-mvp-proportional-v0",
+    "cannot_assess_count_threshold": 2,
+    "cannot_assess_ratio_threshold": 0.4,
+    "required_unmet_score": 0.0
+  },
+  "criteria": [
+    {
+      "criterion_id": "LOCAL_SEARCH",
+      "title": "Local search method and observations",
+      "weight": 2.5,
+      "checklists": [
+        {
+          "checklist_id": "LOCAL_SEARCH.NEIGHBORHOOD",
+          "statement": "The report describes the hill climbing neighborhood and what happens when no better neighbor is found.",
+          "mode": "GRAPH",
+          "importance": "REQUIRED",
+          "query": "hill climbing 8-connected neighborhood best neighbor reduce step size",
+          "requirements": [
+            {
+              "requirement_id": "neighborhood",
+              "description": "An eight-neighbor search is described",
+              "any_of": ["8 -connected neighborhood", "8-connected neighborhood"]
+            },
+            {
+              "requirement_id": "no-improvement-action",
+              "description": "The no-improvement action reduces the step size",
+              "any_of": ["reduce the step size"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "LOCAL_SEARCH.RESULT",
+          "statement": "The report states a numerical iteration count and runtime for the hill climbing experiment.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "hill climbing result iterations runtime Google Colab",
+          "requirements": [
+            {
+              "requirement_id": "iteration-count",
+              "description": "An iteration count is given",
+              "any_of": ["20–40 iterations"]
+            },
+            {
+              "requirement_id": "runtime",
+              "description": "A runtime observation is given",
+              "any_of": ["less than one second"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    },
+    {
+      "criterion_id": "GO_GAME",
+      "title": "Go implementation and scope",
+      "weight": 2.5,
+      "checklists": [
+        {
+          "checklist_id": "GO_GAME.INTERACTION",
+          "statement": "The report explains how mouse input is mapped to the Go board and checked for legality.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "Go mouse coordinates grid positions move legality",
+          "requirements": [
+            {
+              "requirement_id": "mouse-mapping",
+              "description": "Mouse clicks are mapped to board positions",
+              "any_of": ["mouse coordinates are mapped to grid positions"]
+            },
+            {
+              "requirement_id": "legality-check",
+              "description": "Move legality is checked",
+              "any_of": ["verifies move legality"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "GO_GAME.SEARCH_SCOPE",
+          "statement": "The report states both the simplified Go rule scope and the adversarial search method.",
+          "mode": "GRAPH",
+          "importance": "REQUIRED",
+          "query": "Go rules Ko omitted Minimax heuristic search",
+          "requirements": [
+            {
+              "requirement_id": "rule-scope",
+              "description": "The omitted Ko rule is disclosed",
+              "any_of": ["omits the Ko rule"]
+            },
+            {
+              "requirement_id": "search-method",
+              "description": "Minimax is identified as the search method",
+              "any_of": ["Minimax search", "Minimax agent"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    },
+    {
+      "criterion_id": "SUDOKU_CSP",
+      "title": "Sudoku constraint model and validation",
+      "weight": 3.0,
+      "checklists": [
+        {
+          "checklist_id": "SUDOKU_CSP.VARIABLES",
+          "statement": "The report defines a Boolean-variable model for the Sudoku grid.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "Sudoku Boolean variables 729 cell constraints",
+          "requirements": [
+            {
+              "requirement_id": "variables",
+              "description": "The number of Boolean variables is stated",
+              "any_of": ["729 Boolean variables"]
+            },
+            {
+              "requirement_id": "cell-constraints",
+              "description": "Cell constraints are described",
+              "any_of": ["Cell constraints"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "SUDOKU_CSP.CNF_SOLVER",
+          "statement": "The report connects Sudoku constraint encoding to a named SAT solver.",
+          "mode": "GRAPH",
+          "importance": "REQUIRED",
+          "query": "Sudoku CNF Glucose3 SAT solver",
+          "requirements": [
+            {
+              "requirement_id": "encoding",
+              "description": "CNF encoding is described",
+              "any_of": ["CNF encoding", "conjunctive normal form"]
+            },
+            {
+              "requirement_id": "solver",
+              "description": "Glucose3 is named as the SAT solver",
+              "any_of": ["Glucose3"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "SUDOKU_CSP.VALIDATION",
+          "statement": "The report describes validating the Sudoku solution against the rules and original clues.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "Sudoku validator all rules original clues unchanged",
+          "requirements": [
+            {
+              "requirement_id": "sudoku-rules",
+              "description": "All Sudoku rules are checked",
+              "any_of": ["satisfies all Sudoku rules"]
+            },
+            {
+              "requirement_id": "original-clues",
+              "description": "Original clues remain unchanged",
+              "any_of": ["keeps all original clues"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    },
+    {
+      "criterion_id": "REPORT_EVIDENCE",
+      "title": "Reported measurements and limitations",
+      "weight": 2.0,
+      "checklists": [
+        {
+          "checklist_id": "REPORT_EVIDENCE.RESULTS",
+          "statement": "The report includes at least one measured local search outcome.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "local search results iterations less than one second",
+          "requirements": [
+            {
+              "requirement_id": "iteration-result",
+              "description": "A local search result is quantified",
+              "any_of": ["20–40 iterations"]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "REPORT_EVIDENCE.LIMITATIONS",
+          "statement": "The report discusses a limitation of the implemented system.",
+          "mode": "LOCAL",
+          "importance": "REQUIRED",
+          "query": "Current Limitations Minimax computationally expensive slower moves",
+          "requirements": [
+            {
+              "requirement_id": "limitation",
+              "description": "A Minimax limitation is described",
+              "any_of": [
+                "slower moves at higher depth limits",
+                "response time increases at deeper search levels"
+              ]
+            }
+          ],
+          "contradiction_patterns": []
+        },
+        {
+          "checklist_id": "REPORT_EVIDENCE.GO_LATENCY",
+          "statement": "The report gives a measured Go agent response time in milliseconds.",
+          "mode": "LOCAL",
+          "importance": "OPTIONAL",
+          "query": "Go agent response time milliseconds measured latency",
+          "requirements": [
+            {
+              "requirement_id": "millisecond-latency",
+              "description": "Go agent response time is reported in milliseconds",
+              "any_of": ["milliseconds"]
+            }
+          ],
+          "contradiction_patterns": []
+        }
+      ]
+    }
+  ]
+}

@@ -13,6 +13,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-research/
 venv/
 .pytest_cache/
 .mypy_cache/
@@ -38,6 +39,9 @@ research/results/**
 !research/results/.gitignore
 research/configs/**/*.local.json
 research/notebooks/.ipynb_checkpoints/
+
+# Private weekly-submission bundles and source PDFs
+submission/
 
 # Tool caches
 .cache/

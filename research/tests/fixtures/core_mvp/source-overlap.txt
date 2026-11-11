@@ -1,0 +1,5 @@
+Tài liệu đối chứng mô tả một phương pháp khác ở phần đầu.
+
+Đoạn văn này được giữ nguyên để kiểm tra khả năng phát hiện sao chép gần nguyên văn trong pipeline tương đồng.
+
+Phần cuối của tài liệu nguồn không liên quan đến nội dung báo cáo.

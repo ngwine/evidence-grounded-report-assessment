@@ -44,6 +44,42 @@ policy, seed, full candidate counts, selected stable annotation IDs and hashes
 of the selected IDs/paths. Therefore a bounded pilot must not be reported as a
 full-corpus PAN result.
 
+## Leakage-safe derived splits
+
+Use repeatable `--exclude-manifest` arguments when deriving a later split from
+the same PAN-PC-11 extraction. For every verified earlier manifest, the
+converter excludes:
+
+1. every prior `parent_annotation_id`;
+2. every prior suspicious document;
+3. every prior source document from positive selection; and
+4. every document in the prior source-candidate pool, including distractors.
+
+The converter verifies the earlier manifest's corpus fingerprint and the
+checksums/record counts of its `documents.jsonl` and `queries.jsonl` before it
+uses any exclusion. It fails closed on a mismatch. The new manifest records the
+policy, per-manifest checksums and counts, union counts/checksums, and selection
+counts before and after exclusion. Split derivation remains a technical
+transformation: every newly derived manifest still starts at
+`governance.status=PENDING`.
+
+```bash
+python -m research.pan_pilot \
+  ... \
+  --split-name DEV1-leakage-safe \
+  --seed 20261012 \
+  --exclude-manifest var/datasets/derived/similarity/pan-pc-11-pilot-v1/dataset-manifest.json
+
+python -m research.pan_pilot \
+  ... \
+  --split-name TEST0-leakage-safe \
+  --seed 20261013 \
+  --exclude-manifest var/datasets/derived/similarity/pan-pc-11-pilot-v1/dataset-manifest.json \
+  --exclude-manifest var/datasets/derived/similarity/pan-pc-11-dev1-v1/dataset-manifest.json
+```
+
+Do not inspect TEST0 labels or use TEST0 for model/configuration choices.
+
 Official PAN releases contain XML for both suspicious and source documents.
 Only XML whose root references a suspicious document (or is located under a
 known suspicious-document directory) is eligible for positive sampling.

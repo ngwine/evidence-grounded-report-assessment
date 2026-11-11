@@ -48,6 +48,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--exclude-manifest",
+        action="append",
+        type=Path,
+        default=[],
+        help=(
+            "Prior derived dataset manifest whose parent annotations, "
+            "suspicious documents and complete source-candidate pool must be "
+            "excluded. Repeat for multiple earlier splits."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace only the five known generated files if they already exist.",
@@ -71,6 +82,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_query_word_tokens=args.max_query_word_tokens,
             query_stride_word_tokens=args.query_stride_word_tokens,
             source_archives=args.source_archive,
+            exclude_manifests=args.exclude_manifest,
             overwrite=args.overwrite,
         )
     except (FileExistsError, OSError, ValueError) as exc:

@@ -838,3 +838,37 @@ def test_full_runner_writes_reproducibility_manifest_and_stable_artifacts(tmp_pa
         "structure_hybrid_rrf",
     }
     assert metrics["structure_dense"]["macro"]["3"]["recall"] == 1.0
+
+
+def test_runner_fails_closed_when_dataset_changes_during_inference(tmp_path):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    mutated_path = copied / "queries.jsonl"
+
+    class MutatingEncoder(KeywordFixtureEncoder):
+        def __init__(self):
+            super().__init__()
+            self.mutated = False
+
+        def encode(self, texts):
+            if not self.mutated:
+                mutated_path.write_text(
+                    mutated_path.read_text(encoding="utf-8") + "\n",
+                    encoding="utf-8",
+                )
+                self.mutated = True
+            return super().encode(texts)
+
+    output_dir = tmp_path / "mutated-run"
+    with pytest.raises(RuntimeError, match="Dataset inputs changed.*queries"):
+        run_experiment(
+            copied / "dataset-manifest.json",
+            copied / "config.json",
+            output_dir,
+            encoder=MutatingEncoder(),
+            allow_test_encoder=True,
+        )
+
+    assert not (output_dir / "predictions.jsonl").exists()
+    assert not (output_dir / "metrics.json").exists()
+    assert not (output_dir / "run_manifest.json").exists()
