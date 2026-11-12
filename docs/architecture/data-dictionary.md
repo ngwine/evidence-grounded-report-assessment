@@ -662,8 +662,8 @@ Migration ID/checksum mismatch phải fail startup/migration job.
 | `tombstones`          | `resource_type,resource_id`                      | Immediate deny/restore guard     |
 | `audit_events`        | `event_id`                                       | Append-only dedup                |
 
-Tất cả index phải có tên explicit trong migration. `W3.1` phải so sánh key,
-unique/partial/TTL options và báo drift; không chỉ kiểm tra index name tồn tại.
+Tất cả index phải có tên explicit trong migration. `W3.1` phải đối chiếu cấu
+trúc chỉ mục (fields, unique, partial, TTL) và báo drift, không chỉ kiểm tra tên.
 
 ## 13. Locator và normalized mapping
 

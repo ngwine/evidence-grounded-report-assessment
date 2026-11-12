@@ -1,0 +1,22 @@
+.authenticated-shell main { padding-bottom: 48px; }
+.authenticated-shell input:not([type="file"]), .authenticated-shell select, .authenticated-shell textarea { width: 100%; padding: 11px 12px; border: 1px solid #cfdbde; border-radius: 8px; background: #fff; color: #203942; }
+.authenticated-shell input:disabled, .authenticated-shell textarea:read-only { background: #f5f8f8; }
+.authenticated-shell button { min-height: 38px; padding: 9px 13px; }
+.authenticated-shell .notice small { display: block; overflow-wrap: anywhere; }
+.auth-login { max-width: 450px; margin: 70px auto; }
+.auth-login h1 { margin: 8px 0 14px; font-size: 31px; letter-spacing: -.04em; }
+.auth-workspace-select { max-width: 720px; margin-bottom: 22px; }
+.auth-workspace-select .field-label { margin-top: 0; }
+.auth-rubric-grid { display: grid; grid-template-columns: minmax(240px, 310px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.auth-rubric-list { list-style: none; margin: 18px 0; padding: 0; display: grid; gap: 7px; }
+.auth-rubric-list button { width: 100%; text-align: left; border: 1px solid #dae5e4; border-radius: 8px; background: #fafcfc; color: #294e51; }
+.auth-rubric-list button[aria-current="true"] { border-color: #719e92; background: #edf6f1; }
+.auth-rubric-list strong, .auth-rubric-list small { display: block; overflow-wrap: anywhere; }
+.auth-rubric-list strong { font-size: 13px; }
+.auth-rubric-list small { margin-top: 5px; color: #70818a; font-size: 10px; }
+.auth-definition { min-height: 410px; resize: vertical; font: 12px/1.65 "SFMono-Regular", Consolas, monospace; tab-size: 2; }
+.auth-editor-tools, .auth-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 19px; }
+.auth-editor-tools label { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 11px; color: #526f77; }
+.auth-editor-tools input { max-width: 270px; }
+.authenticated-shell .field-help code { font-size: 10px; }
+@media (max-width: 800px) { .auth-rubric-grid { grid-template-columns: 1fr; } .authenticated-shell .site-header { flex-wrap: wrap; } .auth-login { margin-top: 36px; } }

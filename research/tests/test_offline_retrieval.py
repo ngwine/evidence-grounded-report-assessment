@@ -130,6 +130,24 @@ def test_bm25_and_rrf_use_deterministic_chunk_id_tie_breaking():
     assert [candidate["chunk_id"] for candidate in fused["q"]] == ["a", "b"]
 
 
+def test_rrf_duplicate_within_one_method_counts_once_and_weights_are_explicit():
+    first = {"chunk_id": "a", "rank": 1, "source_spans": [{"page": 1}]}
+    duplicate = {"chunk_id": "a", "rank": 2, "source_spans": [{"page": 2}]}
+    other = {"chunk_id": "b", "rank": 1, "source_spans": [{"page": 3}]}
+    rankings = {"bm25": {"q": [duplicate, first]}, "dense": {"q": [other]}}
+    results = fuse_rrf(rankings, rrf_k=60, top_k=2, method_weights={"bm25": 2.0})["q"]
+    assert [item["chunk_id"] for item in results] == ["a", "b"]
+    assert results[0]["score"] == pytest.approx(2 / 61)
+    assert results[0]["rrf_ranks"] == {"bm25": 1}
+    assert results[0]["rrf_weights"] == {"bm25": 2.0}
+    assert results[0]["source_spans"] == [{"page": 1}]
+    reversed_rankings = {"dense": {"q": [other]}, "bm25": {"q": [first, duplicate]}}
+    assert fuse_rrf(reversed_rankings, rrf_k=60, top_k=2,
+                    method_weights={"bm25": 2.0}) == {"q": results}
+    with pytest.raises(ValueError, match="method weights"):
+        fuse_rrf(rankings, top_k=2, method_weights={"bm25": float("nan")})
+
+
 @pytest.mark.parametrize("group_by_document", [False, True])
 def test_numpy_dense_matches_reference_with_ties_zeroes_and_document_grouping(
     monkeypatch, group_by_document
@@ -439,6 +457,20 @@ def test_dataset_gate_rejects_unapproved_manifest(tmp_path):
             copied / "config.json",
             allow_test_encoder=True,
         )
+
+
+def test_runner_accepts_positive_rrf_weights_and_rejects_invalid_values(tmp_path):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    config_path = copied / "config.json"
+    config = read_json(config_path)
+    config["rrf"]["weights"] = {"bm25": 2.0, "dense": 0.5}
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    validate_inputs(copied / "dataset-manifest.json", config_path, allow_test_encoder=True)
+    config["rrf"]["weights"] = {"bm25": -1}
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    with pytest.raises(ValueError, match="rrf.weights"):
+        validate_inputs(copied / "dataset-manifest.json", config_path, allow_test_encoder=True)
 
 
 def test_dataset_gate_rejects_query_qrel_parent_mismatch(tmp_path):

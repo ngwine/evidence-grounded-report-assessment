@@ -166,6 +166,11 @@ def compile_rubric(rubric: Mapping[str, Any]) -> dict[str, Any]:
         field = f"rubric.criteria[{criterion_index}]"
         if not isinstance(criterion, Mapping):
             raise ValueError(f"{field} must be an object")
+        if "levels" in criterion:
+            raise ValueError(
+                f"{field}.levels is not supported by the authored-checklist compiler; "
+                "authored score levels require an explicit supported rule mapping"
+            )
         criterion_id = _identifier(
             criterion.get("criterion_id"), f"{field}.criterion_id"
         )

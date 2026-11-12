@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ import pymupdf
 from research.core_mvp.assessment import _rank_local, validate_assessment_config
 from research.core_mvp.documents import parse_document
 from research.core_mvp.runner import _hardware, _load_encoder, _load_reranker, _repository_state
+from research.governance import load_registry, validate_pack_manifest
 from research.offline_retrieval.common import read_json, sha256_file, write_json
 
 
@@ -54,17 +56,65 @@ def retrieved_pages(candidates):
     return pages
 
 
-def main():
+def validate_mmdocir_manifest(
+    manifest_path: Path,
+    *,
+    raw_dir: Path = RAW,
+    registry: dict | None = None,
+) -> dict:
+    """Bind approval to the exact files and selected PDFs this pilot reads."""
+
+    manifest_path = Path(manifest_path)
+    if manifest_path.parent.resolve() != raw_dir.resolve():
+        raise ValueError("MMDocIR manifest must be beside the raw files used by this run")
+    registry = registry if registry is not None else load_registry()
+    validated = validate_pack_manifest(
+        manifest_path,
+        "EVIDENCE_RETRIEVAL_EXPERIMENT",
+        registry=registry,
+    )
+    if validated["registry_id"] != "mmdocir":
+        raise ValueError("MMDocIR pilot requires an MMDocIR pack manifest")
+    manifest = read_json(manifest_path)
+    expected_paths = {
+        "annotations": "MMDocIR_annotations.jsonl",
+        "pdf_archive": "doc_pdfs.rar",
+    }
+    catalog = next(entry for entry in registry["datasets"] if entry["id"] == "mmdocir")
+    for key, filename in expected_paths.items():
+        record = manifest["files"].get(key)
+        if not isinstance(record, dict) or record.get("path") != filename:
+            raise ValueError(f"MMDocIR files.{key} must be {filename}")
+        if record.get("sha256") != catalog["source_sha256"][filename]:
+            raise ValueError(f"MMDocIR files.{key} checksum differs from the registry")
+    source_files = manifest.get("source", {}).get("files")
+    if not isinstance(source_files, list):
+        raise ValueError("MMDocIR source.files must list both raw inputs")
+    declared_source = {item["name"] for item in source_files}
+    if declared_source != set(expected_paths.values()):
+        raise ValueError("MMDocIR source must declare both exact input files")
+    split = manifest["split"]
+    if split.get("seed") != SEED or len(split.get("document_ids", [])) != 5:
+        raise ValueError("MMDocIR split must freeze five selected PDFs and the pilot seed")
+    return manifest
+
+
+def main(argv: list[str] | None = None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset-manifest", type=Path, required=True)
+    args = parser.parse_args(argv)
+    approved_manifest = validate_mmdocir_manifest(args.dataset_manifest)
+    approved_manifest_sha256 = sha256_file(args.dataset_manifest)
     started = time.perf_counter()
     annotation = RAW / "MMDocIR_annotations.jsonl"
     archive = RAW / "doc_pdfs.rar"
-    assert sha256_file(annotation) == "812d14b22d92389a1d9b288c0143b0ffc31fba6d114322e2e75cab2528833e09"
-    assert sha256_file(archive) == "360e0c7907f1c78012bbc9016623a0ec0d05cb3308ec6ded7c8b46e582b785df"
     if OUTPUT.exists():
         raise FileExistsError(f"Refusing to overwrite pilot: {OUTPUT}")
     rows = [json.loads(line) for line in annotation.read_text().splitlines()]
     eligible = [d for d in rows if any(q["type"] in TEXT_TYPES for q in d["questions"])]
     selected = sorted(eligible, key=lambda d: hashlib.sha256(f"{SEED}:{d['doc_name']}".encode()).hexdigest())[:5]
+    if [document["doc_name"] for document in selected] != approved_manifest["split"]["document_ids"]:
+        raise ValueError("Selected PDF set differs from the approved MMDocIR split")
     extracted = RAW / "pilot-p5"
     names = [d["doc_name"] for d in selected]
     if any(Path(name).name != name for name in names):
@@ -72,6 +122,7 @@ def main():
     if not all((extracted / "doc_pdfs" / name).is_file() for name in names):
         subprocess.run(["unar", "-q", "-D", "-o", str(extracted), str(archive), *["doc_pdfs/" + name for name in names]], check=True)
     config_path = ROOT / "research/configs/core-mvp-v0.json"
+    config_sha256 = sha256_file(config_path)
     config = read_json(config_path)
     hybrid = validate_assessment_config(config["pipeline2"])
     baseline = {**hybrid, "dense_enabled": False, "reranker_enabled": False}
@@ -110,10 +161,22 @@ def main():
     count=len(per_query)
     assert count>0 and all(len(v)==count for v in results.values())
     metrics={"dataset":"MMDocIR Evaluation Dataset","scope":"Text-only LOCAL retrieval; page coverage of the top-5 evidence chunks, not official page ranking Recall@K", "selection":{"seed":SEED,"eligible_documents":len(eligible),"selected_documents":documents,"rule":"first 5 eligible doc_names by SHA256(seed:doc_name); all text-only queries in those documents","accepted_question_types":sorted(TEXT_TYPES)},"query_count":count,"top_k_evidence_chunks":hybrid["top_k"],"methods":{name:{key:sum(r[key] for r in values)/count for key in values[0]} for name,values in results.items()},"per_query":per_query}
+    input_sha256 = {
+        "annotations": sha256_file(annotation),
+        "pdf_archive": sha256_file(archive),
+        "configuration": sha256_file(config_path),
+    }
+    if (
+        input_sha256["annotations"] != approved_manifest["files"]["annotations"]["sha256"]
+        or input_sha256["pdf_archive"] != approved_manifest["files"]["pdf_archive"]["sha256"]
+        or input_sha256["configuration"] != config_sha256
+        or sha256_file(args.dataset_manifest) != approved_manifest_sha256
+    ):
+        raise RuntimeError("Approved MMDocIR inputs changed during the experiment")
     OUTPUT.mkdir(parents=True)
     write_json(OUTPUT/"metrics.json",metrics)
     code_paths=[Path(__file__),ROOT/"research/core_mvp/assessment.py",ROOT/"research/core_mvp/documents.py",ROOT/"research/core_mvp/similarity.py",ROOT/"research/offline_retrieval/dense.py",ROOT/"services/backend/src/kltn_ai/integrations/parsing/pdf_parser.py",ROOT/"services/backend/src/kltn_ai/integrations/indexing/chunking.py"]
-    manifest={"dataset":"MMDocIR","source":"https://huggingface.co/datasets/MMDocIR/MMDocIR_Evaluation_Dataset","approval_evidence":"Dataset mapping row 6, workbook *52200229*4.xlsx: APPROVED, approver Yến","input_sha256":{"annotations":sha256_file(annotation),"pdf_archive":sha256_file(archive),"configuration":sha256_file(config_path)},"configuration":{"bm25":baseline,"hybrid":hybrid,"models":config["models"]},"model_diagnostics":reranker.metadata,"code_sha256":{p.relative_to(ROOT).as_posix():sha256_file(p) for p in code_paths},"git":_repository_state(),"hardware":_hardware(),"total_wall_seconds":time.perf_counter()-started,"metrics_sha256":sha256_file(OUTPUT/"metrics.json"),"interpretation":"Fixed small feasibility pilot; no model selection or superiority claim; no OCR/image/table/layout-bbox benchmark, rubric grading, or claim verification."}
+    manifest={"dataset":"MMDocIR","dataset_version":approved_manifest["dataset_version"],"source":"https://huggingface.co/datasets/MMDocIR/MMDocIR_Evaluation_Dataset","approval_evidence":approved_manifest["governance"]["approval_evidence"],"dataset_manifest_sha256":approved_manifest_sha256,"input_sha256":input_sha256,"configuration":{"bm25":baseline,"hybrid":hybrid,"models":config["models"]},"model_diagnostics":reranker.metadata,"code_sha256":{p.relative_to(ROOT).as_posix():sha256_file(p) for p in code_paths},"git":_repository_state(),"hardware":_hardware(),"total_wall_seconds":time.perf_counter()-started,"metrics_sha256":sha256_file(OUTPUT/"metrics.json"),"interpretation":"Fixed small feasibility pilot; no model selection or superiority claim; no OCR/image/table/layout-bbox benchmark, rubric grading, or claim verification."}
     write_json(OUTPUT/"run-manifest.json",manifest)
     print(json.dumps({"query_count":count,"methods":metrics['methods'],"seconds":manifest['total_wall_seconds']},indent=2))
 

@@ -19,6 +19,16 @@ class InputRejected(RuntimeError):
     """The uploaded bytes or approval state changed before processing."""
 
 
+def _log_event(job: dict[str, Any], event: str, *, error_code: str | None = None) -> None:
+    # Allowlisted IDs/codes only: no filenames, input excerpts or exception text.
+    record = {
+        "event": event, "run_id": job["run_id"], "job_id": job["job_id"],
+        "request_id": job.get("request_id"), "correlation_id": job.get("correlation_id"),
+        "error_code": error_code,
+    }
+    print(json.dumps(record, sort_keys=True), file=sys.stderr)
+
+
 def _input_path(directory: Path, filename: str) -> Path:
     if Path(filename).name != filename:
         raise InputRejected("Input filename is not a basename")
@@ -60,7 +70,8 @@ def _run_job(store: LocalStore, job: dict[str, Any]) -> None:
         pipeline="both",
     )
     os.chmod(directory / "output", 0o700)
-    for filename in ("mvp-summary.json", "similarity-report.json", "assessment-report.json", "run-manifest.json"):
+    for filename in ("mvp-summary.json", "similarity-report.json", "assessment-report.json",
+                     "citation-context.json", "run-manifest.json"):
         artifact = directory / "output" / filename
         if not artifact.is_file():
             raise RuntimeError("Core runner did not produce all required artifacts")
@@ -95,20 +106,29 @@ def process_one(store: LocalStore) -> bool:
     job["status"] = "RUNNING"
     job["started_at"] = datetime.now(timezone.utc).isoformat()
     store.write_job(job)
+    _log_event(job, "JOB_STARTED")
     try:
         _run_job(store, job)
     except InputRejected as exc:
         job["status"] = "FAILED"
         job["error"] = str(exc)
+        job["error_code"] = "INPUT_REJECTED"
     except Exception as exc:  # Worker boundary must not leave a RUNNING job forever.
-        print(f"Local run {job['run_id']} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         job["status"] = "FAILED"
         job["error"] = "Processing failed. Inspect the local worker log; no result was published."
+        job["error_code"] = "PROCESSING_FAILED"
+        if type(exc).__name__ == "ParserRejected" and str(exc) in {
+            "PARSER_INPUT_LIMIT", "PARSER_RESOURCE_LIMIT", "PARSER_OUTPUT_LIMIT",
+            "PARSER_WALL_TIMEOUT", "PARSER_REJECTED", "PARSER_INPUT_CHANGED",
+        }:
+            job["error_code"] = str(exc)
     else:
         job["status"] = "SUCCEEDED"
         job["error"] = None
+        job["error_code"] = None
     job["finished_at"] = datetime.now(timezone.utc).isoformat()
     store.write_job(job)
+    _log_event(job, "JOB_FINISHED", error_code=job["error_code"])
     return True
 
 

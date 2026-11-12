@@ -84,6 +84,11 @@ gán nhãn dựa trên điểm Dense/Cross-Encoder hay nhãn máy dự đoán.
    từng lớp, tỷ lệ đồng thuận, confusion matrix và precision/recall/F1 từng
    lớp; không gọi kết quả trên một report là kết quả tổng quát của khóa luận.
 
+Sau khi hai phiếu đã khóa, dùng
+[`gold_annotation`](../gold_annotation/README.md) để kiểm tra phiếu, đo agreement
+và xác nhận adjudication. Precision/recall/F1 của mô hình chỉ được tính sau
+khi gold và quyền dùng dữ liệu đã được chốt.
+
 ## Ranh giới sử dụng
 
 Các đoạn trích và phiếu có thể chứa văn bản sinh viên hoặc tài liệu có bản

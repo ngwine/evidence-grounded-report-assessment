@@ -13,7 +13,18 @@
     "anonymization": null,
     "retention": null,
     "approver": null,
-    "approved_at": null
+    "approved_at": null,
+    "approval_evidence": null,
+    "consent_or_authority": {
+      "status": "PENDING",
+      "evidence_ref": null
+    },
+    "pii_review": {
+      "status": "PENDING",
+      "reviewer": null,
+      "reviewed_at": null,
+      "evidence_ref": null
+    }
   },
   "annotation": {
     "label_set": ["MET", "UNMET", "CANNOT_ASSESS"],

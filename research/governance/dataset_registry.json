@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "source": "Quản lý KLTN - 52200229, 523H0087-4.xlsx / Dataset mapping",
+  "note": "Mapping decisions are not execution approval. Every derived pack needs its own approved, frozen manifest.",
+  "datasets": [
+    {
+      "id": "pan-pc-11",
+      "manifest_ids": ["pan-pc-11-source-retrieval-pilot"],
+      "pipeline": "P1",
+      "component": "source_retrieval",
+      "mapping": {"decision": "USE", "reviewer": "Yến", "approved_at": null, "evidence": "Dataset mapping!J4"},
+      "rights": {"workbook_status": "RIGHTS_REVIEW_REQUIRED", "basis": "Webis research-use statement; no published SPDX license", "redistribution": false, "evidence": "Dataset mapping!D4"},
+      "split": {"policy": "derived grouped by suspicious/source document; freeze TEST0 before tuning", "evidence": "Dataset mapping!F4"},
+      "source_sha256": {"pan-plagiarism-corpus-2011.part1.rar": "ec92d20d29afa7503e3521249ea11421fc6a8ecfc871e0c79764646092ab9c35", "pan-plagiarism-corpus-2011.part2.rar": "e65ed4be86da9c74ad17920a24502688f709cc2db02e26bfe38dfe542a45696a"},
+      "checksum_evidence": "Dataset mapping!G4; historical local verification on 2026-09-14",
+      "runtime_note": "Only the local DEV0 derived pack has a separate APPROVED manifest; DEV1 and TEST0 are PENDING. This row grants no blanket approval."
+    },
+    {
+      "id": "pan13",
+      "manifest_ids": ["pan13-span-retrieval-oracle-pilot"],
+      "pipeline": "P1",
+      "component": "text_alignment",
+      "mapping": {"decision": "REVIEW_REQUIRED", "reviewer": null, "approved_at": null, "evidence": "Dataset mapping!J5"},
+      "rights": {"workbook_status": "RIGHTS_REVIEW_REQUIRED", "basis": "Public Zenodo download without a declared license in the workbook", "redistribution": false, "evidence": "Dataset mapping!D5"},
+      "split": {"policy": "preserve official training/test partitions; no test tuning", "evidence": "Dataset mapping!F5"},
+      "source_sha256": {"pan13-text-alignment-test-and-training.zip": "82b48527058ee2610e77360ff0d38d28fa54abfa7fa50e34d84673065524d223"},
+      "checksum_evidence": "Dataset mapping!G5; historical local verification on 2026-09-08",
+      "runtime_note": "Converted training pilot remains PENDING pending rights approval."
+    },
+    {
+      "id": "mmdocir",
+      "manifest_ids": ["mmdocir-local-evidence-pilot"],
+      "pipeline": "P2",
+      "component": "long_document_evidence_retrieval",
+      "mapping": {"decision": "USE", "reviewer": "Yến", "approved_at": null, "evidence": "Dataset mapping!J6"},
+      "rights": {"workbook_status": "APPROVED", "basis": "Apache-2.0 according to the dataset README recorded in workbook", "redistribution": false, "evidence": "Dataset mapping!D6"},
+      "split": {"policy": "no official train/test split; record deterministic selection and keep selected evaluation set frozen", "evidence": "Dataset mapping!F6"},
+      "source_sha256": {"doc_pdfs.rar": "360e0c7907f1c78012bbc9016623a0ec0d05cb3308ec6ded7c8b46e582b785df", "MMDocIR_annotations.jsonl": "812d14b22d92389a1d9b288c0143b0ffc31fba6d114322e2e75cab2528833e09"},
+      "checksum_evidence": "Dataset mapping!G6; archive provider hash and historical local annotation hash",
+      "local_audit": {"date": "2026-10-22", "matched": ["doc_pdfs.rar", "MMDocIR_annotations.jsonl"], "mismatched": []},
+      "runtime_note": "Component retrieval only; an approved frozen pack manifest is required for each reproducible run."
+    },
+    {
+      "id": "hover",
+      "manifest_ids": ["hover-multi-hop-pilot"],
+      "pipeline": "P2",
+      "component": "multi_hop_verification",
+      "mapping": {"decision": "USE", "reviewer": "Yến", "approved_at": null, "evidence": "Dataset mapping!J7"},
+      "rights": {"workbook_status": "APPROVED", "basis": "MIT according to the repository LICENSE recorded in workbook", "redistribution": false, "evidence": "Dataset mapping!D7"},
+      "split": {"policy": "retain official train/dev/test; labeled dev for evaluation; test labels unavailable", "evidence": "Dataset mapping!F7,I7"},
+      "source_sha256": {"wiki_wo_links.db": "b188928e7cea71d6cc2f27a771ccf993ba8cff0f2df6708c3ce6a9a048298328", "hover_dev_release_v1.1.json": "67c14858f2d7fcdb96b6fe3d538ffcd6f76e3ba594aa2c0cd4359f601101e89d", "hover_train_release_v1.1.json": "1f1cd57abd616fa00c70bdc575ce77c16fc6cf1a6cffd5ff87c208030a336bb6", "hover_test_release_v1.1.json": "c58e7fc59b4962213a5a6d41d746384ee88a7645e36cb3a439969cf762c8ec24"},
+      "checksum_evidence": "Dataset mapping!G7; historical locally computed SHA256 values",
+      "local_audit": {"date": "2026-10-22", "matched": ["hover_dev_release_v1.1.json", "hover_train_release_v1.1.json", "hover_test_release_v1.1.json"], "mismatched": [{"file": "wiki_wo_links.checksum-mismatch.db", "actual_sha256": "c37ee397916ec0bffacfe8902db454a5cda88a7a188409217b2e15231fe5ee2f", "expected_file": "wiki_wo_links.db"}]},
+      "runtime_note": "The present local wiki DB is named wiki_wo_links.checksum-mismatch.db; reverify the complete source before an approved run."
+    },
+    {
+      "id": "harmogen-r",
+      "manifest_ids": ["harmogen-r-rubric-pilot"],
+      "pipeline": "P2",
+      "component": "rubric_grading_human_agreement",
+      "mapping": {"decision": "USE", "reviewer": "Yến", "approved_at": null, "evidence": "Dataset mapping!J8"},
+      "rights": {"workbook_status": "APPROVED", "basis": "CC BY 4.0 recorded in workbook", "redistribution": false, "evidence": "Dataset mapping!D8"},
+      "split": {"policy": "no official split; group by response/assignment before model selection and holdout evaluation", "evidence": "Dataset mapping!F8; group policy added by project"},
+      "source_sha256": {"harmogenr_dataset_v1.zip": "70c8354490e58b7e0da11a4b7f2cfae18b7070af063666585845f3c1761e2b5a"},
+      "checksum_evidence": "Dataset mapping!G8; historical local verification on 2026-09-14",
+      "local_audit": {"date": "2026-10-22", "matched": ["harmogenr_dataset_v1.zip"], "mismatched": []},
+      "runtime_note": "Component rubric agreement only; anonymous status must still be confirmed in each frozen pack."
+    },
+    {
+      "id": "in-domain-report-rubric",
+      "manifest_ids": ["in-domain-report-rubric-pilot"],
+      "pipeline": "P2",
+      "component": "end_to_end_report_assessment",
+      "mapping": {"decision": "PENDING", "reviewer": null, "approved_at": null, "evidence": "research/datasets/assessment/README.md"},
+      "rights": {"workbook_status": "NOT_REVIEWED", "basis": "Report-owner consent or documented institutional authority required", "redistribution": false, "evidence": "research/datasets/assessment/in-domain-report-rubric-pilot-v1/dataset-manifest.template.json"},
+      "split": {"policy": "group by report and source; prohibit the same source/report family across evaluation partitions", "evidence": "assessment manifest template"},
+      "source_sha256": {},
+      "checksum_evidence": "No frozen approved report files yet",
+      "runtime_note": "Consent or authority, PII review/anonymization, retention, approver/date, frozen checksums and group split are pending."
+    }
+  ]
+}

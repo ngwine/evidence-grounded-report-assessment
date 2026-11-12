@@ -369,6 +369,14 @@ def validate_inputs(
     rrf_k = rrf.get("k")
     if isinstance(rrf_k, bool) or not isinstance(rrf_k, int) or rrf_k <= 0:
         raise ValueError("rrf.k must be a positive integer")
+    rrf_weights = rrf.get("weights", {})
+    allowed_rrf_sources = {"bm25", "dense", "fixed_window_bm25", "structure_dense"}
+    if (not isinstance(rrf_weights, dict)
+            or not set(rrf_weights) <= allowed_rrf_sources
+            or any(isinstance(weight, bool) or not isinstance(weight, (int, float))
+                   or not math.isfinite(weight) or weight <= 0
+                   for weight in rrf_weights.values())):
+        raise ValueError("rrf.weights must map supported methods to finite positive weights")
     overlap_threshold = metrics.get("gold_overlap_threshold")
     if (
         isinstance(overlap_threshold, bool)
@@ -955,6 +963,8 @@ def run_experiment(
             rrf_k=int(config["rrf"]["k"]),
             top_k=depth,
             key_field=rrf_key,
+            method_weights={name: weight for name, weight in config["rrf"].get("weights", {}).items()
+                            if name in {"bm25", "dense"}},
         )
         stage_timings["structure_hybrid_rrf"] = time.perf_counter() - stage_start
 
@@ -976,6 +986,8 @@ def run_experiment(
             rrf_k=int(config["rrf"]["k"]),
             top_k=candidate_depth,
             key_field="document_id",
+            method_weights={name: weight for name, weight in config["rrf"].get("weights", {}).items()
+                            if name in {"fixed_window_bm25", "structure_dense"}},
         )
         if "multiview_hybrid_rrf" in selected_methods:
             rankings["multiview_hybrid_rrf"] = {

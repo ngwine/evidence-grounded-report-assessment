@@ -26,6 +26,13 @@ Tài liệu này trả lời những câu hỏi liên quan đến Rubric và ch�
 Rubric template là giao diện nhập liệu dành cho GV khi tạo rubric đánh giá (Tầng 1). GV khai báo tiêu chí, trọng số, mức đánh giá và các checklist nguyên tử kèm yêu cầu bằng chứng. Compiler hiện tại kiểm tra, chuẩn hóa và gán ID ổn định cho dữ liệu đã khai báo; **chưa tự động phân tách tiêu chí tự do thành checklist bằng LLM**. Automatic rubric decomposition là hướng nghiên cứu sau, không thuộc feasibility baseline đang chạy.
 Rubric gồm 4 thành phần: **tiêu chí, trọng số, mức độ đánh giá, thang điểm đánh giá.**
 
+Trạng thái triển khai ngày 22/10: bảng mức độ dưới đây là thiết kế của người
+soạn rubric. Executable compiler/scorer hiện chạy proportional checklist rules
+ở Mục 6, chưa thực thi authored `levels`/khoảng điểm. Compiler từ chối trường
+`criteria[].levels` để không âm thầm bỏ qua thang điểm của giảng viên. Schema
+rubric trong OpenAPI còn phải thống nhất với format thực thi trước khi có
+publish API; chưa đưa bảng mức độ này vào chấm tự động như một rule đã hỗ trợ.
+
 | Tiêu chí          | Trọng số | Mức độ 1 | Mức độ 2 | ... | Mức độ 6 |
 | ------------------- | :--------: | :---------: | :---------: | :-: | :---------: |
 | TC 1: ............. |    ...    |     ...     |     ...     | ... |     ...     |
