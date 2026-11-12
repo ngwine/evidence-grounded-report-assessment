@@ -22,5 +22,11 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  /* App.tsx/api.ts/types.ts/styles.css: demo "two-pipeline offline MVP"
+   * rieng cua nhanh backend (khong lien quan UI nhieu vai tro hien tai,
+   * khong duoc main.tsx/app//lib//features/ import toi) -- loai khoi
+   * build de tranh loi erasableSyntaxOnly tu code demo do, KHONG xoa file
+   * (van con tren disk/Git de tham khao neu can). */
+  "exclude": ["src/App.tsx", "src/api.ts", "src/types.ts"]
 }
