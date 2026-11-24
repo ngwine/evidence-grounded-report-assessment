@@ -371,8 +371,10 @@ def _rank_bm25_over_shards(
             )
         )
 
-    # kept[query_id] = [(document_rank, score, item)]  (tối đa top_k)
-    kept: dict[str, list[tuple[int, float, dict[str, Any]]]] = {
+    # kept[query_id] = [(document_rank, score, document_id, chunk_id, source_spans)]
+    # (tối đa top_k). Chỉ giữ các trường cần xuất, không giữ cả dict chunk
+    # (kèm text) để khỏi giữ hàng trăm nghìn cửa sổ trong RAM.
+    kept: dict[str, list[tuple[int, float, str, str, Any]]] = {
         query_id: [] for ids, _ in batches for query_id in ids
     }
 
@@ -446,7 +448,13 @@ def _rank_bm25_over_shards(
                     members = per_doc_np[local_doc]
                     item = items[int(members[int(np.argmax(dense[members]))])]
                     bucket.append(
-                        (doc_rank[shard_docs[local_doc]], float(best[local_doc]), item)
+                        (
+                            doc_rank[shard_docs[local_doc]],
+                            float(best[local_doc]),
+                            item["document_id"],
+                            item["chunk_id"],
+                            item.get("source_spans", []),
+                        )
                     )
                 bucket.sort(key=lambda entry: (-entry[1], entry[0]))
                 del bucket[top_k:]
@@ -457,13 +465,15 @@ def _rank_bm25_over_shards(
         for query_id in ids:
             results[query_id] = [
                 {
-                    "document_id": item["document_id"],
-                    "supporting_chunk_id": item["chunk_id"],
+                    "document_id": document_id,
+                    "supporting_chunk_id": chunk_id,
                     "score": score,
                     "rank": rank,
-                    "source_spans": item.get("source_spans", []),
+                    "source_spans": spans,
                 }
-                for rank, (_, score, item) in enumerate(kept[query_id], 1)
+                for rank, (_, score, document_id, chunk_id, spans) in enumerate(
+                    kept[query_id], 1
+                )
             ]
     return results
 
