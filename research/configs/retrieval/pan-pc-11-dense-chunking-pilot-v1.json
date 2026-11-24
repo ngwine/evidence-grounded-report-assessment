@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "experiment_id": "pan-pc-11-dense-chunking-pilot-v1",
+  "protocol": {
+    "dataset_role": "CORE_SOURCE_RETRIEVAL_DIAGNOSTIC",
+    "query_unit": "annotated_suspicious_span_window",
+    "target_scope": "source_document",
+    "corpus_scope": "DETERMINISTIC_RESOURCE_BOUNDED_PILOT",
+    "comparison": "structure_dense_vs_fixed_window_dense_matched_chunking_with_bm25",
+    "full_corpus_result": false,
+    "official_pan_result": false
+  },
+  "seed": 20260923,
+  "methods": [
+    "fixed_window_dense",
+    "structure_dense"
+  ],
+  "candidate_retrieval_depth": 200,
+  "retrieval_depth": 100,
+  "metric_cutoffs": [
+    1,
+    5,
+    10,
+    20,
+    100
+  ],
+  "fixed_window": {
+    "size_tokens": 256,
+    "stride_tokens": 128
+  },
+  "bm25": {
+    "k1": 1.2,
+    "b": 0.75
+  },
+  "dense": {
+    "backend": "sentence_transformers",
+    "model": "intfloat/multilingual-e5-small",
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "revision_source": "https://huggingface.co/intfloat/multilingual-e5-small/commit/614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "device": "cuda",
+    "batch_size": 128,
+    "query_prefix": "query: ",
+    "document_prefix": "passage: ",
+    "dtype": "float16"
+  },
+  "rrf": {
+    "k": 60
+  },
+  "metrics": {
+    "target_scope": "document",
+    "gold_overlap_threshold": 0.5
+  }
+}

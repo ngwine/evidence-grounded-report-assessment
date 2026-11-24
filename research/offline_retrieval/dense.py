@@ -27,6 +27,48 @@ class Encoder(Protocol):
         """Encode texts into fixed-width numeric vectors."""
 
 
+class MultiDeviceEncoder:
+    """Encode one batch of texts on several encoders (one per GPU) in parallel.
+
+    Texts are dealt out round-robin so every device gets a similar length mix,
+    then re-assembled in the original order. Each underlying encoder is a full,
+    independent copy of the same locked model.
+    """
+
+    def __init__(self, encoders: Sequence[Any]) -> None:
+        if len(encoders) < 2:
+            raise ValueError("MultiDeviceEncoder needs at least two encoders")
+        self._encoders = list(encoders)
+        first = dict(getattr(self._encoders[0], "metadata", {}))
+        first["devices"] = [
+            getattr(encoder, "metadata", {}).get("device") for encoder in self._encoders
+        ]
+        first.pop("device", None)
+        self.metadata = first
+
+    def set_mode(self, mode: str) -> None:
+        for encoder in self._encoders:
+            if hasattr(encoder, "set_mode"):
+                encoder.set_mode(mode)
+
+    def encode(self, texts: Sequence[str]) -> Sequence[Sequence[float]]:
+        from concurrent.futures import ThreadPoolExecutor
+
+        count = len(self._encoders)
+        if len(texts) < count:
+            return self._encoders[0].encode(texts)
+        shards = [list(texts[offset::count]) for offset in range(count)]
+        with ThreadPoolExecutor(max_workers=count) as pool:
+            parts = list(pool.map(lambda pair: pair[0].encode(pair[1]), zip(self._encoders, shards)))
+        merged: list[Any] = [None] * len(texts)
+        for offset, part in enumerate(parts):
+            if len(part) != len(shards[offset]):
+                raise ValueError("Dense encoder returned the wrong number of vectors")
+            for position, vector in enumerate(part):
+                merged[offset + position * count] = vector
+        return merged
+
+
 def local_model_revision(model_path: str | Path) -> str:
     """Return the immutable directory checksum used in Dense manifests."""
 
@@ -56,7 +98,12 @@ class SentenceTransformerEncoder:
         batch_size: int = 16,
         query_prefix: str = "",
         document_prefix: str = "",
+        dtype: str = "float32",
     ) -> None:
+        if dtype not in {"float32", "float16"}:
+            raise ValueError("Dense dtype must be float32 or float16")
+        if dtype == "float16" and not str(device).startswith("cuda"):
+            raise ValueError("Dense dtype float16 requires a CUDA device")
         if not model or not revision or revision.startswith("SET_"):
             raise ValueError("Dense model and exact revision/checksum must be locked")
         try:
@@ -88,6 +135,8 @@ class SentenceTransformerEncoder:
                 )
             kwargs["revision"] = revision
         self._model = SentenceTransformer(model, **kwargs)
+        if dtype == "float16":
+            self._model.half()
         self._batch_size = batch_size
         self._query_prefix = query_prefix
         self._document_prefix = document_prefix
@@ -98,6 +147,7 @@ class SentenceTransformerEncoder:
             "revision": resolved_revision,
             "device": device,
             "batch_size": batch_size,
+            "dtype": dtype,
             "local_files_only": True,
             "query_prefix": query_prefix,
             "document_prefix": document_prefix,

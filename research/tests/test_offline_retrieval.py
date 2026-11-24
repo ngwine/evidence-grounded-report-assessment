@@ -821,6 +821,76 @@ def test_bm25_only_run_does_not_load_or_execute_dense_model(tmp_path, monkeypatc
     }
 
 
+def test_multi_device_encoder_preserves_order_and_matches_single_encoder():
+    from research.offline_retrieval.dense import MultiDeviceEncoder
+
+    class TaggedEncoder:
+        metadata = {"backend": "injected_test", "device": "cpu"}
+
+        def __init__(self, tag):
+            self.tag = tag
+            self.seen = []
+            self.mode = None
+
+        def set_mode(self, mode):
+            self.mode = mode
+
+        def encode(self, texts):
+            self.seen.append(list(texts))
+            return [[float(len(text)), float(sum(map(ord, text)) % 97)] for text in texts]
+
+    texts = [f"text-{i}-" + "x" * (i % 7) for i in range(11)]
+    single = TaggedEncoder("single").encode(texts)
+    workers = [TaggedEncoder("a"), TaggedEncoder("b"), TaggedEncoder("c")]
+    multi = MultiDeviceEncoder(workers)
+    multi.set_mode("document")
+    assert multi.encode(texts) == single
+    assert all(worker.mode == "document" for worker in workers)
+    assert sum(len(worker.seen[0]) for worker in workers) == len(texts)
+    assert multi.encode(texts[:2]) == single[:2]
+    with pytest.raises(ValueError):
+        MultiDeviceEncoder([TaggedEncoder("only")])
+
+
+def test_fixed_window_dense_encodes_windows_not_structure_chunks(tmp_path):
+    copied = tmp_path / "fixture"
+    shutil.copytree(FIXTURE_DIR, copied)
+    config_path = copied / "config.json"
+    config = read_json(config_path)
+    config["methods"] = ["fixed_window_dense"]
+    config_path.write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
+
+    encoded_texts: list[str] = []
+
+    class RecordingEncoder(KeywordFixtureEncoder):
+        def encode(self, texts):
+            if self.mode == "document":
+                encoded_texts.extend(texts)
+            return super().encode(texts)
+
+    result = run_experiment(
+        copied / "dataset-manifest.json",
+        config_path,
+        tmp_path / "run",
+        encoder=RecordingEncoder(),
+        allow_test_encoder=True,
+    )
+
+    metrics = read_json(result["metrics_path"])
+    assert set(metrics) == {"fixed_window_dense"}
+    loaded = validate_inputs(
+        copied / "dataset-manifest.json", config_path, allow_test_encoder=True
+    )
+    windows = build_fixed_windows(
+        loaded["documents"],
+        size_tokens=config["fixed_window"]["size_tokens"],
+        stride_tokens=config["fixed_window"]["stride_tokens"],
+    )
+    assert encoded_texts == [window["text"] for window in windows]
+    timings = result["run_manifest"]["timing_seconds"]
+    assert set(timings) == {"fixed_window_build", "fixed_window_dense", "evaluation"}
+
+
 def test_full_runner_writes_reproducibility_manifest_and_stable_artifacts(tmp_path):
     encoder = KeywordFixtureEncoder()
     first_dir = tmp_path / "run-one"

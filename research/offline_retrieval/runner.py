@@ -25,7 +25,7 @@ from .common import (
     write_json,
     write_jsonl,
 )
-from .dense import Encoder, SentenceTransformerEncoder, rank_dense
+from .dense import Encoder, MultiDeviceEncoder, SentenceTransformerEncoder, rank_dense
 from .cross_encoder import (
     MemoizedPairScorer,
     PairScorer,
@@ -45,6 +45,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_METHODS = {
     "dense_cross_encoder",
     "fixed_window_bm25",
+    "fixed_window_dense",
     "multiview_hybrid_cross_encoder",
     "multiview_hybrid_rrf",
     "structure_bm25",
@@ -622,6 +623,30 @@ def _make_encoder(config: dict[str, Any], config_path: Path) -> Encoder:
             configured_path = candidate
     if configured_path.exists():
         model = str(configured_path)
+    devices = dense.get("devices")
+    if devices is not None:
+        if (
+            not isinstance(devices, list)
+            or len(devices) < 2
+            or not all(isinstance(item, str) and item for item in devices)
+        ):
+            raise ValueError("dense.devices must be a list of at least two device names")
+        encoder = MultiDeviceEncoder(
+            [
+                SentenceTransformerEncoder(
+                    model=model,
+                    revision=dense["revision"],
+                    device=device,
+                    batch_size=int(dense.get("batch_size", 16)),
+                    query_prefix=dense.get("query_prefix", ""),
+                    document_prefix=dense.get("document_prefix", ""),
+                    dtype=dense.get("dtype", "float32"),
+                )
+                for device in devices
+            ]
+        )
+        encoder.metadata["model"] = dense["model"]
+        return encoder
     encoder = SentenceTransformerEncoder(
         model=model,
         revision=dense["revision"],
@@ -629,6 +654,7 @@ def _make_encoder(config: dict[str, Any], config_path: Path) -> Encoder:
         batch_size=int(dense.get("batch_size", 16)),
         query_prefix=dense.get("query_prefix", ""),
         document_prefix=dense.get("document_prefix", ""),
+        dtype=dense.get("dtype", "float32"),
     )
     encoder.metadata["model"] = dense["model"]
     return encoder
@@ -876,9 +902,10 @@ def run_experiment(
         }
         & selected_methods
     )
+    needs_fixed_dense = "fixed_window_dense" in selected_methods
     fixed_windows: list[dict[str, Any]] = []
     fixed_bm25: dict[str, list[dict[str, Any]]] = {}
-    if needs_fixed_bm25:
+    if needs_fixed_bm25 or needs_fixed_dense:
         stage_start = time.perf_counter()
         fixed_windows = build_fixed_windows(
             loaded["documents"],
@@ -886,6 +913,7 @@ def run_experiment(
             stride_tokens=int(config["fixed_window"]["stride_tokens"]),
         )
         stage_timings["fixed_window_build"] = time.perf_counter() - stage_start
+    if needs_fixed_bm25:
         stage_start = time.perf_counter()
         fixed_bm25 = rank_bm25(
             fixed_windows,
@@ -951,6 +979,23 @@ def run_experiment(
                 query_id: candidates[:depth]
                 for query_id, candidates in structure_dense.items()
             }
+
+    if needs_fixed_dense:
+        if encoder is None:
+            encoder = _make_encoder(config, loaded["config_path"])
+        stage_start = time.perf_counter()
+        fixed_dense = rank_dense(
+            fixed_windows,
+            loaded["queries"],
+            encoder=encoder,
+            top_k=candidate_depth,
+            group_by_document=target_scope == "document",
+        )
+        stage_timings["fixed_window_dense"] = time.perf_counter() - stage_start
+        rankings["fixed_window_dense"] = {
+            query_id: candidates[:depth]
+            for query_id, candidates in fixed_dense.items()
+        }
 
     if "structure_hybrid_rrf" in selected_methods:
         stage_start = time.perf_counter()
