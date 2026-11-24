@@ -367,6 +367,13 @@ def validate_inputs(
         raise ValueError("bm25.k1 must be positive")
     if isinstance(b, bool) or not isinstance(b, (int, float)) or not 0 <= b <= 1:
         raise ValueError("bm25.b must be in [0, 1]")
+    shard_documents = bm25.get("shard_documents")
+    if shard_documents is not None and (
+        isinstance(shard_documents, bool)
+        or not isinstance(shard_documents, int)
+        or shard_documents <= 0
+    ):
+        raise ValueError("bm25.shard_documents must be a positive integer")
     rrf_k = rrf.get("k")
     if isinstance(rrf_k, bool) or not isinstance(rrf_k, int) or rrf_k <= 0:
         raise ValueError("rrf.k must be a positive integer")
@@ -922,6 +929,7 @@ def run_experiment(
             k1=float(config["bm25"]["k1"]),
             b=float(config["bm25"]["b"]),
             group_by_document=target_scope == "document",
+            shard_documents=config["bm25"].get("shard_documents"),
         )
         if "fixed_window_bm25" in selected_methods:
             rankings["fixed_window_bm25"] = {
@@ -943,6 +951,7 @@ def run_experiment(
             k1=float(config["bm25"]["k1"]),
             b=float(config["bm25"]["b"]),
             group_by_document=target_scope == "document",
+            shard_documents=config["bm25"].get("shard_documents"),
         )
         stage_timings["structure_bm25"] = time.perf_counter() - stage_start
         if "structure_bm25" in selected_methods:

@@ -1027,6 +1027,34 @@ def _chunk_spans(text: str, *, max_chars: int) -> list[tuple[int, int]]:
     return chunks
 
 
+def _check_outputs(output_dir: Path, *, overwrite: bool) -> dict[str, Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    destinations = {name: output_dir / filename for name, filename in OUTPUT_NAMES.items()}
+    collisions = sorted(str(path.name) for path in destinations.values() if path.exists())
+    symlinks = sorted(str(path.name) for path in destinations.values() if path.is_symlink())
+    if symlinks:
+        raise ValueError(
+            "Refusing to write generated output through symlinks: " + ", ".join(symlinks)
+        )
+    if collisions and not overwrite:
+        raise FileExistsError(
+            "Refusing to overwrite existing pilot files: " + ", ".join(collisions)
+        )
+    return destinations
+
+
+def _stream_jsonl(dest: Path, records: Iterable[dict[str, Any]], *, overwrite: bool) -> str:
+    """Ghi từng dòng và trả về sha256 của toàn file (cùng kết quả _render_jsonl)."""
+
+    digest = hashlib.sha256()
+    with dest.open("wb" if overwrite else "xb") as stream:
+        for record in records:
+            line = f"{_canonical_json(record)}\n".encode("utf-8")
+            digest.update(line)
+            stream.write(line)
+    return digest.hexdigest()
+
+
 def _write_outputs(
     output_dir: Path, rendered: dict[str, bytes], *, overwrite: bool
 ) -> None:
@@ -1138,12 +1166,16 @@ def convert_pan_pilot(
         excluded_source_references=exclusions.candidate_source_references,
     )
     archive_records = _archive_provenance(dataset_key, source_archives)
-    text_cache: dict[Path, str] = {}
+    last_read: list[tuple[Path, str]] = []
 
     def text_for(path: Path) -> str:
-        if path not in text_cache:
-            text_cache[path] = _read_utf8_exact(path)
-        return text_cache[path]
+        # Chỉ giữ văn bản đọc gần nhất (annotation được duyệt theo thứ tự đường
+        # dẫn tài liệu nghi vấn nên hầu như không phải đọc lại).
+        if last_read and last_read[0][0] == path:
+            return last_read[0][1]
+        text = _read_utf8_exact(path)
+        last_read[:] = [(path, text)]
+        return text
 
     documents: list[dict[str, Any]] = []
     document_by_path: dict[Path, dict[str, Any]] = {}
@@ -1167,45 +1199,56 @@ def convert_pan_pilot(
         document_by_path[source_path] = document
     documents.sort(key=lambda record: record["document_id"])
 
-    chunks: list[dict[str, Any]] = []
+    chunk_rows: list[tuple[str, str, str, int, int, int]] = []
     for document in documents:
         for order, (start, end) in enumerate(
             _chunk_spans(document["text"], max_chars=max_chunk_chars)
         ):
             chunk_text = document["text"][start:end]
-            chunks.append(
-                {
-                    "chunk_id": _stable_id(
+            chunk_rows.append(
+                (
+                    _stable_id(
                         "chunk",
                         document["document_id"],
                         start,
                         end,
                         _sha256_text(chunk_text),
                     ),
-                    "document_id": document["document_id"],
-                    "document_version": document["version"],
-                    "order": order,
-                    "text": chunk_text,
-                    "source_spans": [
-                        {
-                            "document_id": document["document_id"],
-                            "raw_start": start,
-                            "raw_end": end,
-                        }
-                    ],
-                    "chunking": {
-                        "strategy": "paragraph_aware_v1",
-                        "max_chars": max_chunk_chars,
-                    },
-                }
+                    document["document_id"],
+                    document["version"],
+                    order,
+                    start,
+                    end,
+                )
             )
-    chunks.sort(key=lambda record: record["chunk_id"])
+    chunk_rows.sort(key=lambda row: row[0])
+
+    def iter_chunks():
+        text_by_id = {d["document_id"]: d["text"] for d in documents}
+        for chunk_id, document_id, version, order, start, end in chunk_rows:
+            yield {
+                "chunk_id": chunk_id,
+                "document_id": document_id,
+                "document_version": version,
+                "order": order,
+                "text": text_by_id[document_id][start:end],
+                "source_spans": [
+                    {"document_id": document_id, "raw_start": start, "raw_end": end}
+                ],
+                "chunking": {
+                    "strategy": "paragraph_aware_v1",
+                    "max_chars": max_chunk_chars,
+                },
+            }
 
     queries: list[dict[str, Any]] = []
     qrels: list[dict[str, Any]] = []
-    for annotation in annotations:
+    for annotation in sorted(
+        annotations,
+        key=lambda a: (a.suspicious_path.as_posix(), a.annotation_path, a.feature_index),
+    ):
         suspicious_text = text_for(annotation.suspicious_path)
-        source_text = text_for(annotation.source_path)
+        source_text = document_by_path[annotation.source_path]["text"]
         suspicious_start, suspicious_end = _checked_span(
             suspicious_text,
             annotation.suspicious_start,
@@ -1309,12 +1352,17 @@ def convert_pan_pilot(
     queries.sort(key=lambda record: record["query_id"])
     qrels.sort(key=lambda record: record["qrel_id"])
 
-    rendered = {
-        "documents": _render_jsonl(documents),
-        "chunks": _render_jsonl(chunks),
-        "queries": _render_jsonl(queries),
-        "qrels": _render_jsonl(qrels),
-    }
+    resolved_output = Path(output_dir).resolve()
+    destinations = _check_outputs(resolved_output, overwrite=overwrite)
+    file_sha: dict[str, str] = {}
+    for name, records in (
+        ("documents", documents),
+        ("chunks", iter_chunks()),
+        ("queries", queries),
+        ("qrels", qrels),
+    ):
+        file_sha[name] = _stream_jsonl(destinations[name], records, overwrite=overwrite)
+    rendered: dict[str, bytes] = {}
     selected_annotation_ids = sorted(
         _annotation_id(profile["dataset_id"], annotation) for annotation in annotations
     )
@@ -1441,12 +1489,12 @@ def convert_pan_pilot(
         "files": {
             name: {
                 "path": OUTPUT_NAMES[name],
-                "sha256": _sha256_bytes(rendered[name]),
+                "sha256": file_sha[name],
                 "records": len(records),
             }
             for name, records in (
                 ("documents", documents),
-                ("chunks", chunks),
+                ("chunks", chunk_rows),
                 ("queries", queries),
                 ("qrels", qrels),
             )
@@ -1454,13 +1502,13 @@ def convert_pan_pilot(
     }
     rendered["manifest"] = _render_json(manifest)
 
-    resolved_output = Path(output_dir).resolve()
-    _write_outputs(resolved_output, rendered, overwrite=overwrite)
+    with destinations["manifest"].open("wb" if overwrite else "xb") as stream:
+        stream.write(rendered["manifest"])
     return ConversionResult(
         output_dir=resolved_output,
         manifest_path=resolved_output / OUTPUT_NAMES["manifest"],
         document_count=len(documents),
-        chunk_count=len(chunks),
+        chunk_count=len(chunk_rows),
         query_count=len(queries),
         qrel_count=len(qrels),
     )

@@ -115,10 +115,21 @@ def rank_bm25(
     b: float = 0.75,
     group_by_document: bool = False,
     query_batch_size: int = 32,
+    shard_documents: int | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     if not group_by_document:
         return rank_bm25_reference(
             corpus, queries, top_k=top_k, k1=k1, b=b, group_by_document=False
+        )
+    if shard_documents is not None:
+        return rank_bm25_sharded(
+            corpus,
+            queries,
+            top_k=top_k,
+            k1=k1,
+            b=b,
+            query_batch_size=query_batch_size,
+            shard_documents=shard_documents,
         )
     import numpy as np
     from array import array
@@ -254,4 +265,221 @@ def rank_bm25(
                     }
                 )
             results[query_id] = ranked
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Bản chạy theo khối tài liệu (tiết kiệm RAM cho pool lớn).
+# Lượt 1: duyệt toàn bộ chunk, chỉ lấy thống kê toàn cục (N, độ dài trung bình,
+# df, từ vựng) nên idf và avgdl giống hệt bản không chia khối.
+# Lượt 2: mỗi lần dựng ma trận BM25 cho một nhóm `shard_documents` tài liệu,
+# chấm mọi truy vấn, giữ top_k tài liệu của nhóm rồi gộp. Tài liệu của các nhóm
+# không giao nhau và điểm một chunk chỉ phụ thuộc thống kê toàn cục, nên top_k
+# sau khi gộp bằng top_k của bản gốc (phá hoà: (-điểm, document_id); trong một
+# tài liệu lấy chunk_id nhỏ nhất).
+# `corpus` phải duyệt lại được (list/tuple).
+# ---------------------------------------------------------------------------
+def rank_bm25_sharded(
+    corpus: Iterable[dict[str, Any]],
+    queries: Iterable[dict[str, Any]],
+    *,
+    top_k: int,
+    k1: float = 1.2,
+    b: float = 0.75,
+    query_batch_size: int = 32,
+    shard_documents: int = 500,
+) -> dict[str, list[dict[str, Any]]]:
+    import numpy as np
+    from array import array
+    from scipy import sparse
+
+    if top_k <= 0:
+        raise ValueError("top_k must be positive")
+    if k1 <= 0 or not 0 <= b <= 1:
+        raise ValueError("BM25 requires k1 > 0 and b in [0, 1]")
+    if (
+        isinstance(shard_documents, bool)
+        or not isinstance(shard_documents, int)
+        or shard_documents <= 0
+    ):
+        raise ValueError("shard_documents must be a positive integer")
+    if not isinstance(corpus, (list, tuple)):
+        corpus = list(corpus)
+    queries = list(queries)
+    if not corpus:
+        return {str(query["query_id"]): [] for query in queries}
+
+    # ---- Lượt 1: thống kê toàn cục -----------------------------------
+    vocab: dict[str, int] = {}
+    df_arr = array("q")
+    seen_ids: set[str] = set()
+    document_ids: set[str] = set()
+    total_length = 0
+    for item in corpus:
+        chunk_id = item.get("chunk_id")
+        text = item.get("text")
+        if not isinstance(chunk_id, str) or not chunk_id:
+            raise ValueError("Every corpus item requires a non-empty chunk_id")
+        if chunk_id in seen_ids:
+            raise ValueError(f"Duplicate chunk_id: {chunk_id}")
+        seen_ids.add(chunk_id)
+        if not isinstance(text, str):
+            raise ValueError(f"Corpus item {chunk_id} requires string text")
+        document_id = item.get("document_id")
+        if not isinstance(document_id, str) or not document_id:
+            raise ValueError("Every retrieval candidate requires document_id")
+        document_ids.add(document_id)
+        tokens = tokenize(text)
+        total_length += len(tokens)
+        for term in set(tokens):
+            term_index = vocab.get(term)
+            if term_index is None:
+                term_index = vocab[term] = len(df_arr)
+                df_arr.append(0)
+            df_arr[term_index] += 1
+    n_items = len(seen_ids)
+    del seen_ids
+    n_terms = len(vocab)
+    average_length = total_length / n_items or 1.0
+    df = np.frombuffer(df_arr, dtype=np.int64).astype(np.float64)
+    idf = np.log(1 + (n_items - df + 0.5) / (df + 0.5))
+    del df
+
+    doc_ids = sorted(document_ids)
+    del document_ids
+    doc_rank = {d: i for i, d in enumerate(doc_ids)}
+    n_shards = (len(doc_ids) + shard_documents - 1) // shard_documents
+
+    # ---- Ma trận truy vấn, dùng chung cho mọi khối ------------------
+    batches = []
+    seen_query_ids: set[str] = set()
+    for start in range(0, len(queries), query_batch_size):
+        rows, cols, vals, batch_ids = [], [], [], []
+        for row, query in enumerate(queries[start : start + query_batch_size]):
+            query_id = query.get("query_id")
+            query_text = query.get("text")
+            if not isinstance(query_id, str) or not query_id:
+                raise ValueError("Every query requires a non-empty query_id")
+            if query_id in seen_query_ids:
+                raise ValueError(f"Duplicate query_id: {query_id}")
+            seen_query_ids.add(query_id)
+            if not isinstance(query_text, str):
+                raise ValueError(f"Query {query_id} requires string text")
+            batch_ids.append(query_id)
+            for term, query_frequency in Counter(tokenize(query_text)).items():
+                term_index = vocab.get(term)
+                if term_index is not None:
+                    rows.append(row)
+                    cols.append(term_index)
+                    vals.append(float(query_frequency))
+        batches.append(
+            (
+                batch_ids,
+                sparse.csr_matrix(
+                    (vals, (rows, cols)), shape=(len(batch_ids), n_terms)
+                ),
+            )
+        )
+
+    # kept[query_id] = [(document_rank, score, item)]  (tối đa top_k)
+    kept: dict[str, list[tuple[int, float, dict[str, Any]]]] = {
+        query_id: [] for ids, _ in batches for query_id in ids
+    }
+
+    # ---- Lượt 2: từng khối tài liệu ----------------------------------
+    members_by_shard: list[list[dict[str, Any]]] = [[] for _ in range(n_shards)]
+    for item in corpus:
+        members_by_shard[doc_rank[item["document_id"]] // shard_documents].append(item)
+
+    for shard_index in range(n_shards):
+        items = members_by_shard[shard_index]
+        members_by_shard[shard_index] = []  # nhả tham chiếu sau khi dùng
+        if not items:
+            continue
+        shard_n = len(items)
+        indptr = array("q", [0])
+        indices = array("i")
+        term_freqs = array("d")
+        lengths = array("d")
+        for item in items:
+            tokens = tokenize(item["text"])
+            lengths.append(len(tokens))
+            for term, frequency in Counter(tokens).items():
+                indices.append(vocab[term])
+                term_freqs.append(frequency)
+            indptr.append(len(indices))
+        indptr_np = np.frombuffer(indptr, dtype=np.int64)
+        indices_np = np.frombuffer(indices, dtype=np.int32)
+        tf = np.frombuffer(term_freqs, dtype=np.float64)
+        lengths_np = np.frombuffer(lengths, dtype=np.float64)
+        row_lengths = np.repeat(lengths_np, np.diff(indptr_np))
+        weights = idf[indices_np] * (
+            tf * (k1 + 1) / (tf + k1 * (1 - b + b * row_lengths / average_length))
+        )
+        del row_lengths
+        term_item = sparse.csr_matrix(
+            (weights, indices_np, indptr_np), shape=(shard_n, n_terms)
+        ).T.tocsr()
+        del weights
+
+        # tài liệu trong khối, xếp theo document_id; chunk xếp theo chunk_id
+        shard_docs = sorted({item["document_id"] for item in items}, key=doc_rank.get)
+        local_pos = {d: i for i, d in enumerate(shard_docs)}
+        item_doc = np.fromiter(
+            (local_pos[item["document_id"]] for item in items),
+            dtype=np.int64,
+            count=shard_n,
+        )
+        per_doc: list[list[int]] = [[] for _ in shard_docs]
+        for item_index in range(shard_n):
+            per_doc[item_doc[item_index]].append(item_index)
+        per_doc_np = [
+            np.array(sorted(m, key=lambda i: items[i]["chunk_id"]), dtype=np.int64)
+            for m in per_doc
+        ]
+        del per_doc
+
+        for batch_ids, query_matrix in batches:
+            batch_scores = (query_matrix @ term_item).tocsr()
+            for row, query_id in enumerate(batch_ids):
+                lo, hi = batch_scores.indptr[row], batch_scores.indptr[row + 1]
+                matched = batch_scores.indices[lo:hi]
+                matched_scores = batch_scores.data[lo:hi]
+                keep = matched_scores > 0.0
+                matched, matched_scores = matched[keep], matched_scores[keep]
+                if matched.size == 0:
+                    continue
+                dense = np.zeros(shard_n, dtype=np.float64)
+                dense[matched] = matched_scores
+                best = np.full(len(shard_docs), -np.inf)
+                np.maximum.at(best, item_doc[matched], matched_scores)
+                candidates = np.flatnonzero(best > 0.0)
+                order = candidates[np.lexsort((candidates, -best[candidates]))][
+                    :top_k
+                ]
+                bucket = kept[query_id]
+                for local_doc in order:
+                    members = per_doc_np[local_doc]
+                    item = items[int(members[int(np.argmax(dense[members]))])]
+                    bucket.append(
+                        (doc_rank[shard_docs[local_doc]], float(best[local_doc]), item)
+                    )
+                # thứ tự khối tăng theo document_id nên sort ổn định giữ đúng phá hoà
+                bucket.sort(key=lambda entry: (-entry[1], entry[0]))
+                del bucket[top_k:]
+        del term_item, items, item_doc, per_doc_np
+
+    results: dict[str, list[dict[str, Any]]] = {}
+    for ids, _ in batches:
+        for query_id in ids:
+            results[query_id] = [
+                {
+                    "document_id": item["document_id"],
+                    "supporting_chunk_id": item["chunk_id"],
+                    "score": score,
+                    "rank": rank,
+                    "source_spans": item.get("source_spans", []),
+                }
+                for rank, (_, score, item) in enumerate(kept[query_id], 1)
+            ]
     return results
