@@ -14,7 +14,7 @@ import subprocess
 import time
 from typing import Any
 
-from .bm25 import rank_bm25
+from .bm25 import rank_bm25, rank_bm25_fixed_windows
 from .common import (
     canonical_json,
     read_json,
@@ -912,7 +912,18 @@ def run_experiment(
     needs_fixed_dense = "fixed_window_dense" in selected_methods
     fixed_windows: list[dict[str, Any]] = []
     fixed_bm25: dict[str, list[dict[str, Any]]] = {}
-    if needs_fixed_bm25 or needs_fixed_dense:
+    # Khi BM25 chạy theo khối và cửa sổ cố định không cần cho Dense/cross-encoder,
+    # cửa sổ được sinh theo từng khối bên trong BM25 thay vì dựng cả danh sách
+    # (pool lớn có hàng triệu cửa sổ). Kết quả không đổi.
+    bm25_shard_documents = config["bm25"].get("shard_documents")
+    lazy_fixed_bm25 = bool(
+        needs_fixed_bm25
+        and bm25_shard_documents is not None
+        and target_scope == "document"
+        and not needs_fixed_dense
+        and not any("cross_encoder" in name for name in selected_methods)
+    )
+    if (needs_fixed_bm25 or needs_fixed_dense) and not lazy_fixed_bm25:
         stage_start = time.perf_counter()
         fixed_windows = build_fixed_windows(
             loaded["documents"],
@@ -922,21 +933,41 @@ def run_experiment(
         stage_timings["fixed_window_build"] = time.perf_counter() - stage_start
     if needs_fixed_bm25:
         stage_start = time.perf_counter()
-        fixed_bm25 = rank_bm25(
-            fixed_windows,
-            loaded["queries"],
-            top_k=candidate_depth,
-            k1=float(config["bm25"]["k1"]),
-            b=float(config["bm25"]["b"]),
-            group_by_document=target_scope == "document",
-            shard_documents=config["bm25"].get("shard_documents"),
-        )
+        if lazy_fixed_bm25:
+            stage_timings["fixed_window_build"] = 0.0  # tính trong fixed_window_bm25
+            fixed_bm25 = rank_bm25_fixed_windows(
+                loaded["documents"],
+                loaded["queries"],
+                size_tokens=int(config["fixed_window"]["size_tokens"]),
+                stride_tokens=int(config["fixed_window"]["stride_tokens"]),
+                top_k=candidate_depth,
+                k1=float(config["bm25"]["k1"]),
+                b=float(config["bm25"]["b"]),
+                shard_documents=bm25_shard_documents,
+            )
+        else:
+            fixed_bm25 = rank_bm25(
+                fixed_windows,
+                loaded["queries"],
+                top_k=candidate_depth,
+                k1=float(config["bm25"]["k1"]),
+                b=float(config["bm25"]["b"]),
+                group_by_document=target_scope == "document",
+                shard_documents=bm25_shard_documents,
+            )
         if "fixed_window_bm25" in selected_methods:
             rankings["fixed_window_bm25"] = {
                 query_id: candidates[:depth]
                 for query_id, candidates in fixed_bm25.items()
             }
         stage_timings["fixed_window_bm25"] = time.perf_counter() - stage_start
+
+    # Cửa sổ cố định chỉ còn cần cho Dense hoặc cross-encoder; nếu không thì nhả
+    # RAM trước khi chạy BM25 theo cấu trúc (không ảnh hưởng kết quả).
+    if fixed_windows and not (
+        needs_fixed_dense or any("cross_encoder" in name for name in selected_methods)
+    ):
+        fixed_windows = []
 
     needs_structure_bm25 = bool(
         {"structure_bm25", "structure_hybrid_rrf"} & selected_methods

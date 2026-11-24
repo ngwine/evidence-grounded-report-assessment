@@ -47,15 +47,18 @@ def read_json(path: Path) -> Any:
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    # Đọc từng dòng thay vì read_text().split(): không giữ thêm 2 bản của cả
+    # file trong RAM (file chunks của pool lớn ~1,5 GB). Kết quả không đổi.
     records: list[dict[str, Any]] = []
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
-        line = raw_line.strip()
-        if not line:
-            continue
-        value = json.loads(line)
-        if not isinstance(value, dict):
-            raise ValueError(f"{path}:{line_number} must contain a JSON object")
-        records.append(value)
+    with open(path, encoding="utf-8") as handle:
+        for line_number, raw_line in enumerate(handle, 1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise ValueError(f"{path}:{line_number} must contain a JSON object")
+            records.append(value)
     return records
 
 

@@ -272,42 +272,31 @@ def rank_bm25(
 # Bản chạy theo khối tài liệu (tiết kiệm RAM cho pool lớn).
 # Lượt 1: duyệt toàn bộ chunk, chỉ lấy thống kê toàn cục (N, độ dài trung bình,
 # df, từ vựng) nên idf và avgdl giống hệt bản không chia khối.
-# Lượt 2: mỗi lần dựng ma trận BM25 cho một nhóm `shard_documents` tài liệu,
-# chấm mọi truy vấn, giữ top_k tài liệu của nhóm rồi gộp. Tài liệu của các nhóm
-# không giao nhau và điểm một chunk chỉ phụ thuộc thống kê toàn cục, nên top_k
-# sau khi gộp bằng top_k của bản gốc (phá hoà: (-điểm, document_id); trong một
-# tài liệu lấy chunk_id nhỏ nhất).
-# `corpus` phải duyệt lại được (list/tuple).
+# Lượt 2: mỗi lần dựng ma trận BM25 cho một khối tài liệu, chấm mọi truy vấn,
+# giữ top_k tài liệu của khối rồi gộp. Tài liệu của các khối không giao nhau
+# và điểm một chunk chỉ phụ thuộc thống kê toàn cục, nên top_k sau khi gộp
+# bằng top_k của bản gốc (phá hoà: (-điểm, document_id); trong một tài liệu
+# lấy chunk_id nhỏ nhất).
+#
+# Lõi `_rank_bm25_over_shards` nhận `shard_factory`: hàm không đối số, mỗi lần
+# gọi trả về iterator các khối (list chunk), mỗi khối chứa trọn các tài liệu và
+# không tài liệu nào xuất hiện ở hai khối. Hàm được gọi đúng 2 lần (lượt 1 và
+# lượt 2) và phải sinh cùng dữ liệu cả hai lần.
 # ---------------------------------------------------------------------------
-def rank_bm25_sharded(
-    corpus: Iterable[dict[str, Any]],
+def _rank_bm25_over_shards(
+    shard_factory: Any,
     queries: Iterable[dict[str, Any]],
     *,
     top_k: int,
-    k1: float = 1.2,
-    b: float = 0.75,
-    query_batch_size: int = 32,
-    shard_documents: int = 500,
+    k1: float,
+    b: float,
+    query_batch_size: int,
 ) -> dict[str, list[dict[str, Any]]]:
     import numpy as np
     from array import array
     from scipy import sparse
 
-    if top_k <= 0:
-        raise ValueError("top_k must be positive")
-    if k1 <= 0 or not 0 <= b <= 1:
-        raise ValueError("BM25 requires k1 > 0 and b in [0, 1]")
-    if (
-        isinstance(shard_documents, bool)
-        or not isinstance(shard_documents, int)
-        or shard_documents <= 0
-    ):
-        raise ValueError("shard_documents must be a positive integer")
-    if not isinstance(corpus, (list, tuple)):
-        corpus = list(corpus)
     queries = list(queries)
-    if not corpus:
-        return {str(query["query_id"]): [] for query in queries}
 
     # ---- Lượt 1: thống kê toàn cục -----------------------------------
     vocab: dict[str, int] = {}
@@ -315,40 +304,41 @@ def rank_bm25_sharded(
     seen_ids: set[str] = set()
     document_ids: set[str] = set()
     total_length = 0
-    for item in corpus:
-        chunk_id = item.get("chunk_id")
-        text = item.get("text")
-        if not isinstance(chunk_id, str) or not chunk_id:
-            raise ValueError("Every corpus item requires a non-empty chunk_id")
-        if chunk_id in seen_ids:
-            raise ValueError(f"Duplicate chunk_id: {chunk_id}")
-        seen_ids.add(chunk_id)
-        if not isinstance(text, str):
-            raise ValueError(f"Corpus item {chunk_id} requires string text")
-        document_id = item.get("document_id")
-        if not isinstance(document_id, str) or not document_id:
-            raise ValueError("Every retrieval candidate requires document_id")
-        document_ids.add(document_id)
-        tokens = tokenize(text)
-        total_length += len(tokens)
-        for term in set(tokens):
-            term_index = vocab.get(term)
-            if term_index is None:
-                term_index = vocab[term] = len(df_arr)
-                df_arr.append(0)
-            df_arr[term_index] += 1
+    for shard in shard_factory():
+        for item in shard:
+            chunk_id = item.get("chunk_id")
+            text = item.get("text")
+            if not isinstance(chunk_id, str) or not chunk_id:
+                raise ValueError("Every corpus item requires a non-empty chunk_id")
+            if chunk_id in seen_ids:
+                raise ValueError(f"Duplicate chunk_id: {chunk_id}")
+            seen_ids.add(chunk_id)
+            if not isinstance(text, str):
+                raise ValueError(f"Corpus item {chunk_id} requires string text")
+            document_id = item.get("document_id")
+            if not isinstance(document_id, str) or not document_id:
+                raise ValueError("Every retrieval candidate requires document_id")
+            document_ids.add(document_id)
+            tokens = tokenize(text)
+            total_length += len(tokens)
+            for term in set(tokens):
+                term_index = vocab.get(term)
+                if term_index is None:
+                    term_index = vocab[term] = len(df_arr)
+                    df_arr.append(0)
+                df_arr[term_index] += 1
     n_items = len(seen_ids)
     del seen_ids
+    if n_items == 0:
+        return {str(query["query_id"]): [] for query in queries}
     n_terms = len(vocab)
     average_length = total_length / n_items or 1.0
     df = np.frombuffer(df_arr, dtype=np.int64).astype(np.float64)
     idf = np.log(1 + (n_items - df + 0.5) / (df + 0.5))
     del df
 
-    doc_ids = sorted(document_ids)
+    doc_rank = {d: i for i, d in enumerate(sorted(document_ids))}
     del document_ids
-    doc_rank = {d: i for i, d in enumerate(doc_ids)}
-    n_shards = (len(doc_ids) + shard_documents - 1) // shard_documents
 
     # ---- Ma trận truy vấn, dùng chung cho mọi khối ------------------
     batches = []
@@ -387,13 +377,7 @@ def rank_bm25_sharded(
     }
 
     # ---- Lượt 2: từng khối tài liệu ----------------------------------
-    members_by_shard: list[list[dict[str, Any]]] = [[] for _ in range(n_shards)]
-    for item in corpus:
-        members_by_shard[doc_rank[item["document_id"]] // shard_documents].append(item)
-
-    for shard_index in range(n_shards):
-        items = members_by_shard[shard_index]
-        members_by_shard[shard_index] = []  # nhả tham chiếu sau khi dùng
+    for items in shard_factory():
         if not items:
             continue
         shard_n = len(items)
@@ -422,7 +406,7 @@ def rank_bm25_sharded(
         ).T.tocsr()
         del weights
 
-        # tài liệu trong khối, xếp theo document_id; chunk xếp theo chunk_id
+        # tài liệu trong khối xếp theo document_id; chunk xếp theo chunk_id
         shard_docs = sorted({item["document_id"] for item in items}, key=doc_rank.get)
         local_pos = {d: i for i, d in enumerate(shard_docs)}
         item_doc = np.fromiter(
@@ -464,7 +448,6 @@ def rank_bm25_sharded(
                     bucket.append(
                         (doc_rank[shard_docs[local_doc]], float(best[local_doc]), item)
                     )
-                # thứ tự khối tăng theo document_id nên sort ổn định giữ đúng phá hoà
                 bucket.sort(key=lambda entry: (-entry[1], entry[0]))
                 del bucket[top_k:]
         del term_item, items, item_doc, per_doc_np
@@ -483,3 +466,106 @@ def rank_bm25_sharded(
                 for rank, (_, score, item) in enumerate(kept[query_id], 1)
             ]
     return results
+
+
+def _check_bm25_args(top_k: int, k1: float, b: float, shard_documents: Any) -> None:
+    if top_k <= 0:
+        raise ValueError("top_k must be positive")
+    if k1 <= 0 or not 0 <= b <= 1:
+        raise ValueError("BM25 requires k1 > 0 and b in [0, 1]")
+    if (
+        isinstance(shard_documents, bool)
+        or not isinstance(shard_documents, int)
+        or shard_documents <= 0
+    ):
+        raise ValueError("shard_documents must be a positive integer")
+
+
+def rank_bm25_sharded(
+    corpus: Iterable[dict[str, Any]],
+    queries: Iterable[dict[str, Any]],
+    *,
+    top_k: int,
+    k1: float = 1.2,
+    b: float = 0.75,
+    query_batch_size: int = 32,
+    shard_documents: int = 500,
+) -> dict[str, list[dict[str, Any]]]:
+    """BM25 gộp về tài liệu, chạy theo khối; corpus là list chunk đã nằm trong RAM."""
+
+    _check_bm25_args(top_k, k1, b, shard_documents)
+    if not isinstance(corpus, (list, tuple)):
+        corpus = list(corpus)
+    queries = list(queries)
+    if not corpus:
+        return {str(query["query_id"]): [] for query in queries}
+
+    document_ids = set()
+    for item in corpus:
+        document_id = item.get("document_id")
+        if not isinstance(document_id, str) or not document_id:
+            raise ValueError("Every retrieval candidate requires document_id")
+        document_ids.add(document_id)
+    shard_of = {d: i // shard_documents for i, d in enumerate(sorted(document_ids))}
+    members_by_shard: list[list[dict[str, Any]]] = [
+        [] for _ in range((len(shard_of) + shard_documents - 1) // shard_documents)
+    ]
+    for item in corpus:
+        members_by_shard[shard_of[item["document_id"]]].append(item)
+    del shard_of, document_ids
+
+    return _rank_bm25_over_shards(
+        lambda: iter(members_by_shard),
+        queries,
+        top_k=top_k,
+        k1=k1,
+        b=b,
+        query_batch_size=query_batch_size,
+    )
+
+
+def rank_bm25_fixed_windows(
+    documents: Iterable[dict[str, Any]],
+    queries: Iterable[dict[str, Any]],
+    *,
+    size_tokens: int,
+    stride_tokens: int,
+    top_k: int,
+    k1: float = 1.2,
+    b: float = 0.75,
+    query_batch_size: int = 32,
+    shard_documents: int = 500,
+) -> dict[str, list[dict[str, Any]]]:
+    """BM25 trên cửa sổ cố định, gộp về tài liệu, KHÔNG dựng cả list cửa sổ.
+
+    Cửa sổ được sinh theo từng nhóm `shard_documents` tài liệu (và sinh lại ở
+    lượt 2), nên RAM chỉ giữ cửa sổ của một nhóm. Kết quả bằng
+    rank_bm25(build_fixed_windows(documents, ...), group_by_document=True).
+    """
+
+    from .fixed_window import build_fixed_windows
+
+    _check_bm25_args(top_k, k1, b, shard_documents)
+    documents = list(documents)
+    queries = list(queries)
+
+    def shard_factory():
+        for start in range(0, len(documents), shard_documents):
+            yield build_fixed_windows(
+                documents[start : start + shard_documents],
+                size_tokens=size_tokens,
+                stride_tokens=stride_tokens,
+            )
+
+    # build_fixed_windows kiểm tra trùng document_id trong từng nhóm; kiểm tra toàn cục tại đây
+    ids = [document.get("document_id") for document in documents]
+    if len(ids) != len(set(ids)):
+        raise ValueError("Duplicate document_id in documents")
+    return _rank_bm25_over_shards(
+        shard_factory,
+        queries,
+        top_k=top_k,
+        k1=k1,
+        b=b,
+        query_batch_size=query_batch_size,
+    )
