@@ -59,6 +59,23 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--annotation-type",
+        default=None,
+        help=(
+            "Keep only plagiarism features whose XML type matches (for example "
+            "simulated). Applied after prior-split exclusion."
+        ),
+    )
+    parser.add_argument(
+        "--max-annotations-per-suspicious-document",
+        type=int,
+        default=None,
+        help=(
+            "Keep at most this many positives per suspicious document, chosen "
+            "by seeded hash order (default: no cap)."
+        ),
+    )
+    parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Replace only the five known generated files if they already exist.",
@@ -84,6 +101,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_archives=args.source_archive,
             exclude_manifests=args.exclude_manifest,
             overwrite=args.overwrite,
+            annotation_type=args.annotation_type,
+            max_annotations_per_suspicious_document=(
+                args.max_annotations_per_suspicious_document
+            ),
         )
     except (FileExistsError, OSError, ValueError) as exc:
         raise SystemExit(f"PAN conversion failed: {exc}") from exc

@@ -104,6 +104,9 @@ class _Annotation:
     source_reference: str
     source_start: int
     source_end: int
+    # Thuộc tính `type` của thẻ feature (artificial/simulated/translation...).
+    # Không tham gia _annotation_id nên không đổi mã parent.
+    plagiarism_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -606,6 +609,7 @@ def _scan_annotations(index: _CorpusIndex) -> _AnnotationScan:
                     source_reference=source_reference,
                     source_start=source_offset,
                     source_end=source_offset + source_length,
+                    plagiarism_type=(feature.attrib.get("type") or "").strip() or None,
                 )
             )
 
@@ -685,6 +689,29 @@ def _exclude_prior_split_annotations(
         eligible.append(annotation)
     counts["annotations_eligible_after_exclusion"] = len(eligible)
     return eligible, counts
+
+
+def _cap_per_suspicious_document(
+    annotations: Iterable[_Annotation],
+    *,
+    dataset_id: str,
+    cap: int,
+    seed: int,
+) -> list[_Annotation]:
+    """Keep at most ``cap`` positives per suspicious document, chosen by hash order."""
+
+    by_document: dict[str, list[_Annotation]] = {}
+    for annotation in annotations:
+        by_document.setdefault(annotation.suspicious_reference, []).append(annotation)
+    kept: list[_Annotation] = []
+    for reference, members in by_document.items():
+        members.sort(
+            key=lambda item: _hash_order(
+                seed, f"document-cap:{reference}", _annotation_id(dataset_id, item)
+            )
+        )
+        kept.extend(members[:cap])
+    return kept
 
 
 def _select_annotations(
@@ -1064,6 +1091,8 @@ def convert_pan_pilot(
     source_archives: Iterable[str | Path] = (),
     exclude_manifests: Iterable[str | Path] = (),
     overwrite: bool = False,
+    annotation_type: str | None = None,
+    max_annotations_per_suspicious_document: int | None = None,
 ) -> ConversionResult:
     """Convert PAN XML/TXT into deterministic runner inputs.
 
@@ -1106,6 +1135,19 @@ def convert_pan_pilot(
             "query_stride_word_tokens must be between 1 and max_query_word_tokens"
         )
 
+    if annotation_type is not None and (
+        not isinstance(annotation_type, str) or not annotation_type.strip()
+    ):
+        raise ValueError("annotation_type must be a non-empty string or None")
+    if max_annotations_per_suspicious_document is not None and (
+        isinstance(max_annotations_per_suspicious_document, bool)
+        or not isinstance(max_annotations_per_suspicious_document, int)
+        or max_annotations_per_suspicious_document < 1
+    ):
+        raise ValueError(
+            "max_annotations_per_suspicious_document must be an integer >= 1 or None"
+        )
+
     profile = DATASET_PROFILES[dataset_key]
     index = _CorpusIndex(Path(input_root))
     scan = _scan_annotations(index)
@@ -1123,6 +1165,39 @@ def convert_pan_pilot(
             exclusions=exclusions,
         )
     )
+    selection_filter_record: dict[str, Any] = {}
+    if annotation_type is not None:
+        wanted = annotation_type.strip().casefold()
+        selection_filter_record["annotation_type"] = annotation_type.strip()
+        selection_filter_record["annotations_of_type_before_exclusion"] = sum(
+            1
+            for item in scan.annotations
+            if (item.plagiarism_type or "").casefold() == wanted
+        )
+        eligible_annotations = [
+            item
+            for item in eligible_annotations
+            if (item.plagiarism_type or "").casefold() == wanted
+        ]
+        selection_filter_record["annotations_of_type_after_exclusion"] = len(
+            eligible_annotations
+        )
+    if max_annotations_per_suspicious_document is not None:
+        selection_filter_record["max_annotations_per_suspicious_document"] = (
+            max_annotations_per_suspicious_document
+        )
+        eligible_annotations = _cap_per_suspicious_document(
+            eligible_annotations,
+            dataset_id=profile["dataset_id"],
+            cap=max_annotations_per_suspicious_document,
+            seed=seed,
+        )
+        selection_filter_record["annotations_after_document_cap"] = len(
+            eligible_annotations
+        )
+        selection_filter_record["suspicious_documents_after_document_cap"] = len(
+            {item.suspicious_reference for item in eligible_annotations}
+        )
     annotations = _select_annotations(
         eligible_annotations,
         dataset_id=profile["dataset_id"],
@@ -1369,6 +1444,7 @@ def convert_pan_pilot(
             "positive_annotations_available": len(eligible_annotations),
             "positive_annotations_selected": len(annotations),
             **annotation_exclusion_counts,
+            **selection_filter_record,
             **source_sampling_counts,
             "selected_annotation_ids": selected_annotation_ids,
             "selected_annotation_ids_sha256": _sha256_text(
